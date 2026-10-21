@@ -178,11 +178,16 @@ const quoted = (lines: string[]) => [
   ...(lines.length > REACTION_LINES ? [`+${lines.length - REACTION_LINES} more`] : []),
 ].join(' · ');
 export const NO_REACTION = "the page didn't react (no other text on screen changed): the site may not have taken it";
-export function reaction(before: string[], after: string[]): string {
+// field: what was typed into it and its value now. The site changing it (a money field that reformats, "200" → "$200")
+// is a reaction too: seen live, every type into one said NO_REACTION. Emptied isn't: that's the value refused.
+export function reaction(before: string[], after: string[], field?: { typed: string; now: string }): string {
   const now = addedLines(before, after);
   const was = addedLines(after, before);
-  if (!now.length) return was.length ? `page changed: ${quoted(was)} gone` : NO_REACTION;
-  return `page changed: now ${quoted(now)}${was.length ? `, was ${quoted(was)}` : ''}`;
+  const changes = [
+    now.length ? `now ${quoted(now)}${was.length ? `, was ${quoted(was)}` : ''}` : was.length ? `${quoted(was)} gone` : '',
+    field?.now && field.now !== field.typed ? `the site changed the field: ${quoted([field.typed])} → ${quoted([field.now])}` : '',
+  ].filter(Boolean);
+  return changes.length ? `page changed: ${changes.join('; ')}` : NO_REACTION;
 }
 
 // F2: what the AI reads each step, like browser-use's page view: the listed elements with the visible text around them,

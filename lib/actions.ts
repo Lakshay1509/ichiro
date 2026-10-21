@@ -437,27 +437,33 @@ export async function typeText(n: number, text: string, enter: boolean, slow: bo
   field?.dispatchEvent(new Event('change', { bubbles: true }));
 
   // Report what the field really contains: shows if the site rejected or reformatted the text.
-  const now = field ? field.value : (el as HTMLElement).innerText;
-  const notes = ['ok', `field now: ${isSecret(el) ? '•••' : JSON.stringify(now.slice(0, 40))}`];
+  const value = () => (field ? field.value : (el as HTMLElement).innerText);
+  const fieldNow = () => `field now: ${isSecret(el) ? '•••' : JSON.stringify(value().slice(0, 40))}`;
+  const notes = ['ok', fieldNow()];
   if (enter) notes.push(await pressEnter(el, field ? field.form : el.closest('form')));
   else {
+    // What was typed, to tell if the site changed it (a formatter, as we typed or on leaving). Fields only: an editor's
+    // innerText shifts on its own.
+    const typed = field && !isSecret(el) ? text : undefined;
     // F4b: leave the field like a person moving on, so sites that save on leaving do (seen live: Airbnb's price only
     // saved on blur). A field with a suggestion list keeps focus, so the list stays open for the next click.
     if (!suggests((a) => el.getAttribute(a))) moveFocus(null);
-    // The page's reaction goes first: the field's own text proves nothing, since we put it there.
-    notes.splice(1, 0, await reactionTo(before, screen));
+    // The page's reaction goes first: the field's own text proves nothing, since we put it there; the site changing it
+    // does. Then the value now, which the site may have reformatted on leaving.
+    const fieldChange = () => (typed === undefined ? undefined : { typed, now: value() });
+    notes.splice(1, 1, await reactionTo(before, screen, fieldChange), fieldNow());
   }
   return notes.join(' — ');
 }
 
-// F4b: what changed on screen after typing. A site that asks its server first (a result count) can sit quiet for a
-// moment, so "no reaction" gets one more wait before it's said.
-async function reactionTo(before: string[], screen: () => string[]): Promise<string> {
+// F4b: what changed on screen (and in the typed field) after typing. A site that asks its server first (a result
+// count) can sit quiet for a moment, so "no reaction" gets one more wait before it's said.
+async function reactionTo(before: string[], screen: () => string[], field: () => { typed: string; now: string } | undefined): Promise<string> {
   await waitForQuiet(1500);
-  const first = reaction(before, screen());
+  const first = reaction(before, screen(), field());
   if (first !== NO_REACTION) return first;
   await waitForQuiet(1500);
-  return reaction(before, screen());
+  return reaction(before, screen(), field());
 }
 
 // Native <select> only. Custom dropdowns are divs: click them, read, click the option.

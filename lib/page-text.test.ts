@@ -183,6 +183,12 @@ lines(reaction(['a'], ['a']), "the page didn't react (no other text on screen ch
 lines(reaction([], ['1', '2', '3', '4', '5']), 'page changed: now "1" · "2" · "3" · +2 more', 'at most 3 lines');
 lines(reaction([], ['x'.repeat(100)]), `page changed: now "${'x'.repeat(79)}…"`, 'lines cut at 80');
 lines(reaction([], ['say "hi"']), 'page changed: now "say \\"hi\\""', 'quoted, so page text stays one quoted piece');
+// The site changing the typed field counts: seen live, a money field took "200" as "$200" with no other text changing,
+// and every type said the page didn't react. As typed, or emptied (the value refused), it doesn't.
+lines(reaction(['a'], ['a'], { typed: '200', now: '$200' }), 'page changed: the site changed the field: "200" → "$200"', 'field reformatted');
+lines(reaction(['a'], ['a'], { typed: '200', now: '200' }), "the page didn't react (no other text on screen changed): the site may not have taken it", 'field as typed');
+lines(reaction(['a'], ['a'], { typed: 'abc', now: '' }), "the page didn't react (no other text on screen changed): the site may not have taken it", 'field emptied');
+lines(reaction(['Total: $0'], ['Total: $200'], { typed: '200', now: '$200.00' }), 'page changed: now "Total: $200", was "Total: $0"; the site changed the field: "200" → "$200.00"', 'text and field');
 
 // The text command's words (the AI writes them): text, text all, text page N; anything else is refused.
 if (JSON.stringify([textArgs([]), textArgs(['all']), textArgs(['page', '8'])]) !== '[{"all":false},{"all":true},{"all":true,"page":8}]') throw new Error('textArgs');
