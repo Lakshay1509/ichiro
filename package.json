@@ -1,0 +1,29 @@
+{
+  "name": "browser-agent",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wxt",
+    "build": "wxt build",
+    "zip": "wxt zip",
+    "typecheck": "tsc --noEmit",
+    "postinstall": "wxt prepare",
+    "test": "node --test lib/*.test.ts",
+    "key:set": "node host/key.ts set",
+    "key:check": "node host/key.ts check",
+    "key:clear": "node host/key.ts clear",
+    "host:install": "node host/install.ts install",
+    "host:uninstall": "node host/install.ts uninstall"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "typescript": "^7.0.2",
+    "wxt": "^0.21.4"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "^2.3.1",
+    "pdfjs-dist": "^6.4.299",
+    "zod": "^4.6.7"
+  }
+}

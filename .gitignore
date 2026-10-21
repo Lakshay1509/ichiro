@@ -1,0 +1,11 @@
+# Installed and generated: rebuilt by npm ci / npm run build.
+node_modules/
+.output/
+.wxt/
+# Secrets and local-only files: never commit.
+.env
+.env.*
+*.pem
+*.crx
+bridge.json
+*.log
