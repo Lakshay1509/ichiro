@@ -442,8 +442,9 @@ export async function typeText(n: number, text: string, enter: boolean, slow: bo
   const notes = ['ok', fieldNow()];
   if (enter) notes.push(await pressEnter(el, field ? field.form : el.closest('form')));
   else {
-    // What was typed, to tell if the site changed it (a formatter, as we typed or on leaving). Fields only: an editor's
-    // innerText shifts on its own.
+    // What was typed, to tell if the site changed it (a formatter, as we typed or on leaving). Not the value after our
+    // events: their handlers run inside dispatchEvent, so a formatter has already run. Fields only: an editor's innerText
+    // shifts on its own. Source: https://developer.mozilla.org/en-US/docs/Web/API/EventTarget/dispatchEvent
     const typed = field && !isSecret(el) ? text : undefined;
     // F4b: leave the field like a person moving on, so sites that save on leaving do (seen live: Airbnb's price only
     // saved on blur). A field with a suggestion list keeps focus, so the list stays open for the next click.
@@ -500,6 +501,7 @@ function canScroll(el: Element, dir: Way): boolean {
 
 // overflow:hidden on <html> (or on <body> when <html> leaves it visible) stops people scrolling the window that way.
 // Sites do this behind modals, and sideways to keep a page from moving. Scripts could still move it, so check first.
+// Source: https://developer.mozilla.org/en-US/docs/Web/API/Window/getComputedStyle
 function windowLocked(axis: 'overflowX' | 'overflowY' = 'overflowY'): boolean {
   const html = getComputedStyle(document.documentElement)[axis];
   const viewport = html === 'visible' && document.body ? getComputedStyle(document.body)[axis] : html;
@@ -529,7 +531,9 @@ export function mainScroller(): Element | null {
 export function scroll(dir: Way, n?: number): string {
   const side = dir === 'left' || dir === 'right';
   const sign = dir === 'down' || dir === 'right' ? 1 : -1;
-  // 80% of a box (or the window) that way, and where it stands after.
+  // 80% of a box (or the window) that way, and where it stands after. behavior 'instant' jumps at once, so scrollX/Y
+  // read right after are the new spot. Source: https://developer.mozilla.org/en-US/docs/Web/API/Element/scrollBy
+  // (and .../Window/scrollBy, .../Window/scrollX)
   const step = (width: number, height: number) => (side ? { left: sign * width * 0.8 } : { top: sign * height * 0.8 });
   const where = (el: Element) => (side ? sideLine(roomOf(el)) : scrollLine(Math.round(el.scrollTop), el.scrollHeight - el.clientHeight));
   const biggest = (els: Element[]) => biggestBox(els, (el) => canScroll(el, dir));

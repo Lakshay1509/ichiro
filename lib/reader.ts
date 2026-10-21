@@ -323,9 +323,11 @@ export function sideRoom(scrollLeft: number, max: number, rtl: boolean): Room {
   return { left, right: max - left };
 }
 
+// Source: https://developer.mozilla.org/en-US/docs/Web/API/Element/scrollWidth (and .../CSS/Reference/Properties/direction)
 export const roomOf = (el: Element) => sideRoom(el.scrollLeft, el.scrollWidth - el.clientWidth, getComputedStyle(el).direction === 'rtl');
 
-// A box that scrolls sideways on its own (a wide table): its room, else null.
+// A box that scrolls sideways on its own (a wide table): its room, else null. overflow-y: auto makes overflow-x auto too,
+// so the size check decides. Source: https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/overflow-x
 export const sideways = (el: Element): Room | null =>
   /^(auto|scroll)$/.test(getComputedStyle(el).overflowX) && el.scrollWidth > el.clientWidth + 1 ? roomOf(el) : null;
 

@@ -111,7 +111,8 @@ const onScreen = (r: DOMRect, boxes?: () => SideBox[]) => r.bottom > 0 && r.top 
 export const onPage = (r: Box, width: number, scrollY: number, boxes?: () => SideBox[]) => r.bottom + scrollY > 0 && across(r, width, boxes);
 
 // The boxes el sits in (itself included) that scroll sideways, innermost first. Not the page itself: text pushed right
-// of it stays out (F3a). cache: per walk, since text nodes share boxes.
+// of it stays out (F3a). cache: per walk, since text nodes share boxes. Rects are viewport coordinates, like the text's.
+// Source: https://developer.mozilla.org/en-US/docs/Web/API/Element/getBoundingClientRect
 function sideBoxes(el: Element | null, cache: Map<Element, SideBox[]>): SideBox[] {
   if (!el || el === document.body || el === document.documentElement) return [];
   let boxes = cache.get(el);
@@ -179,7 +180,8 @@ const quoted = (lines: string[]) => [
 ].join(' · ');
 export const NO_REACTION = "the page didn't react (no other text on screen changed): the site may not have taken it";
 // field: what was typed into it and its value now. The site changing it (a money field that reformats, "200" → "$200")
-// is a reaction too: seen live, every type into one said NO_REACTION. Emptied isn't: that's the value refused.
+// is a reaction too: seen live, every type into one said NO_REACTION. Emptied isn't: that's the value refused (a number
+// field empties what isn't a number). Source: https://html.spec.whatwg.org/multipage/input.html (value sanitization)
 export function reaction(before: string[], after: string[], field?: { typed: string; now: string }): string {
   const now = addedLines(before, after);
   const was = addedLines(after, before);
@@ -335,6 +337,7 @@ const AFTER_CAP = 200; // characters after a match at most, when its sentence ru
 // one), at most cap. Seen live: a cut mid-sentence hid the number the agent needed ("salary range … based on the pr…").
 function sentenceEnd(text: string, at: number, cap: number): number {
   const stop = /[.!?。](?=\s|$)/g;
+  // exec on a /g regex starts at lastIndex. Source: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/lastIndex
   stop.lastIndex = at - 1; // a cut right after a sentence's end stays there
   const found = stop.exec(text);
   return Math.min(found ? found.index + 1 : text.length, cap, text.length);
@@ -420,6 +423,7 @@ export const nameHit = (name: string, query: string, holdsMatch: () => boolean) 
 function allMatches(query: string): { el: Element | null; snippet: string }[] {
   const nodes = searchable();
   const inText = findMatches(nodes.map((n) => n.data), query).map((m) => ({ el: parentOf(nodes[m.piece]!), snippet: m.snippet }));
+  // Still in the page (the read may be older). Source: https://developer.mozilla.org/en-US/docs/Web/API/Node/isConnected
   const named = [...getElements()].filter(([, el]) => el.isConnected && nameHit(name(el), query, () => inText.some((m) => deepContains(el, m.el))));
   return [...inText, ...named.map(([n, el]) => ({ el, snippet: `[${n}] ${describe(el)} (element name)` }))];
 }
