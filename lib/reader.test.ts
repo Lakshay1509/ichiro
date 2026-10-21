@@ -1,6 +1,7 @@
-// Checks scrollLine, urlName (unlabeled image links), cut (shortened names), saysMore (calendar labels), ranges (panel
-// and scroll box numbers) and classHint (unnamed icon buttons). Run: npm test
-import { besideText, classHint, cut, ranges, saysMore, scrollLine, suggests, urlName } from './reader.ts';
+// Checks scrollLine, sideRoom and sideLine (boxes that scroll sideways), urlName (unlabeled image links), cut
+// (shortened names), saysMore (calendar labels), ranges (panel and scroll box numbers) and classHint (unnamed icon
+// buttons). Run: npm test
+import { besideText, classHint, cut, ranges, saysMore, scrollLine, sideLine, sideRoom, suggests, urlName } from './reader.ts';
 
 // besideText: an unlabeled checkbox or radio is named by the text right beside it, up to the next control. Seen live
 // in 4 runs: boxes sharing a parent all got the parent's whole text ("… Yes No Clear") or nothing, and the model
@@ -100,6 +101,26 @@ const cases: [number, number, string][] = [
 for (const [y, max, want] of cases) {
   const got = scrollLine(y, max);
   if (got !== want) throw new Error(`scrollLine(${y}, ${max}) = "${got}", want "${want}"`);
+}
+
+// A box that scrolls sideways (a wide table): how far it can still go each way. scrollLeft counts from the start
+// edge: the left one, or the right one in RTL (0, then negative); negative is right-anchored even without the flag.
+for (const [scrollLeft, rtl, want, what] of [
+  [0, false, { left: 0, right: 700 }, 'at the start'],
+  [300, false, { left: 300, right: 400 }, 'scrolled right'],
+  [0, true, { left: 700, right: 0 }, 'RTL at the start'],
+  [-200, true, { left: 500, right: 200 }, 'RTL scrolled left'],
+  [-200, false, { left: 500, right: 200 }, 'negative: right-anchored'],
+] as const) {
+  const got = JSON.stringify(sideRoom(scrollLeft, 700, rtl));
+  if (got !== JSON.stringify(want)) throw new Error(`sideRoom, ${what}: ${got}`);
+}
+for (const [room, want] of [
+  [{ left: 0, right: 700 }, 'Scroll sideways: 0% — more content right'],
+  [{ left: 350.4, right: 349.6 }, 'Scroll sideways: 50% — more content left, more content right'],
+  [{ left: 700, right: 0.3 }, 'Scroll sideways: 100% — more content left'],
+] as const) {
+  if (sideLine(room) !== want) throw new Error(`sideLine(${JSON.stringify(room)}) = "${sideLine(room)}"`);
 }
 
 // F4b: a field with a suggestion list keeps focus after typing (ARIA combobox / autocomplete, or a datalist).

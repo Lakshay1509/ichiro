@@ -1,5 +1,5 @@
 // Checks joinLines (same-line pieces glue, a gap adds a space, a lower piece starts a new line) and find's matcher. Run: npm test
-import { addedLines, capText, chooseText, findMatches, iconText, joinLines, MAX_TEXT_LINES, onPage, pageLines, rankSections, reaction, sameText, TEXT_CAP, textArgs, toPiece, type Piece } from './page-text.ts';
+import { addedLines, capText, chooseText, findMatches, iconText, joinLines, MAX_TEXT_LINES, nameHit, onPage, pageLines, rankSections, reaction, sameText, TEXT_CAP, textArgs, toPiece, type Piece } from './page-text.ts';
 
 // R1: click by text takes shown texts that read exactly the words (spaces collapsed, icon glyphs dropped), then ignoring
 // case if none; never part of a longer text. All matches come back, so the caller can refuse two.
@@ -92,8 +92,23 @@ want('every match, in order', find(['8GB', 'x', '16GB', 'y', '16 GB'], '16gb'), 
 want('no match', find(['8GB RAM'], '16 GB'), []);
 want('blank query', find(['16GB'], '   '), []);
 want('blank pieces skipped', find(['', '  ', '16GB'], '16GB'), [{ piece: 2, snippet: '16GB' }]);
-const long = `${'a'.repeat(100)} 16GB ${'b'.repeat(100)}`;
-want('snippet cut', find([long], '16gb'), [{ piece: 0, snippet: `…${'a'.repeat(39)} 16GB ${'b'.repeat(39)}…` }]);
+const long = `${'a'.repeat(100)} 16GB ${'b'.repeat(300)}`;
+want('snippet cut, no sentence end', find([long], '16gb'), [{ piece: 0, snippet: `…${'a'.repeat(39)} 16GB ${'b'.repeat(199)}…` }]);
+// After the match a snippet runs on to the end of its sentence, so it doesn't stop before the number (seen live: "…based
+// on the pr…" hid a salary). A decimal point isn't a sentence end. 40 characters alone would cut "is 4".
+const rating = 'Rating for this item from verified buyers is 4.5 of 5 stars. Next sentence here.';
+want('to the end of the sentence', find([rating], 'rating'), [{ piece: 0, snippet: 'Rating for this item from verified buyers is 4.5 of 5 stars.…' }]);
+const ends = `Match ${'y'.repeat(38)}. Next sentence goes on.`; // 40 characters after "Match" end right after the "."
+want('a cut at a sentence end stays', find([ends], 'match'), [{ piece: 0, snippet: `Match ${'y'.repeat(38)}.…` }]);
+
+// find also searches the page list's element names: a color swatch named only by its label ("Navy Blue") has no text
+// to match. An element holding a text match was found already, so its name doesn't count twice.
+for (const [name, query, holds, hit, what] of [
+  ['Navy Blue', 'Navy', false, true, 'label-only swatch'],
+  ['Navy Blue', 'navyblue', false, true, 'case and spaces ignored'],
+  ['Navy Blue', 'Navy', true, false, 'its text matched already'],
+  ['Forest Green', 'Navy', false, false, 'other name'],
+] as const) if (nameHit(name, query, () => holds) !== hit) throw new Error(`nameHit, ${what}`);
 
 // A find that missed lists sections: closest (shares a word of 3+ letters) first, then page order; blank, repeated
 // and long ones dropped; capped.
@@ -135,6 +150,22 @@ placed('scrolled past, still on the page', onPage(box(-2000, 0), 1280, 3000), tr
 placed('pushed above the page', onPage(box(-9999, 0), 1280, 0), false);
 placed('pushed left', onPage(box(0, -9999), 1280, 0), false);
 placed('pushed right', onPage(box(0, 9999), 1280, 0), false);
+
+// A weather table's header in a box that scrolls sideways (overflow-x: auto), on a 664 px screen (side panel open):
+// the last columns sit right of the screen until the box scrolls. Seen live: text, text all and pick stopped at "Wind
+// Speed (mph)" while find had them. Text in the box counts while the box is on screen, within what scrolling it shows.
+const table = { rect: { top: 300, bottom: 900, left: 16, right: 648 }, room: { left: 0, right: 700 } };
+const header = [at('Time', 300, 20, 60), at('Wind Speed (mph)', 300, 500, 640), at('Pressure (in)', 300, 700, 800), at('Precipitation (in)', 300, 1200, 1330)];
+const row = (boxes: (typeof table)[]) => joinLines(header.filter((p) => onPage(p.first, 664, 0, () => boxes)));
+if (row([]) !== 'Time Wind Speed (mph)') throw new Error(`no box: ${row([])}`);
+if (row([table]) !== 'Time Wind Speed (mph) Pressure (in) Precipitation (in)') throw new Error(`sideways box: ${row([table])}`);
+const scrolled = { ...table, room: { left: 300, right: 400 } };
+placed('in the box, past what scrolling shows', onPage(box(300, 1200), 664, 0, () => [scrolled]), false);
+placed('in the box, pushed left of it', onPage(box(300, -9999), 664, 0, () => [scrolled]), false);
+placed('scrolled out left, back in reach', onPage(box(300, -250), 664, 0, () => [scrolled]), true);
+const offRight = { ...table, rect: { ...table.rect, left: 700, right: 1300 } };
+placed('the box itself right of the screen', onPage(box(300, 1400), 664, 0, () => [offRight]), false);
+placed('that box inside an outer one on screen', onPage(box(300, 1400), 664, 0, () => [offRight, table]), true);
 // A long page is cut at the cap, with a note that says how to reach the rest.
 const capped = capText('a'.repeat(TEXT_CAP + 50));
 if (capped !== `${'a'.repeat(TEXT_CAP)}\n… 50 more characters: use find to jump to what you need`) throw new Error(`capText: ${capped.slice(-80)}`);
@@ -152,6 +183,12 @@ lines(reaction(['a'], ['a']), "the page didn't react (no other text on screen ch
 lines(reaction([], ['1', '2', '3', '4', '5']), 'page changed: now "1" · "2" · "3" · +2 more', 'at most 3 lines');
 lines(reaction([], ['x'.repeat(100)]), `page changed: now "${'x'.repeat(79)}…"`, 'lines cut at 80');
 lines(reaction([], ['say "hi"']), 'page changed: now "say \\"hi\\""', 'quoted, so page text stays one quoted piece');
+// The site changing the typed field counts: seen live, a money field took "200" as "$200" with no other text changing,
+// and every type said the page didn't react. As typed, or emptied (the value refused), it doesn't.
+lines(reaction(['a'], ['a'], { typed: '200', now: '$200' }), 'page changed: the site changed the field: "200" → "$200"', 'field reformatted');
+lines(reaction(['a'], ['a'], { typed: '200', now: '200' }), "the page didn't react (no other text on screen changed): the site may not have taken it", 'field as typed');
+lines(reaction(['a'], ['a'], { typed: 'abc', now: '' }), "the page didn't react (no other text on screen changed): the site may not have taken it", 'field emptied');
+lines(reaction(['Total: $0'], ['Total: $200'], { typed: '200', now: '$200.00' }), 'page changed: now "Total: $200", was "Total: $0"; the site changed the field: "200" → "$200.00"', 'text and field');
 
 // The text command's words (the AI writes them): text, text all, text page N; anything else is refused.
 if (JSON.stringify([textArgs([]), textArgs(['all']), textArgs(['page', '8'])]) !== '[{"all":false},{"all":true},{"all":true,"page":8}]') throw new Error('textArgs');

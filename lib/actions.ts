@@ -2,7 +2,7 @@
 // Known limit: these events have isTrusted = false. A few sites ignore them; harness Phase 7 adds real input.
 import {
   clickable, clickPoint, deepContains, deepElementFromPoint, findInteractive, getElement, getElements, isSecret, name, NO_VALUE, panelOnTop,
-  parentOf, role, scrollLine, shadowRootOf, suggests, visibleCenter,
+  parentOf, role, roomOf, scrollLine, shadowRootOf, sideLine, sideways, suggests, visibleCenter,
 } from './reader.ts';
 import { HandOver, StopLine } from './messages.ts';
 import { chooseText, NO_REACTION, reaction, readText, textTargets } from './page-text.ts';
@@ -437,27 +437,34 @@ export async function typeText(n: number, text: string, enter: boolean, slow: bo
   field?.dispatchEvent(new Event('change', { bubbles: true }));
 
   // Report what the field really contains: shows if the site rejected or reformatted the text.
-  const now = field ? field.value : (el as HTMLElement).innerText;
-  const notes = ['ok', `field now: ${isSecret(el) ? '•••' : JSON.stringify(now.slice(0, 40))}`];
+  const value = () => (field ? field.value : (el as HTMLElement).innerText);
+  const fieldNow = () => `field now: ${isSecret(el) ? '•••' : JSON.stringify(value().slice(0, 40))}`;
+  const notes = ['ok', fieldNow()];
   if (enter) notes.push(await pressEnter(el, field ? field.form : el.closest('form')));
   else {
+    // What was typed, to tell if the site changed it (a formatter, as we typed or on leaving). Not the value after our
+    // events: their handlers run inside dispatchEvent, so a formatter has already run. Fields only: an editor's innerText
+    // shifts on its own. Source: https://developer.mozilla.org/en-US/docs/Web/API/EventTarget/dispatchEvent
+    const typed = field && !isSecret(el) ? text : undefined;
     // F4b: leave the field like a person moving on, so sites that save on leaving do (seen live: Airbnb's price only
     // saved on blur). A field with a suggestion list keeps focus, so the list stays open for the next click.
     if (!suggests((a) => el.getAttribute(a))) moveFocus(null);
-    // The page's reaction goes first: the field's own text proves nothing, since we put it there.
-    notes.splice(1, 0, await reactionTo(before, screen));
+    // The page's reaction goes first: the field's own text proves nothing, since we put it there; the site changing it
+    // does. Then the value now, which the site may have reformatted on leaving.
+    const fieldChange = () => (typed === undefined ? undefined : { typed, now: value() });
+    notes.splice(1, 1, await reactionTo(before, screen, fieldChange), fieldNow());
   }
   return notes.join(' — ');
 }
 
-// F4b: what changed on screen after typing. A site that asks its server first (a result count) can sit quiet for a
-// moment, so "no reaction" gets one more wait before it's said.
-async function reactionTo(before: string[], screen: () => string[]): Promise<string> {
+// F4b: what changed on screen (and in the typed field) after typing. A site that asks its server first (a result
+// count) can sit quiet for a moment, so "no reaction" gets one more wait before it's said.
+async function reactionTo(before: string[], screen: () => string[], field: () => { typed: string; now: string } | undefined): Promise<string> {
   await waitForQuiet(1500);
-  const first = reaction(before, screen());
+  const first = reaction(before, screen(), field());
   if (first !== NO_REACTION) return first;
   await waitForQuiet(1500);
-  return reaction(before, screen());
+  return reaction(before, screen(), field());
 }
 
 // Native <select> only. Custom dropdowns are divs: click them, read, click the option.
@@ -481,18 +488,23 @@ export function selectOption(n: number, option: string, allow = false, given = f
   return `ok — selected ${JSON.stringify(opt.text.trim())}`;
 }
 
+type Way = 'up' | 'down' | 'left' | 'right';
+const EDGE: Record<Way, string> = { up: 'top', down: 'bottom', left: 'left edge', right: 'right edge' };
+
 // True if el is a scroll box with room left to scroll in that direction.
-function canScroll(el: Element, dir: 'up' | 'down'): boolean {
+function canScroll(el: Element, dir: Way): boolean {
+  if (dir === 'left' || dir === 'right') return (sideways(el)?.[dir] ?? 0) >= 1;
   const { overflowY } = getComputedStyle(el);
   if (overflowY !== 'auto' && overflowY !== 'scroll') return false;
   return dir === 'down' ? el.scrollTop + el.clientHeight < el.scrollHeight - 1 : el.scrollTop > 0;
 }
 
-// overflow:hidden on <html> (or on <body> when <html> leaves it visible) stops people scrolling the window.
-// Sites do this behind modals. Scripts could still move it, so check before scrolling it.
-function windowLocked(): boolean {
-  const html = getComputedStyle(document.documentElement).overflowY;
-  const viewport = html === 'visible' && document.body ? getComputedStyle(document.body).overflowY : html;
+// overflow:hidden on <html> (or on <body> when <html> leaves it visible) stops people scrolling the window that way.
+// Sites do this behind modals, and sideways to keep a page from moving. Scripts could still move it, so check first.
+// Source: https://developer.mozilla.org/en-US/docs/Web/API/Window/getComputedStyle
+function windowLocked(axis: 'overflowX' | 'overflowY' = 'overflowY'): boolean {
+  const html = getComputedStyle(document.documentElement)[axis];
+  const viewport = html === 'visible' && document.body ? getComputedStyle(document.body)[axis] : html;
   return viewport === 'hidden' || viewport === 'clip';
 }
 
@@ -514,9 +526,16 @@ export function mainScroller(): Element | null {
 
 // Scrolls the page by 80% of the screen. With n: scrolls the box around element n instead.
 // A panel on top (popup, drawer, filters) is what you see, so its box scrolls first, like a mouse wheel over it.
-// The reply always says what moved: the model can't see it.
-export function scroll(dir: 'up' | 'down', n?: number): string {
-  const sign = dir === 'down' ? 1 : -1;
+// Left and right move a box that scrolls sideways (a wide table), or a wide page. The reply always says what moved:
+// the model can't see it.
+export function scroll(dir: Way, n?: number): string {
+  const side = dir === 'left' || dir === 'right';
+  const sign = dir === 'down' || dir === 'right' ? 1 : -1;
+  // 80% of a box (or the window) that way, and where it stands after. behavior 'instant' jumps at once, so scrollX/Y
+  // read right after are the new spot. Source: https://developer.mozilla.org/en-US/docs/Web/API/Element/scrollBy
+  // (and .../Window/scrollBy, .../Window/scrollX)
+  const step = (width: number, height: number) => (side ? { left: sign * width * 0.8 } : { top: sign * height * 0.8 });
+  const where = (el: Element) => (side ? sideLine(roomOf(el)) : scrollLine(Math.round(el.scrollTop), el.scrollHeight - el.clientHeight));
   const biggest = (els: Element[]) => biggestBox(els, (el) => canScroll(el, dir));
   const panel = panelOnTop();
   let box: Element | null | undefined;
@@ -529,19 +548,19 @@ export function scroll(dir: 'up' | 'down', n?: number): string {
     box = panel && biggest([panel, ...panel.querySelectorAll('*')]);
     // Never stuck on a panel: if nothing in it scrolls, the page does, and the reply says so.
     if (panel && !box) note = `nothing in the panel on top scrolls ${dir}, so `;
-    if (!box && !windowLocked()) {
-      const before = scrollY;
-      scrollBy({ top: sign * innerHeight * 0.8, behavior: 'instant' });
-      const page = document.scrollingElement ?? document.documentElement;
-      if (scrollY !== before) return `ok — ${note}scrolled the page: ${scrollLine(Math.round(page.scrollTop), page.scrollHeight - page.clientHeight)}`;
+    if (!box && !windowLocked(side ? 'overflowX' : 'overflowY')) {
+      const at = () => (side ? scrollX : scrollY);
+      const before = at();
+      scrollBy({ ...step(innerWidth, innerHeight), behavior: 'instant' });
+      if (at() !== before) return `ok — ${note}scrolled the page: ${where(document.scrollingElement ?? document.documentElement)}`;
     }
     // The window is locked or didn't move: apps like Gmail (and open modals) scroll an inner box. Use the biggest visible one.
     box ??= biggest([...document.querySelectorAll('body *')]);
-    if (!box) throw new Error(`Can't scroll ${dir}: ${note}already at the ${dir === 'down' ? 'bottom' : 'top'}`);
+    if (!box) throw new Error(`Can't scroll ${dir}: ${note}already at the ${EDGE[dir]}`);
   }
-  box.scrollBy({ top: sign * box.clientHeight * 0.8, behavior: 'instant' });
+  box.scrollBy({ ...step(box.clientWidth, box.clientHeight), behavior: 'instant' });
   const what = panel && deepContains(panel, box) ? 'a box inside the panel on top, not the page' : 'an inner box, not the page';
-  return `ok — ${note}scrolled ${what}: ${scrollLine(Math.round(box.scrollTop), box.scrollHeight - box.clientHeight)}`;
+  return `ok — ${note}scrolled ${what}: ${where(box)}`;
 }
 
 const KEY_CODES: Record<string, number> = {

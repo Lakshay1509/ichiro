@@ -1,5 +1,8 @@
 // Page text: the plain text on screen (dates, prices, ratings) for text, find and the AI's page view. Runs in the content script.
-import { clickable, clippedCenter, cut, deepContains, deepElementFromPoint, ICON_GLYPHS, name, parentOf, shadowRootOf } from './reader.ts';
+import {
+  clickable, clippedCenter, cut, deepContains, deepElementFromPoint, describe, getElements, ICON_GLYPHS, name, parentOf, type Room, shadowRootOf,
+  sideways,
+} from './reader.ts';
 
 // Where a text node starts and ends on screen: its first and last line box.
 type Box = { top: number; bottom: number; left: number; right: number };
@@ -88,11 +91,38 @@ export function toPiece(text: string, rects: Box[], noRoom = false): Piece {
   return noRoom ? { text, first: dot, last: dot } : { text, first, last: rects.at(-1)! };
 }
 
-const onScreen = (r: DOMRect) => r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth;
+// A box that scrolls sideways (a wide table): where it is, and how far it can still scroll each way.
+export type SideBox = { rect: Box; room: Room };
+
+// Left to right, r is on the screen (width wide), or within reach of the sideways box it sits in (the box widened by
+// its room: what scrolling it shows), that box across by the same rule. Seen live: a weather table's last columns sat
+// right of the screen, so text missed them while find had them. boxes: innermost first, only asked for when r is off
+// screen. Pure.
+export function across(r: Box, width: number, boxes: () => SideBox[] = () => []): boolean {
+  if (r.right > 0 && r.left < width) return true;
+  const [box, ...outer] = boxes();
+  return !!box && r.right > box.rect.left - box.room.left && r.left < box.rect.right + box.room.right && across(box.rect, width, () => outer);
+}
+
+const onScreen = (r: DOMRect, boxes?: () => SideBox[]) => r.bottom > 0 && r.top < innerHeight && across(r, innerWidth, boxes);
 
 // F3a: anywhere down the page, but not pushed off it (left:-9999px, top:-9999px hide text from sighted readers).
 // r is in viewport coordinates, so scrollY puts it back on the page.
-export const onPage = (r: Box, width: number, scrollY: number) => r.bottom + scrollY > 0 && r.right > 0 && r.left < width;
+export const onPage = (r: Box, width: number, scrollY: number, boxes?: () => SideBox[]) => r.bottom + scrollY > 0 && across(r, width, boxes);
+
+// The boxes el sits in (itself included) that scroll sideways, innermost first. Not the page itself: text pushed right
+// of it stays out (F3a). cache: per walk, since text nodes share boxes. Rects are viewport coordinates, like the text's.
+// Source: https://developer.mozilla.org/en-US/docs/Web/API/Element/getBoundingClientRect
+function sideBoxes(el: Element | null, cache: Map<Element, SideBox[]>): SideBox[] {
+  if (!el || el === document.body || el === document.documentElement) return [];
+  let boxes = cache.get(el);
+  if (!boxes) {
+    const room = sideways(el);
+    boxes = [...(room ? [{ rect: el.getBoundingClientRect(), room }] : []), ...sideBoxes(parentOf(el), cache)];
+    cache.set(el, boxes);
+  }
+  return boxes;
+}
 
 // The text command's words, written by the AI, so anything else is refused: text (the screen), text all (the whole
 // page), text page N (a PDF from page N on, P2; the caller refuses it on other tabs).
@@ -110,14 +140,16 @@ export const capText = (text: string) =>
   text.length > TEXT_CAP ? `${text.slice(0, TEXT_CAP)}\n… ${text.length - TEXT_CAP} more characters: use find to jump to what you need` : text;
 
 // The visible text pieces under root, by text's rules: shown, not screen-reader-only, on screen (all: anywhere on the
-// page, F3a). Text behind a modal is still included (no hit test, so pointer-events:none text isn't lost). A named
-// icon alone in its box is a piece too: its name.
+// page, F3a; a box that scrolls sideways counts whole while it's on screen). Text behind a modal is still included (no
+// hit test, so pointer-events:none text isn't lost). A named icon alone in its box is a piece too: its name.
 export function* shownPieces(root: Node, all: boolean): Generator<Piece & { node: Text | Element }> {
   const range = document.createRange();
-  const shown = all ? (r: DOMRect) => onPage(r, innerWidth, scrollY) : onScreen;
+  const sides = new Map<Element, SideBox[]>();
   for (const node of textNodes(root, true)) {
     const text = node instanceof Text ? node.data : iconName(node);
     if (!text.trim()) continue;
+    const boxes = () => sideBoxes(parentOf(node), sides);
+    const shown = (r: DOMRect) => (all ? onPage(r, innerWidth, scrollY, boxes) : onScreen(r, boxes));
     const rects = lineBoxes(range, node);
     if (rects.some(shown) && isShown(node)) yield { ...toPiece(text, rects, seeThrough(node)), node };
   }
@@ -147,11 +179,17 @@ const quoted = (lines: string[]) => [
   ...(lines.length > REACTION_LINES ? [`+${lines.length - REACTION_LINES} more`] : []),
 ].join(' · ');
 export const NO_REACTION = "the page didn't react (no other text on screen changed): the site may not have taken it";
-export function reaction(before: string[], after: string[]): string {
+// field: what was typed into it and its value now. The site changing it (a money field that reformats, "200" → "$200")
+// is a reaction too: seen live, every type into one said NO_REACTION. Emptied isn't: that's the value refused (a number
+// field empties what isn't a number). Source: https://html.spec.whatwg.org/multipage/input.html (value sanitization)
+export function reaction(before: string[], after: string[], field?: { typed: string; now: string }): string {
   const now = addedLines(before, after);
   const was = addedLines(after, before);
-  if (!now.length) return was.length ? `page changed: ${quoted(was)} gone` : NO_REACTION;
-  return `page changed: now ${quoted(now)}${was.length ? `, was ${quoted(was)}` : ''}`;
+  const changes = [
+    now.length ? `now ${quoted(now)}${was.length ? `, was ${quoted(was)}` : ''}` : was.length ? `${quoted(was)} gone` : '',
+    field?.now && field.now !== field.typed ? `the site changed the field: ${quoted([field.typed])} → ${quoted([field.now])}` : '',
+  ].filter(Boolean);
+  return changes.length ? `page changed: ${changes.join('; ')}` : NO_REACTION;
 }
 
 // F2: what the AI reads each step, like browser-use's page view: the listed elements with the visible text around them,
@@ -293,10 +331,21 @@ export function chooseText(found: Found[], want: string): { i: number; note: str
 
 const SHOWN_MATCHES = 5;
 const CONTEXT = 40; // characters of snippet on each side of a match
+const AFTER_CAP = 200; // characters after a match at most, when its sentence runs on past the context
+
+// Where a snippet cut at `at` should end: the end of the sentence it falls in (a . ! ? before a space, so "4.5" isn't
+// one), at most cap. Seen live: a cut mid-sentence hid the number the agent needed ("salary range … based on the pr…").
+function sentenceEnd(text: string, at: number, cap: number): number {
+  const stop = /[.!?。](?=\s|$)/g;
+  // exec on a /g regex starts at lastIndex. Source: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/lastIndex
+  stop.lastIndex = at - 1; // a cut right after a sentence's end stays there
+  const found = stop.exec(text);
+  return Math.min(found ? found.index + 1 : text.length, cap, text.length);
+}
 
 // Finds query in text pieces (DOM order), ignoring case and all spaces: "16 GB" matches "16GB", also across pieces
 // ("16<b>GB</b>"). Returns the piece each match starts in and a readable snippet around it (context characters on each
-// side). Pure, so Node can test it.
+// side, then on to the end of the sentence). Pure, so Node can test it.
 export function findMatches(pieces: string[], query: string, context = CONTEXT): { piece: number; snippet: string }[] {
   // text: the pieces joined readably. key: text without spaces, lowercased; starts/ends/pieceOf map each key unit back.
   let text = '';
@@ -326,7 +375,7 @@ export function findMatches(pieces: string[], query: string, context = CONTEXT):
     const start = starts[k]!;
     const end = ends[k + needle.length - 1]!;
     const from = Math.max(0, start - context);
-    const to = Math.min(text.length, end + context);
+    const to = sentenceEnd(text, end + context, end + Math.max(context, AFTER_CAP));
     matches.push({ piece: pieceOf[k]!, snippet: `${from ? '…' : ''}${text.slice(from, to)}${to < text.length ? '…' : ''}` });
   }
   return matches;
@@ -366,15 +415,28 @@ function searchable(): Text[] {
   }
   return nodes;
 }
-// F3d: find's matches in what's loaded now, as snippets: what the loader reads while it scrolls a lazy page for find.
-export const findSnippets = (query: string) => findMatches(searchable().map((n) => n.data), query).map((m) => m.snippet);
+// A listed element's name matches query, and the element holds no text match (that one was found already). Seen live:
+// find "Navy" missed clickable "Navy Blue", a color swatch named only by its label. Pure.
+export const nameHit = (name: string, query: string, holdsMatch: () => boolean) => findMatches([name], query).length > 0 && !holdsMatch();
 
-// find (3.7d): like Ctrl+F over the whole page's visible text, not only the screen. Scrolls match nth (from 1) to the
+// find's matches: in the page's text, then in the page list's element names; each with the element to scroll to.
+function allMatches(query: string): { el: Element | null; snippet: string }[] {
+  const nodes = searchable();
+  const inText = findMatches(nodes.map((n) => n.data), query).map((m) => ({ el: parentOf(nodes[m.piece]!), snippet: m.snippet }));
+  // Still in the page (the read may be older). Source: https://developer.mozilla.org/en-US/docs/Web/API/Node/isConnected
+  const named = [...getElements()].filter(([, el]) => el.isConnected && nameHit(name(el), query, () => inText.some((m) => deepContains(el, m.el))));
+  return [...inText, ...named.map(([n, el]) => ({ el, snippet: `[${n}] ${describe(el)} (element name)` }))];
+}
+
+// F3d: find's matches in what's loaded now, as snippets: what the loader reads while it scrolls a lazy page for find.
+export const findSnippets = (query: string) => allMatches(query).map((m) => m.snippet);
+
+// find (3.7d): like Ctrl+F over the whole page's visible text, not only the screen, then the page list's element names
+// (a label-only swatch has no text). Scrolls match nth (from 1) to the
 // middle of the screen (inner scroll boxes too), so the next read numbers the elements around it. Top frame only.
 // A lazy page was already scrolled through by the caller (F3d).
 export function findText(query: string, nth: number): string {
-  const nodes = searchable();
-  const matches = findMatches(nodes.map((n) => n.data), query);
+  const matches = allMatches(query);
   const rules = '(case and spaces ignored; hidden text and iframes not searched)';
   const what = `${JSON.stringify(query)} ${rules}`;
   // A miss lists the page's sections, so the next find uses their exact words instead of guessing (seen live: 5 guesses
@@ -390,7 +452,7 @@ export function findText(query: string, nth: number): string {
     return [`No match for ${JSON.stringify(query)}. ${tip} A page of the site? search "site:" may reach it faster.`, list, rules].filter(Boolean).join('\n');
   }
   if (nth > matches.length) throw new Error(`Only ${matches.length} matches for ${JSON.stringify(query)}; there is no match ${nth}`);
-  parentOf(nodes[matches[nth - 1]!.piece]!)?.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
+  matches[nth - 1]!.el?.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
   const shown = matches.slice(nth - 1, nth - 1 + SHOWN_MATCHES).map((m, i) => `${nth + i}. ${m.snippet}`);
   return [`${matches.length} matches for ${what}. Scrolled to match ${nth}:`, ...shown].join('\n');
 }
