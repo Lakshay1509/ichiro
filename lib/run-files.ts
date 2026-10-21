@@ -20,7 +20,7 @@ export function fileUrl(path: string): string {
 
 // The newest download in allowed (RunDownloads.allowed, oldest first) that finished and is still on disk, or null.
 // items: Chrome's records for them (downloads.search); any other item is never picked.
-export function newestReadable(allowed: number[], items: Item[]): Item | null {
+export function newestReadable<T extends Item>(allowed: number[], items: T[]): T | null {
   for (const id of allowed.toReversed()) {
     const item = items.find((i) => i.id === id);
     if (item?.state === 'complete' && item.exists) return item;

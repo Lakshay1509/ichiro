@@ -265,7 +265,7 @@ export function pageItems(elements: Map<number, Element>, lines: string[]): Item
       if (child instanceof Text) {
         if (!child.data.trim()) continue;
         const rects = lineBoxes(range, child);
-        if (rects.some(onScreen) && isShown(child) && uncovered(child, rects, pins)) items.push({ ...toPiece(child.data, rects, seeThrough(child)), owner });
+        if (rects.some((r) => onScreen(r)) && isShown(child) && uncovered(child, rects, pins)) items.push({ ...toPiece(child.data, rects, seeThrough(child)), owner });
       } else if (child instanceof Element && !clippedAway(child)) {
         const own = listed.get(child);
         if (own) {
@@ -309,7 +309,7 @@ export function textTargets(want: string): (Found & { el: Element })[] {
   const shown = [...textNodes(document.documentElement)].filter((n) => {
     if (!sameText([n.data], want).length) return false; // cheap test first: most text never matches
     const rects = lineBoxes(range, n);
-    screen.set(n, rects.some(onScreen));
+    screen.set(n, rects.some((r) => onScreen(r)));
     return isShown(n) && (screen.get(n) ? uncovered(n, rects, pins) : rects.some((r) => onPage(r, innerWidth, scrollY)));
   });
   const els = new Map(sameText(shown.map((n) => n.data), want).map((i) => [parentOf(shown[i]!)!, screen.get(shown[i]!)!]));
