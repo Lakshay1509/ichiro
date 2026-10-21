@@ -324,10 +324,20 @@ export function chooseText(found: Found[], want: string): { i: number; note: str
 
 const SHOWN_MATCHES = 5;
 const CONTEXT = 40; // characters of snippet on each side of a match
+const AFTER_CAP = 200; // characters after a match at most, when its sentence runs on past the context
+
+// Where a snippet cut at `at` should end: the end of the sentence it falls in (a . ! ? before a space, so "4.5" isn't
+// one), at most cap. Seen live: a cut mid-sentence hid the number the agent needed ("salary range … based on the pr…").
+function sentenceEnd(text: string, at: number, cap: number): number {
+  const stop = /[.!?。](?=\s|$)/g;
+  stop.lastIndex = at - 1; // a cut right after a sentence's end stays there
+  const found = stop.exec(text);
+  return Math.min(found ? found.index + 1 : text.length, cap, text.length);
+}
 
 // Finds query in text pieces (DOM order), ignoring case and all spaces: "16 GB" matches "16GB", also across pieces
 // ("16<b>GB</b>"). Returns the piece each match starts in and a readable snippet around it (context characters on each
-// side). Pure, so Node can test it.
+// side, then on to the end of the sentence). Pure, so Node can test it.
 export function findMatches(pieces: string[], query: string, context = CONTEXT): { piece: number; snippet: string }[] {
   // text: the pieces joined readably. key: text without spaces, lowercased; starts/ends/pieceOf map each key unit back.
   let text = '';
@@ -357,7 +367,7 @@ export function findMatches(pieces: string[], query: string, context = CONTEXT):
     const start = starts[k]!;
     const end = ends[k + needle.length - 1]!;
     const from = Math.max(0, start - context);
-    const to = Math.min(text.length, end + context);
+    const to = sentenceEnd(text, end + context, end + Math.max(context, AFTER_CAP));
     matches.push({ piece: pieceOf[k]!, snippet: `${from ? '…' : ''}${text.slice(from, to)}${to < text.length ? '…' : ''}` });
   }
   return matches;

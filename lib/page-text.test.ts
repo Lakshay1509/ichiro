@@ -92,8 +92,14 @@ want('every match, in order', find(['8GB', 'x', '16GB', 'y', '16 GB'], '16gb'), 
 want('no match', find(['8GB RAM'], '16 GB'), []);
 want('blank query', find(['16GB'], '   '), []);
 want('blank pieces skipped', find(['', '  ', '16GB'], '16GB'), [{ piece: 2, snippet: '16GB' }]);
-const long = `${'a'.repeat(100)} 16GB ${'b'.repeat(100)}`;
-want('snippet cut', find([long], '16gb'), [{ piece: 0, snippet: `…${'a'.repeat(39)} 16GB ${'b'.repeat(39)}…` }]);
+const long = `${'a'.repeat(100)} 16GB ${'b'.repeat(300)}`;
+want('snippet cut, no sentence end', find([long], '16gb'), [{ piece: 0, snippet: `…${'a'.repeat(39)} 16GB ${'b'.repeat(199)}…` }]);
+// After the match a snippet runs on to the end of its sentence, so it doesn't stop before the number (seen live: "…based
+// on the pr…" hid a salary). A decimal point isn't a sentence end. 40 characters alone would cut "is 4".
+const rating = 'Rating for this item from verified buyers is 4.5 of 5 stars. Next sentence here.';
+want('to the end of the sentence', find([rating], 'rating'), [{ piece: 0, snippet: 'Rating for this item from verified buyers is 4.5 of 5 stars.…' }]);
+const ends = `Match ${'y'.repeat(38)}. Next sentence goes on.`; // 40 characters after "Match" end right after the "."
+want('a cut at a sentence end stays', find([ends], 'match'), [{ piece: 0, snippet: `Match ${'y'.repeat(38)}.…` }]);
 
 // find also searches the page list's element names: a color swatch named only by its label ("Navy Blue") has no text
 // to match. An element holding a text match was found already, so its name doesn't count twice.
