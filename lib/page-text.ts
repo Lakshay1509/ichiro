@@ -1,5 +1,5 @@
 // Page text: the plain text on screen (dates, prices, ratings) for text, find and the AI's page view. Runs in the content script.
-import { clickable, clippedCenter, cut, deepContains, deepElementFromPoint, ICON_GLYPHS, name, parentOf, shadowRootOf } from './reader.ts';
+import { clickable, clippedCenter, cut, deepContains, deepElementFromPoint, ICON_GLYPHS, name, parentOf, type Room, shadowRootOf, sideways } from './reader.ts';
 
 // Where a text node starts and ends on screen: its first and last line box.
 type Box = { top: number; bottom: number; left: number; right: number };
@@ -88,11 +88,37 @@ export function toPiece(text: string, rects: Box[], noRoom = false): Piece {
   return noRoom ? { text, first: dot, last: dot } : { text, first, last: rects.at(-1)! };
 }
 
-const onScreen = (r: DOMRect) => r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth;
+// A box that scrolls sideways (a wide table): where it is, and how far it can still scroll each way.
+export type SideBox = { rect: Box; room: Room };
+
+// Left to right, r is on the screen (width wide), or within reach of the sideways box it sits in (the box widened by
+// its room: what scrolling it shows), that box across by the same rule. Seen live: a weather table's last columns sat
+// right of the screen, so text missed them while find had them. boxes: innermost first, only asked for when r is off
+// screen. Pure.
+export function across(r: Box, width: number, boxes: () => SideBox[] = () => []): boolean {
+  if (r.right > 0 && r.left < width) return true;
+  const [box, ...outer] = boxes();
+  return !!box && r.right > box.rect.left - box.room.left && r.left < box.rect.right + box.room.right && across(box.rect, width, () => outer);
+}
+
+const onScreen = (r: DOMRect, boxes?: () => SideBox[]) => r.bottom > 0 && r.top < innerHeight && across(r, innerWidth, boxes);
 
 // F3a: anywhere down the page, but not pushed off it (left:-9999px, top:-9999px hide text from sighted readers).
 // r is in viewport coordinates, so scrollY puts it back on the page.
-export const onPage = (r: Box, width: number, scrollY: number) => r.bottom + scrollY > 0 && r.right > 0 && r.left < width;
+export const onPage = (r: Box, width: number, scrollY: number, boxes?: () => SideBox[]) => r.bottom + scrollY > 0 && across(r, width, boxes);
+
+// The boxes el sits in (itself included) that scroll sideways, innermost first. Not the page itself: text pushed right
+// of it stays out (F3a). cache: per walk, since text nodes share boxes.
+function sideBoxes(el: Element | null, cache: Map<Element, SideBox[]>): SideBox[] {
+  if (!el || el === document.body || el === document.documentElement) return [];
+  let boxes = cache.get(el);
+  if (!boxes) {
+    const room = sideways(el);
+    boxes = [...(room ? [{ rect: el.getBoundingClientRect(), room }] : []), ...sideBoxes(parentOf(el), cache)];
+    cache.set(el, boxes);
+  }
+  return boxes;
+}
 
 // The text command's words, written by the AI, so anything else is refused: text (the screen), text all (the whole
 // page), text page N (a PDF from page N on, P2; the caller refuses it on other tabs).
@@ -110,14 +136,16 @@ export const capText = (text: string) =>
   text.length > TEXT_CAP ? `${text.slice(0, TEXT_CAP)}\n… ${text.length - TEXT_CAP} more characters: use find to jump to what you need` : text;
 
 // The visible text pieces under root, by text's rules: shown, not screen-reader-only, on screen (all: anywhere on the
-// page, F3a). Text behind a modal is still included (no hit test, so pointer-events:none text isn't lost). A named
-// icon alone in its box is a piece too: its name.
+// page, F3a; a box that scrolls sideways counts whole while it's on screen). Text behind a modal is still included (no
+// hit test, so pointer-events:none text isn't lost). A named icon alone in its box is a piece too: its name.
 export function* shownPieces(root: Node, all: boolean): Generator<Piece & { node: Text | Element }> {
   const range = document.createRange();
-  const shown = all ? (r: DOMRect) => onPage(r, innerWidth, scrollY) : onScreen;
+  const sides = new Map<Element, SideBox[]>();
   for (const node of textNodes(root, true)) {
     const text = node instanceof Text ? node.data : iconName(node);
     if (!text.trim()) continue;
+    const boxes = () => sideBoxes(parentOf(node), sides);
+    const shown = (r: DOMRect) => (all ? onPage(r, innerWidth, scrollY, boxes) : onScreen(r, boxes));
     const rects = lineBoxes(range, node);
     if (rects.some(shown) && isShown(node)) yield { ...toPiece(text, rects, seeThrough(node)), node };
   }

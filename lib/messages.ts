@@ -26,7 +26,7 @@ export type Message =
   // given: the text is in the goal you typed (the panel checks, never the AI). Skips only the personal-data ask.
   | { type: 'type'; n: number; text: string; enter: boolean; slow: boolean; allow?: boolean; given?: boolean }
   | { type: 'select'; n: number; option: string; allow?: boolean; given?: boolean }
-  | { type: 'scroll'; dir: 'up' | 'down'; n?: number }
+  | { type: 'scroll'; dir: 'up' | 'down' | 'left' | 'right'; n?: number }
   | { type: 'key'; key: string; allow?: boolean }
   | { type: 'settle'; maxMs: number }
   | { type: 'fields' } // F9: how many form fields are shown (no read, so numbers stay)

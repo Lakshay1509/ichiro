@@ -313,6 +313,29 @@ export function scrollLine(y: number, max: number): string {
   return `Scroll: ${Math.round((y / max) * 100)}% — ${more}`;
 }
 
+// How far a box can still scroll left and right.
+export type Room = { left: number; right: number };
+
+// Room from scrollLeft, which counts from the start edge: the left one, or in RTL the right one (0, then negative).
+// max = scrollWidth - clientWidth. Pure. Source: https://developer.mozilla.org/en-US/docs/Web/API/Element/scrollLeft
+export function sideRoom(scrollLeft: number, max: number, rtl: boolean): Room {
+  const left = scrollLeft < 0 || (scrollLeft === 0 && rtl) ? max + scrollLeft : scrollLeft;
+  return { left, right: max - left };
+}
+
+export const roomOf = (el: Element) => sideRoom(el.scrollLeft, el.scrollWidth - el.clientWidth, getComputedStyle(el).direction === 'rtl');
+
+// A box that scrolls sideways on its own (a wide table): its room, else null.
+export const sideways = (el: Element): Room | null =>
+  /^(auto|scroll)$/.test(getComputedStyle(el).overflowX) && el.scrollWidth > el.clientWidth + 1 ? roomOf(el) : null;
+
+// Like scrollLine, sideways. Pure.
+export function sideLine(room: Room): string {
+  const [left, right] = [Math.round(room.left), Math.round(room.right)];
+  const more = [left > 0 && 'more content left', right > 0 && 'more content right'].filter(Boolean).join(', ');
+  return `Scroll sideways: ${Math.round((left / (left + right)) * 100)}% — ${more}`;
+}
+
 // Heading level: from the tag (h2 → 2), else aria-level (role=heading defaults to 2).
 function level(el: Element): number {
   return Number(/^H(\d)$/.exec(el.tagName)?.[1] ?? el.getAttribute('aria-level') ?? 2);
@@ -388,8 +411,9 @@ export function ranges(nums: number[]): string {
   return out.slice(0, 5).join(', ') + (out.length > 5 ? ', …' : '');
 }
 
-// Scrolls on its own (not the page): a scroll box with more inside than shows.
-const scrollsAlone = (el: Element) => /^(auto|scroll)$/.test(getComputedStyle(el).overflowY) && el.scrollHeight > el.clientHeight + 1;
+// Scrolls on its own (not the page): a scroll box with more inside than shows, up and down or sideways.
+const scrollsDown = (el: Element) => /^(auto|scroll)$/.test(getComputedStyle(el).overflowY) && el.scrollHeight > el.clientHeight + 1;
+const scrollsAlone = (el: Element) => scrollsDown(el) || !!sideways(el);
 
 // Up to 3 boxes that scroll on their own and hold listed elements, biggest first, so the model knows what scroll moves.
 function scrollBoxes(visible: Element[], nums: number[]): string[] {
@@ -406,7 +430,9 @@ function scrollBoxes(visible: Element[], nums: number[]): string[] {
     .slice(0, 3)
     .map((box) => {
       const inBox = visible.flatMap((el, i) => (deepContains(box, el) ? [nums[i]!] : []));
-      return `Box with ${ranges(inBox)} scrolls: ${scrollLine(Math.round(box.scrollTop), box.scrollHeight - box.clientHeight).replace(/^Scroll: /, '')}`;
+      const room = sideways(box);
+      const ways = [scrollsDown(box) ? scrollLine(Math.round(box.scrollTop), box.scrollHeight - box.clientHeight) : '', room ? sideLine(room) : ''];
+      return `Box with ${ranges(inBox)} ${ways.filter(Boolean).map((w) => w.replace(/^Scroll/, 'scrolls')).join('; ')}`;
     });
 }
 

@@ -135,6 +135,22 @@ placed('scrolled past, still on the page', onPage(box(-2000, 0), 1280, 3000), tr
 placed('pushed above the page', onPage(box(-9999, 0), 1280, 0), false);
 placed('pushed left', onPage(box(0, -9999), 1280, 0), false);
 placed('pushed right', onPage(box(0, 9999), 1280, 0), false);
+
+// A weather table's header in a box that scrolls sideways (overflow-x: auto), on a 664 px screen (side panel open):
+// the last columns sit right of the screen until the box scrolls. Seen live: text, text all and pick stopped at "Wind
+// Speed (mph)" while find had them. Text in the box counts while the box is on screen, within what scrolling it shows.
+const table = { rect: { top: 300, bottom: 900, left: 16, right: 648 }, room: { left: 0, right: 700 } };
+const header = [at('Time', 300, 20, 60), at('Wind Speed (mph)', 300, 500, 640), at('Pressure (in)', 300, 700, 800), at('Precipitation (in)', 300, 1200, 1330)];
+const row = (boxes: (typeof table)[]) => joinLines(header.filter((p) => onPage(p.first, 664, 0, () => boxes)));
+if (row([]) !== 'Time Wind Speed (mph)') throw new Error(`no box: ${row([])}`);
+if (row([table]) !== 'Time Wind Speed (mph) Pressure (in) Precipitation (in)') throw new Error(`sideways box: ${row([table])}`);
+const scrolled = { ...table, room: { left: 300, right: 400 } };
+placed('in the box, past what scrolling shows', onPage(box(300, 1200), 664, 0, () => [scrolled]), false);
+placed('in the box, pushed left of it', onPage(box(300, -9999), 664, 0, () => [scrolled]), false);
+placed('scrolled out left, back in reach', onPage(box(300, -250), 664, 0, () => [scrolled]), true);
+const offRight = { ...table, rect: { ...table.rect, left: 700, right: 1300 } };
+placed('the box itself right of the screen', onPage(box(300, 1400), 664, 0, () => [offRight]), false);
+placed('that box inside an outer one on screen', onPage(box(300, 1400), 664, 0, () => [offRight, table]), true);
 // A long page is cut at the cap, with a note that says how to reach the rest.
 const capped = capText('a'.repeat(TEXT_CAP + 50));
 if (capped !== `${'a'.repeat(TEXT_CAP)}\n… 50 more characters: use find to jump to what you need`) throw new Error(`capText: ${capped.slice(-80)}`);

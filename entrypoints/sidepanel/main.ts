@@ -1466,10 +1466,10 @@ const commands: Record<string, Command> = {
     },
   },
   scroll: {
-    help: 'scroll up|down [n|"label"] — scroll the page, or the box around element n',
+    help: 'scroll up|down|left|right [n|"label"] — scroll the page, or the box around element n (left|right: a box that scrolls sideways, like a wide table)',
     run: ([dir, nArg]) => {
-      const usage = 'scroll up|down [number|"label"], e.g. scroll down or scroll down 12';
-      if (dir !== 'up' && dir !== 'down') throw new Error(`Usage: ${usage}`);
+      const usage = 'scroll up|down|left|right [number|"label"], e.g. scroll down or scroll right 12';
+      if (dir !== 'up' && dir !== 'down' && dir !== 'left' && dir !== 'right') throw new Error(`Usage: ${usage}`);
       const n = nArg === undefined ? undefined : target(nArg, usage);
       return act(() => sendToTab({ type: 'scroll', dir, n }, n === undefined ? 0 : frameFor(n)));
     },

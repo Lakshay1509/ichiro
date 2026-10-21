@@ -2,7 +2,7 @@
 // Known limit: these events have isTrusted = false. A few sites ignore them; harness Phase 7 adds real input.
 import {
   clickable, clickPoint, deepContains, deepElementFromPoint, findInteractive, getElement, getElements, isSecret, name, NO_VALUE, panelOnTop,
-  parentOf, role, scrollLine, shadowRootOf, suggests, visibleCenter,
+  parentOf, role, roomOf, scrollLine, shadowRootOf, sideLine, sideways, suggests, visibleCenter,
 } from './reader.ts';
 import { HandOver, StopLine } from './messages.ts';
 import { chooseText, NO_REACTION, reaction, readText, textTargets } from './page-text.ts';
@@ -481,18 +481,22 @@ export function selectOption(n: number, option: string, allow = false, given = f
   return `ok — selected ${JSON.stringify(opt.text.trim())}`;
 }
 
+type Way = 'up' | 'down' | 'left' | 'right';
+const EDGE: Record<Way, string> = { up: 'top', down: 'bottom', left: 'left edge', right: 'right edge' };
+
 // True if el is a scroll box with room left to scroll in that direction.
-function canScroll(el: Element, dir: 'up' | 'down'): boolean {
+function canScroll(el: Element, dir: Way): boolean {
+  if (dir === 'left' || dir === 'right') return (sideways(el)?.[dir] ?? 0) >= 1;
   const { overflowY } = getComputedStyle(el);
   if (overflowY !== 'auto' && overflowY !== 'scroll') return false;
   return dir === 'down' ? el.scrollTop + el.clientHeight < el.scrollHeight - 1 : el.scrollTop > 0;
 }
 
-// overflow:hidden on <html> (or on <body> when <html> leaves it visible) stops people scrolling the window.
-// Sites do this behind modals. Scripts could still move it, so check before scrolling it.
-function windowLocked(): boolean {
-  const html = getComputedStyle(document.documentElement).overflowY;
-  const viewport = html === 'visible' && document.body ? getComputedStyle(document.body).overflowY : html;
+// overflow:hidden on <html> (or on <body> when <html> leaves it visible) stops people scrolling the window that way.
+// Sites do this behind modals, and sideways to keep a page from moving. Scripts could still move it, so check first.
+function windowLocked(axis: 'overflowX' | 'overflowY' = 'overflowY'): boolean {
+  const html = getComputedStyle(document.documentElement)[axis];
+  const viewport = html === 'visible' && document.body ? getComputedStyle(document.body)[axis] : html;
   return viewport === 'hidden' || viewport === 'clip';
 }
 
@@ -514,9 +518,14 @@ export function mainScroller(): Element | null {
 
 // Scrolls the page by 80% of the screen. With n: scrolls the box around element n instead.
 // A panel on top (popup, drawer, filters) is what you see, so its box scrolls first, like a mouse wheel over it.
-// The reply always says what moved: the model can't see it.
-export function scroll(dir: 'up' | 'down', n?: number): string {
-  const sign = dir === 'down' ? 1 : -1;
+// Left and right move a box that scrolls sideways (a wide table), or a wide page. The reply always says what moved:
+// the model can't see it.
+export function scroll(dir: Way, n?: number): string {
+  const side = dir === 'left' || dir === 'right';
+  const sign = dir === 'down' || dir === 'right' ? 1 : -1;
+  // 80% of a box (or the window) that way, and where it stands after.
+  const step = (width: number, height: number) => (side ? { left: sign * width * 0.8 } : { top: sign * height * 0.8 });
+  const where = (el: Element) => (side ? sideLine(roomOf(el)) : scrollLine(Math.round(el.scrollTop), el.scrollHeight - el.clientHeight));
   const biggest = (els: Element[]) => biggestBox(els, (el) => canScroll(el, dir));
   const panel = panelOnTop();
   let box: Element | null | undefined;
@@ -529,19 +538,19 @@ export function scroll(dir: 'up' | 'down', n?: number): string {
     box = panel && biggest([panel, ...panel.querySelectorAll('*')]);
     // Never stuck on a panel: if nothing in it scrolls, the page does, and the reply says so.
     if (panel && !box) note = `nothing in the panel on top scrolls ${dir}, so `;
-    if (!box && !windowLocked()) {
-      const before = scrollY;
-      scrollBy({ top: sign * innerHeight * 0.8, behavior: 'instant' });
-      const page = document.scrollingElement ?? document.documentElement;
-      if (scrollY !== before) return `ok — ${note}scrolled the page: ${scrollLine(Math.round(page.scrollTop), page.scrollHeight - page.clientHeight)}`;
+    if (!box && !windowLocked(side ? 'overflowX' : 'overflowY')) {
+      const at = () => (side ? scrollX : scrollY);
+      const before = at();
+      scrollBy({ ...step(innerWidth, innerHeight), behavior: 'instant' });
+      if (at() !== before) return `ok — ${note}scrolled the page: ${where(document.scrollingElement ?? document.documentElement)}`;
     }
     // The window is locked or didn't move: apps like Gmail (and open modals) scroll an inner box. Use the biggest visible one.
     box ??= biggest([...document.querySelectorAll('body *')]);
-    if (!box) throw new Error(`Can't scroll ${dir}: ${note}already at the ${dir === 'down' ? 'bottom' : 'top'}`);
+    if (!box) throw new Error(`Can't scroll ${dir}: ${note}already at the ${EDGE[dir]}`);
   }
-  box.scrollBy({ top: sign * box.clientHeight * 0.8, behavior: 'instant' });
+  box.scrollBy({ ...step(box.clientWidth, box.clientHeight), behavior: 'instant' });
   const what = panel && deepContains(panel, box) ? 'a box inside the panel on top, not the page' : 'an inner box, not the page';
-  return `ok — ${note}scrolled ${what}: ${scrollLine(Math.round(box.scrollTop), box.scrollHeight - box.clientHeight)}`;
+  return `ok — ${note}scrolled ${what}: ${where(box)}`;
 }
 
 const KEY_CODES: Record<string, number> = {
