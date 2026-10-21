@@ -39,16 +39,31 @@ async function childFrames(tabId: number) {
   return ((await browser.webNavigation.getAllFrames({ tabId })) ?? []).filter((f) => f.frameId !== 0);
 }
 
-const frameLine = (url: string) => `--- iframe: ${URL.parse(url)?.hostname || url} ---`;
+// 4.2: a CAPTCHA frame says so, so the agent knows it's there and not its to use. note: why the rest isn't read.
+const frameLine = (url: string, note = '') => {
+  const kind = captchaKind(url);
+  return `--- iframe: ${URL.parse(url)?.hostname || url}${kind ? ` (${kind}: only the user may solve it)` : note && ` (${note})`} ---`;
+};
+
+// #16: which frames show on the tab's screen, all asked at once. false only when the frame said so: a frame that
+// can't answer (no script, a hidden tab) is read as before.
+const shownFrames = (tabId: number, frames: { frameId: number }[]) =>
+  Promise.all(frames.map((f) => send(tabId, { type: 'inView' }, f.frameId).catch(() => null)));
 
 // Visible text of the top page, then of each frame that has any (a payment form or embed can hold the answer).
 // whole: the whole page, not just the screen (F3a). Not cut: the caller cuts it with capText for the model, and V1 keeps
-// the whole of a text all for the done check's search.
+// the whole of a text all for the done check's search. On the screen only, a frame off it is one line (#16).
 export async function textAll(whole = false): Promise<string> {
   const tabId = await targetTabId();
   const msg = { type: 'text', all: whole } as const;
   const parts = [await sendToTab(msg)];
-  for (const frame of await childFrames(tabId)) {
+  const frames = await childFrames(tabId);
+  const shown = whole ? [] : await shownFrames(tabId, frames);
+  for (const [i, frame] of frames.entries()) {
+    if (shown[i] === false) {
+      parts.push(frameLine(frame.url, 'off screen'));
+      continue;
+    }
     const text = await send(tabId, msg, frame.frameId).catch(() => '');
     if (text) parts.push(frameLine(frame.url), text);
   }
@@ -117,7 +132,15 @@ async function readFrames(footer: boolean): Promise<string> {
   const parts = [...top.page];
   let total = top.total;
 
-  for (const frame of await childFrames(tabId)) {
+  const frames = await childFrames(tabId);
+  const shown = await shownFrames(tabId, frames);
+  for (const [i, frame] of frames.entries()) {
+    // 4.2: listed from its URL, never read: none of its elements gets a number, and it shows even if its script is silent.
+    // #16: a frame off the screen is one line too, as the top page lists only what's on screen.
+    if (captchaKind(frame.url) || shown[i] === false) {
+      parts.push(frameLine(frame.url, shown[i] === false ? 'off screen' : ''));
+      continue;
+    }
     // No script there (a browser page, or still loading): skip that frame.
     const part = await send(tabId, { type: 'read', next: lastNumber, overlay: overlayOn }, frame.frameId).catch(() => null);
     if (!part?.lines.length) continue;

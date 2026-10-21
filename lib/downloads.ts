@@ -24,6 +24,9 @@ export class RunDownloads {
   // RP1: downloads the repeat item now running may start without asking: item 1's count, which you approved with the
   // list. The panel sets it per item and back to 0 after; any download past it pauses and asks as usual.
   allowance = 0;
+  // Downloads you allowed, oldest first: in an Allow once step, by a repeat's allowance, or with your yes. Only these
+  // may be read (text download); one that finished before it could be asked never is.
+  readonly allowed: number[] = [];
   private told = new Map<number, string>(); // downloads not finished yet → the last line the model got about each
   private waiting = new Set<number>(); // paused until you say yes
 
@@ -32,9 +35,10 @@ export class RunDownloads {
   readonly onCreated = (item: Item) => {
     this.created++;
     this.told.set(item.id, '');
-    if (this.allowing) return;
+    if (this.allowing) return void this.allowed.push(item.id);
     if (this.allowance > 0) {
       this.allowance--;
+      this.allowed.push(item.id);
       return;
     }
     this.waiting.add(item.id);
@@ -58,8 +62,10 @@ export class RunDownloads {
       }
       let line = downloadNote(item);
       if (wasWaiting && item.state === 'in_progress') {
-        if (await ask(item)) await browser.downloads.resume(id).catch(() => {});
-        else {
+        if (await ask(item)) {
+          this.allowed.push(id);
+          await browser.downloads.resume(id).catch(() => {});
+        } else {
           await browser.downloads.cancel(id).catch(() => {});
           lines.push(`download refused: the user said no to "${fileName(item)}"`);
           this.told.delete(id);

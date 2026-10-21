@@ -31,6 +31,7 @@ export type Message =
   | { type: 'settle'; maxMs: number }
   | { type: 'fields' } // F9: how many form fields are shown (no read, so numbers stay)
   | { type: 'captcha' }
+  | { type: 'inView' } // #16: does this frame show on the tab's screen (null: no answer, a hidden tab)
   | { type: 'overlay'; on: boolean }
   // F1a: draw (on) or clear the numbers for a screenshot. Replies true if a secret field is on screen.
   | { type: 'shot'; on: boolean };
@@ -69,6 +70,7 @@ export type Replies = {
   settle: boolean;
   fields: number;
   captcha: string;
+  inView: boolean | null;
   overlay: string;
   shot: boolean;
 };

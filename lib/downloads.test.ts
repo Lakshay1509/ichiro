@@ -74,3 +74,21 @@ items.set(7, item(7));
 run.onCreated(items.get(7)!);
 if (calls.join() !== 'pause 6,pause 7') fail('allowance used up: should pause');
 if (run.created !== 3) fail(`created counts every download: ${run.created}`);
+
+// P2 downloads: only the downloads you allowed may be read: an Allow once step's (1), a yes (2), a repeat's allowance
+// (5); never one you said no to (3), one that finished before it could be asked (4), or one still waiting (6, 7).
+run = new RunDownloads();
+run.allowing = true;
+run.onCreated(items.get(1)!);
+run.allowing = false;
+items.set(2, item(2));
+run.onCreated(items.get(2)!);
+await run.report(yes);
+items.set(3, item(3));
+run.onCreated(items.get(3)!);
+await run.report(no);
+run.onCreated(items.get(4)!);
+await run.report(never);
+run.allowance = 1;
+for (const id of [5, 6, 7]) run.onCreated(items.get(id)!);
+if (run.allowed.join() !== '1,2,5') fail(`allowed downloads: ${run.allowed.join()}`);

@@ -152,6 +152,17 @@ export async function allowOnce(attempt: (allow: boolean) => Promise<string | vo
   return "The user did this step themselves, then pressed Resume. Don't redo it: read the page to see what it shows now, then go on with your task.";
 }
 
+// 4.2 for the bridge, as in a goal run: a CAPTCHA is yours. While one is shown, every command but goto and back (they
+// leave the page, so they don't look) waits until you solve it and press Resume; then it doesn't run, as the page
+// changed under it. shown: the kind on screen, '' none (captchaAll). solved: the seen of the one you last resumed from,
+// since a solved CAPTCHA often stays on screen. null: the command goes on.
+export async function captchaHold(name: string, url: string, shown: () => Promise<string>, solved: string): Promise<{ ask: string; seen: string } | null> {
+  if (name === 'goto' || name === 'back') return null;
+  const kind = await shown();
+  const seen = `${url} ${kind}`;
+  return kind && seen !== solved ? { ask: `CAPTCHA on the page (${kind}). Solve it yourself, then press Resume.`, seen } : null;
+}
+
 // F10: a site's saved tips for the agent, once per bridge session: the first reply on that site carries them. sent: the
 // sites done this session (it grows here, before load, so tips are read once). site: siteOn's, '' off the Sites.
 export async function tipsOnce(site: string, sent: Set<string>, load: (site: string) => Promise<string[]>): Promise<string> {

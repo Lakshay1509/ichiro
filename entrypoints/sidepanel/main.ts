@@ -2,7 +2,7 @@
 import { buildAsk, buildDoneCheck, buildTipAsk, checkGoto, livePlan, MAX_BAD_REPLIES, MAX_CHECKS, MAX_NOTES, oneLine, onSites, parseStep, parseVerdict, progress, startSites, STEP_BUDGET, stepsAdded, submits, addVisit, visitedLines, type Visit, savedNotes, siteOn, siteToAdd, siteToOpen, summarize, type Step } from '@/lib/agent-prompt';
 import { fileName, RunDownloads } from '@/lib/downloads';
 import { captchaAll, clickTextIn, focusedFrame, frameFor, textFrame, labelFor, nameFor, numberFor, numbersAll, pickInFrames, readAll, sendToAllFrames, setOverlayOn, textAll } from '@/lib/frames';
-import { allowOnce, batchProblem, batchReply, checkAgentTip, checkCommands, LOOK_HELP, lookShot, MAX_COMMAND, MAX_OUTPUT, MCP_COMMANDS, retryUnlisted, TIP_HELP, tipsOnce, type BridgeImage, type BridgeReply } from '@/lib/bridge';
+import { allowOnce, batchProblem, batchReply, captchaHold, checkAgentTip, checkCommands, LOOK_HELP, lookShot, MAX_COMMAND, MAX_OUTPUT, MCP_COMMANDS, retryUnlisted, TIP_HELP, tipsOnce, type BridgeImage, type BridgeReply } from '@/lib/bridge';
 import { HOST_NAME } from '@/lib/host-install';
 import { JUDGE, PLANNER, type Ask, type Reply } from '@/lib/host-request';
 import { HandOver, StopLine } from '@/lib/messages';
@@ -16,6 +16,7 @@ import { pickArgs } from '@/lib/pick';
 import { readPdf, renderPage } from '@/lib/pdf';
 import { downloadsSince, failed, filesLine, forItem, item1On, itemMiss, itemTarget, MAX_REPEAT_ITEMS, notAlikeError, parseRepeat, recipeFrom, recordLine, repeatAsk, repeatDone, stoppedAt } from '@/lib/repeat';
 import { pdfFind, pdfPageLine, pdfText } from '@/lib/pdf-text';
+import { downloadArgs, fileKind, fileUrl, MAX_TEXT_FILE, newestReadable } from '@/lib/run-files';
 import { keep, lookAgainText, searchKept, type Kept } from '@/lib/read-store';
 import { attach, checkPoint, checkScriptClick, clickAtPoint, detachAll, dragAlong, MAX_POINTS, mouseFlags, moveTo, parsePoint, sendKeys, sendMouse, sendText, type Point } from '@/lib/real-input';
 import { keyEvents, parseKey, scriptKey } from '@/lib/keys';
@@ -45,6 +46,15 @@ function print(text: string, className = '') {
   out.append(line);
   out.scrollTop = out.scrollHeight;
 }
+
+// While you're at the bottom, the log stays there when the panel gets shorter or narrower (Chrome's debugging bar
+// coming in, a resize): else an ask's buttons slide below the visible area. Only the scroll changes, so no resize loop.
+// Source: https://developer.mozilla.org/en-US/docs/Web/API/ResizeObserver
+let atBottom = true;
+out.addEventListener('scroll', () => (atBottom = out.scrollHeight - out.scrollTop - out.clientHeight < 8));
+new ResizeObserver(() => {
+  if (atBottom) out.scrollTop = out.scrollHeight;
+}).observe(out);
 
 // The open choice: a stop-line's Allow once / I'll do it, or a run's pause. Valid only until another command starts:
 // a new read renumbers elements, and an old Allow must never land on a different element.
@@ -195,9 +205,11 @@ function runGoal(goal: string, sites: string[]): Promise<string> {
     browser.tabs.onCreated.addListener(onCreated);
     browser.tabs.onRemoved.addListener(onRemoved);
     browser.downloads.onCreated.addListener(downloads.onCreated);
+    goalDownloads = downloads;
     try {
       return await runSteps(goal, sites, run, downloads);
     } finally {
+      goalDownloads = null;
       browser.tabs.onCreated.removeListener(onCreated);
       browser.tabs.onRemoved.removeListener(onRemoved);
       unwatch(downloads);
@@ -947,6 +959,32 @@ async function pdfTabUrl(): Promise<string | null> {
   return /^https?:/.test(url) && (await readPdf(url).then(() => true, () => false)) ? url : null;
 }
 
+// The goal run's downloads while it goes (the bridge's are agentDownloads), for text download.
+let goalDownloads: RunDownloads | null = null;
+
+// text download [page N]: this run's newest download you allowed (run-files.ts), a PDF or a text file, read from where
+// Chrome saved it. Never a path the agent names, never a download from before the run, never a command you type.
+async function readDownload(args: string[]): Promise<string> {
+  const from = downloadArgs(args);
+  const own = forAgent ? agentDownloads : goalDownloads;
+  if (!own) throw new Error("text download reads only a run's own downloads");
+  const items = (await Promise.all(own.allowed.map((id) => browser.downloads.search({ id })))).flat();
+  const item = newestReadable(own.allowed, items);
+  if (!item) throw new Error('No download to read: none that the user allowed in this run has finished and is still on disk');
+  const name = `"${fileName(item)}"`;
+  const kind = fileKind(item);
+  if (!kind) throw new Error(`Can't read ${name} (${item.mime || 'unknown type'}): text download reads PDFs and text files only`);
+  if (kind === 'text' && from > 1) throw new Error(`${name} isn't a PDF: send text download`);
+  if (kind === 'text' && (item.fileSize < 0 || item.fileSize > MAX_TEXT_FILE)) throw new Error(`${name} is too big to read (text files up to ${MAX_TEXT_FILE / 1e6} MB)`);
+  // Only you can turn this on. Source: https://developer.chrome.com/docs/extensions/reference/api/extension#method-isAllowedFileSchemeAccess
+  if (!(await browser.extension.isAllowedFileSchemeAccess())) {
+    throw new Error(`Can't read ${name}: Chrome's "Allow access to file URLs" is off for this extension. Ask the user to turn it on (chrome://extensions → Browser Agent → Details), then try again`);
+  }
+  const url = fileUrl(item.filename);
+  if (kind === 'pdf') return `Download ${name}:\n${pdfText(await readPdf(url), from, 0)}`;
+  return `Download ${name}:\n${capText(await (await fetch(url)).text())}`;
+}
+
 // P1: the page list for a PDF tab, in read's own header shape.
 async function pdfPage(url: string, title: string): Promise<string> {
   const head = `URL: ${url}\nTitle: ${title}`;
@@ -1030,7 +1068,8 @@ type Port = ReturnType<typeof browser.runtime.connectNative>;
 // page: the last page list the agent got (null: none yet, so the next one goes whole). tipped: the sites whose saved
 // tips the agent already got this session (F10, tipsOnce).
 // steps (RP1): one per call, with what worked, for repeat <step>; each reply starts with its number.
-let bridge: { port: Port; sites: string[]; refused: Set<string>; page: string | null; tipped: Set<string>; steps: Pick<Step, 'ran' | 'downloadsAt'>[] } | null = null;
+// solved: the CAPTCHA you last resumed from (captchaHold), so a solved one still on screen doesn't ask again.
+let bridge: { port: Port; sites: string[]; refused: Set<string>; page: string | null; tipped: Set<string>; steps: Pick<Step, 'ran' | 'downloadsAt'>[]; solved: string } | null = null;
 
 // S2 for the bridge: a site off its Sites asks you first. No: refused and not asked again while the bridge is on.
 async function bridgeSite(site: string, url: string): Promise<void> {
@@ -1053,7 +1092,7 @@ const save = (change: Partial<Remembered>) => remember(change).catch((err: Error
 // Connects to the local helper (host/mcp.ts) with these Sites. Used by mcp on and by the panel turning it back on.
 function startBridge(sites: string[]): string {
   const port = browser.runtime.connectNative(HOST_NAME);
-  bridge = { port, sites, refused: new Set(), page: null, tipped: new Set(), steps: [] };
+  bridge = { port, sites, refused: new Set(), page: null, tipped: new Set(), steps: [], solved: '' };
   port.onMessage.addListener((m) => void onBridge(port, m));
   // Chrome's reason (not installed, host crashed) is in lastError.
   port.onDisconnect.addListener(() => {
@@ -1281,6 +1320,13 @@ async function agentCommand(line: string, last: boolean): Promise<AgentReply> {
     if (!site) throw new Error(`Blocked: this tab (${now.site}) isn't a web page you can use. Use goto.`);
     await bridgeSite(site, now.url);
   }
+  // 4.2 (captchaHold). After the Sites check, so a site just added is checked too. "Refused" keeps it out of repeat's history.
+  const held = await captchaHold(name, now.url, captchaAll, bridge?.solved ?? '');
+  if (held) {
+    if (!(await bridgeAsks.resume(held.ask))) throw new Error('Stopped: the user pressed Stop at a CAPTCHA. Ask them what to do.');
+    if (bridge) bridge.solved = held.seen;
+    return { text: "Refused: a CAPTCHA was on the page; the user solved it and pressed Resume. Your command didn't run: read the page, then send it again if it's still needed.", stop: 'the user solved a CAPTCHA' };
+  }
   if (name === 'repeat') return { text: await bridgeRepeat(args) };
   if (name === 'pause') {
     if (await askResume(args)) return { text: 'The user pressed Resume. Report what the page shows now, not what you expect.' };
@@ -1382,8 +1428,9 @@ const commands: Record<string, Command> = {
     run: () => readAll(),
   },
   text: {
-    help: 'text [all | page N] — show the plain text on screen, like dates and prices (iframes included); text all reads the whole page, not just the screen; text page N reads a PDF from page N on and puts that page in the next picture',
+    help: 'text [all | page N | download [page N]] — show the plain text on screen, like dates and prices (iframes included); text all reads the whole page, not just the screen; text page N reads a PDF from page N on and puts that page in the next picture; text download reads the newest file this run downloaded with the user\'s ok (a PDF, from page N, or a text file)',
     run: async (args) => {
+      if (args[0] === 'download') return readDownload(args.slice(1));
       const { all, page } = textArgs(args); // the AI writes these words, so anything else is refused
       const pdf = await pdfTabUrl(); // P1: a PDF's text comes from its file, all of it either way
       let text: string;

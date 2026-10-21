@@ -2,6 +2,7 @@
 import { HandOver, STALE_MS, StopLine, type Message, type Replies } from '@/lib/messages';
 import { aim, aimKey, aimPoints, aimText, click, focusHere, pasteText, clickText, endGuard, hover, pressKey, scroll, selectOption, typeText, watchMouse } from '@/lib/actions';
 import { captchaKind, visibleCaptcha } from '@/lib/captcha';
+import { onScreen } from '@/lib/in-view';
 import { drawForShot, endShot, setOverlay } from '@/lib/overlay';
 import { loadPage, withNote } from '@/lib/load-page';
 import { findSnippets, findText, pageItems, pageLines, readText, TEXT_CAP, textTargets } from '@/lib/page-text';
@@ -52,6 +53,7 @@ const handlers: {
   settle: ({ maxMs }) => waitForQuiet(maxMs),
   fields: () => fieldCount(),
   captcha: () => visibleCaptcha(),
+  inView: () => onScreen(),
   overlay: ({ on }) => {
     setOverlay(on, getElements());
     return on ? 'Overlay on (redraws after every read)' : 'Overlay off';
