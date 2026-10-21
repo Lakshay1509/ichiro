@@ -1,5 +1,5 @@
 // Checks joinLines (same-line pieces glue, a gap adds a space, a lower piece starts a new line) and find's matcher. Run: npm test
-import { addedLines, capText, chooseText, findMatches, iconText, joinLines, MAX_TEXT_LINES, onPage, pageLines, rankSections, reaction, sameText, TEXT_CAP, textArgs, toPiece, type Piece } from './page-text.ts';
+import { addedLines, capText, chooseText, findMatches, iconText, joinLines, MAX_TEXT_LINES, nameHit, onPage, pageLines, rankSections, reaction, sameText, TEXT_CAP, textArgs, toPiece, type Piece } from './page-text.ts';
 
 // R1: click by text takes shown texts that read exactly the words (spaces collapsed, icon glyphs dropped), then ignoring
 // case if none; never part of a longer text. All matches come back, so the caller can refuse two.
@@ -94,6 +94,15 @@ want('blank query', find(['16GB'], '   '), []);
 want('blank pieces skipped', find(['', '  ', '16GB'], '16GB'), [{ piece: 2, snippet: '16GB' }]);
 const long = `${'a'.repeat(100)} 16GB ${'b'.repeat(100)}`;
 want('snippet cut', find([long], '16gb'), [{ piece: 0, snippet: `…${'a'.repeat(39)} 16GB ${'b'.repeat(39)}…` }]);
+
+// find also searches the page list's element names: a color swatch named only by its label ("Navy Blue") has no text
+// to match. An element holding a text match was found already, so its name doesn't count twice.
+for (const [name, query, holds, hit, what] of [
+  ['Navy Blue', 'Navy', false, true, 'label-only swatch'],
+  ['Navy Blue', 'navyblue', false, true, 'case and spaces ignored'],
+  ['Navy Blue', 'Navy', true, false, 'its text matched already'],
+  ['Forest Green', 'Navy', false, false, 'other name'],
+] as const) if (nameHit(name, query, () => holds) !== hit) throw new Error(`nameHit, ${what}`);
 
 // A find that missed lists sections: closest (shares a word of 3+ letters) first, then page order; blank, repeated
 // and long ones dropped; capped.

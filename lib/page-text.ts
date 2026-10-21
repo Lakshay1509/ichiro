@@ -1,5 +1,8 @@
 // Page text: the plain text on screen (dates, prices, ratings) for text, find and the AI's page view. Runs in the content script.
-import { clickable, clippedCenter, cut, deepContains, deepElementFromPoint, ICON_GLYPHS, name, parentOf, type Room, shadowRootOf, sideways } from './reader.ts';
+import {
+  clickable, clippedCenter, cut, deepContains, deepElementFromPoint, describe, getElements, ICON_GLYPHS, name, parentOf, type Room, shadowRootOf,
+  sideways,
+} from './reader.ts';
 
 // Where a text node starts and ends on screen: its first and last line box.
 type Box = { top: number; bottom: number; left: number; right: number };
@@ -394,15 +397,27 @@ function searchable(): Text[] {
   }
   return nodes;
 }
-// F3d: find's matches in what's loaded now, as snippets: what the loader reads while it scrolls a lazy page for find.
-export const findSnippets = (query: string) => findMatches(searchable().map((n) => n.data), query).map((m) => m.snippet);
+// A listed element's name matches query, and the element holds no text match (that one was found already). Seen live:
+// find "Navy" missed clickable "Navy Blue", a color swatch named only by its label. Pure.
+export const nameHit = (name: string, query: string, holdsMatch: () => boolean) => findMatches([name], query).length > 0 && !holdsMatch();
 
-// find (3.7d): like Ctrl+F over the whole page's visible text, not only the screen. Scrolls match nth (from 1) to the
+// find's matches: in the page's text, then in the page list's element names; each with the element to scroll to.
+function allMatches(query: string): { el: Element | null; snippet: string }[] {
+  const nodes = searchable();
+  const inText = findMatches(nodes.map((n) => n.data), query).map((m) => ({ el: parentOf(nodes[m.piece]!), snippet: m.snippet }));
+  const named = [...getElements()].filter(([, el]) => el.isConnected && nameHit(name(el), query, () => inText.some((m) => deepContains(el, m.el))));
+  return [...inText, ...named.map(([n, el]) => ({ el, snippet: `[${n}] ${describe(el)} (element name)` }))];
+}
+
+// F3d: find's matches in what's loaded now, as snippets: what the loader reads while it scrolls a lazy page for find.
+export const findSnippets = (query: string) => allMatches(query).map((m) => m.snippet);
+
+// find (3.7d): like Ctrl+F over the whole page's visible text, not only the screen, then the page list's element names
+// (a label-only swatch has no text). Scrolls match nth (from 1) to the
 // middle of the screen (inner scroll boxes too), so the next read numbers the elements around it. Top frame only.
 // A lazy page was already scrolled through by the caller (F3d).
 export function findText(query: string, nth: number): string {
-  const nodes = searchable();
-  const matches = findMatches(nodes.map((n) => n.data), query);
+  const matches = allMatches(query);
   const rules = '(case and spaces ignored; hidden text and iframes not searched)';
   const what = `${JSON.stringify(query)} ${rules}`;
   // A miss lists the page's sections, so the next find uses their exact words instead of guessing (seen live: 5 guesses
@@ -418,7 +433,7 @@ export function findText(query: string, nth: number): string {
     return [`No match for ${JSON.stringify(query)}. ${tip} A page of the site? search "site:" may reach it faster.`, list, rules].filter(Boolean).join('\n');
   }
   if (nth > matches.length) throw new Error(`Only ${matches.length} matches for ${JSON.stringify(query)}; there is no match ${nth}`);
-  parentOf(nodes[matches[nth - 1]!.piece]!)?.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
+  matches[nth - 1]!.el?.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
   const shown = matches.slice(nth - 1, nth - 1 + SHOWN_MATCHES).map((m, i) => `${nth + i}. ${m.snippet}`);
   return [`${matches.length} matches for ${what}. Scrolled to match ${nth}:`, ...shown].join('\n');
 }
