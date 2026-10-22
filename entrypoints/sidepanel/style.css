@@ -200,6 +200,7 @@ button.danger:hover { background: var(--danger-soft); border-color: rgba(209, 36
 /* The command box, built like a composer: a roomy field for what you type, then a quieter bottom row for
    MCP on/off, set apart by space and size rather than a line. */
 form {
+  position: relative; /* the / menu floats just above it */
   margin: 8px 16px 16px;
   border: 1px solid var(--line);
   border-radius: 16px;
@@ -219,6 +220,29 @@ input {
 }
 input::placeholder { color: var(--placeholder); }
 input:focus-visible { outline: none; } /* the card's blue border shows focus, not a second ring */
+
+/* The / menu: a popover over the log, the row Enter picks tinted like a hover. */
+#slash {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 6px);
+  z-index: 1;
+  max-height: 240px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.04), 0 23px 52px rgba(0, 0, 0, 0.05); /* DESIGN.md level 2: popovers */
+  scrollbar-width: thin;
+}
+#slash li { display: flex; align-items: baseline; gap: 10px; padding: 6px 10px; border-radius: 5px; cursor: pointer; }
+#slash li[aria-selected='true'] { background: var(--hover); }
+.slash-name { flex: none; color: var(--ink); font: 12px/1.5 var(--mono); }
+.slash-help { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-muted); font-size: 12px; }
 
 /* MCP on or off, at the right like a setting: the name in ink, its state quieter, the icon blue when on. */
 #mcp { display: flex; justify-content: flex-end; align-items: center; gap: 6px; padding: 0 14px 12px; color: var(--ink-muted); font-size: 12.5px; line-height: 16px; }

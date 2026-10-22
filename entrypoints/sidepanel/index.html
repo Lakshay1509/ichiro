@@ -8,7 +8,9 @@
   <body>
     <div id="out" role="log"></div>
     <form>
-      <input aria-label="A /command" placeholder="/command · /help for the list" autocomplete="off" spellcheck="false" autofocus />
+      <!-- The / menu (slash-menu.ts): commands that start with what you type, floating over the log. -->
+      <ul id="slash" role="listbox" aria-label="Commands" hidden></ul>
+      <input aria-label="A /command" placeholder="/command · /help for the list" autocomplete="off" spellcheck="false" autofocus role="combobox" aria-controls="slash" aria-autocomplete="list" aria-expanded="false" />
       <!-- MCP on or off (main.ts showMcp), the command box's bottom row. Icons: Lucide plug / unplug, ISC licence, https://lucide.dev -->
       <div id="mcp" role="status" data-state="off">
         <svg class="plug" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

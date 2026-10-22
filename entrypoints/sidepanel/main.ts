@@ -29,6 +29,7 @@ import { recall, remember, type Remembered } from '@/lib/panel-memory';
 import { MAX_TIPS } from '@/lib/site-tips';
 import { isCheckoutUrl } from '@/lib/stop-lines';
 import { clearLog, closeStep, leaveStep, openStep, show, swap, type Item, type Step } from './log';
+import { slashMenu } from './slash-menu';
 
 // allow: run past a stop-line. Only the Allow once button passes true, never a typed command.
 // line: the whole command line as typed, for commands that take the rest of it as is (paste, type here).
@@ -1045,6 +1046,8 @@ recall().then(async ({ mcpOn, mcpSites, overlayOn }) => {
   setOverlayOn(true);
   await sendToAllFrames({ type: 'overlay', on: true }).catch(() => {});
 }).catch((err: Error) => print(`Couldn't read saved settings: ${err.message}`, 'error'));
+
+slashMenu(input, commands);
 
 form.addEventListener('submit', async (event) => {
   event.preventDefault();
