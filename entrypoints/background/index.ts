@@ -9,13 +9,23 @@ import { closeAsk, nextCommand, pressAsk } from './asks';
 import { bridge, endAgentTurn, runEnded, startBridge, stopBridge } from './bridge';
 import { commands, typed } from './commands';
 import { watchTabSwitches } from './input';
-import { addPanel, print, removePanel } from './panels';
+import { addPanel, alwaysOn, print, removePanel, showAlwaysOn } from './panels';
 
 export default defineBackground(() => {
   browser.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(console.error);
   watchTabSwitches();
   browser.runtime.onConnect.addListener(onConnect);
+  browser.runtime.onStartup.addListener(chromeStarted);
 });
+
+// BG5: Chrome started (not on an extension reload). With always-on, MCP comes back on if it was on, with no panel open.
+// Source: https://developer.chrome.com/docs/extensions/reference/api/runtime#event-onStartup
+function chromeStarted() {
+  recall().then(({ mcpOn, mcpSites, alwaysOn }) => {
+    showAlwaysOn(alwaysOn);
+    if (alwaysOn && mcpOn && !bridge) startBridge(mcpSites);
+  }).catch((err: Error) => print(`Couldn't read saved settings: ${err.message}`, 'error'));
+}
 
 // A panel connects. Only this extension's own side panel page (isPanelSender): anything else is cut off unheard.
 function onConnect(port: Browser.runtime.Port) {
@@ -42,7 +52,8 @@ function firstPanelOpened() {
   pruneSites(Date.now()).catch((err: Error) => print(`Couldn't tidy saved site tips: ${err.message}`, 'error'));
 
   // Turns back on what you left on (panel-memory.ts): the MCP bridge with its saved Sites, and the overlay.
-  recall().then(async ({ mcpOn, mcpSites, overlayOn }) => {
+  recall().then(async ({ mcpOn, mcpSites, overlayOn, alwaysOn }) => {
+    showAlwaysOn(alwaysOn);
     if (mcpOn && !bridge) startBridge(mcpSites); // the line under the command box shows it, not the log
     // A tab with no page to draw on (chrome://, the Web Store) just stays as it is; the next /overlay on draws it.
     if (!overlayOn) return;
@@ -53,7 +64,9 @@ function firstPanelOpened() {
 
 // As before BG4, closing the panel ends everything: the bridge stops (still saved on, so the next panel open turns it
 // back on), and the agent's command stops the way a typed command stops it. The log stays for the next panel.
+// BG5: with always-on, nothing stops; an open ask waits for the next panel.
 async function lastPanelClosed() {
+  if (alwaysOn) return;
   stopBridge();
   closeAsk('Closed, nothing ran: the panel was closed.');
   nextCommand();

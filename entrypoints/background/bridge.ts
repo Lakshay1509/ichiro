@@ -112,7 +112,10 @@ export function startBridge(sites: string[]): string {
   bridge = { port, sites, refused: new Set(), page: null, tipped: new Set(), steps: [], solved: '' };
   showMcp('starting');
   port.onMessage.addListener((m) => void onBridge(port, m));
-  // Chrome's reason (not installed, host crashed) is in lastError.
+  // Chrome's reason (not installed, host crashed) is in lastError. Never reconnects here: a crashing host would loop.
+  // The next panel open turns it back on (BG5, also with always-on).
+  // shortcut: with no panel open, Chrome stops this worker ~30 s later and this line goes with the log; keep it in
+  // storage.session if it's missed.
   port.onDisconnect.addListener(() => {
     if (bridge?.port !== port) return; // you turned it off
     bridge = null;

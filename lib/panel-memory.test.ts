@@ -21,19 +21,27 @@ const getDomain = (host: string) => host.split('.').slice(-2).join('.');
 Object.assign(globalThis, { browser: { storage: { local }, publicSuffix: { getDomain } } });
 
 // Nothing saved yet: all off, no Sites.
-if (JSON.stringify(await recall()) !== '{"mcpOn":false,"mcpSites":[],"overlayOn":false}') fail(`defaults: ${JSON.stringify(await recall())}`);
+if (JSON.stringify(await recall()) !== '{"mcpOn":false,"mcpSites":[],"overlayOn":false,"alwaysOn":false}') fail(`defaults: ${JSON.stringify(await recall())}`);
 
 // Save → read back, locked to trusted contexts before the first write. A partial save keeps the rest.
 await remember({ mcpOn: true, mcpSites: ['amazon.in', 'wikipedia.org'] });
 if (level !== 'TRUSTED_CONTEXTS') fail(`lock: ${level}`);
 await remember({ overlayOn: true });
+await remember({ alwaysOn: true });
 const back = await recall();
-if (!back.mcpOn || !back.overlayOn || back.mcpSites.join() !== 'amazon.in,wikipedia.org') fail(`read back: ${JSON.stringify(back)}`);
+if (!back.mcpOn || !back.overlayOn || !back.alwaysOn || back.mcpSites.join() !== 'amazon.in,wikipedia.org') fail(`read back: ${JSON.stringify(back)}`);
+await remember({ alwaysOn: false });
+if ((await recall()).alwaysOn) fail('always-on turned off again');
 
 // Bad saved values: anything not exactly a site is dropped (never turned into one), duplicates once, non-true is off.
-store = { mcpOn: 'yes', overlayOn: 1, mcpSites: ['amazon.in', 'evil.com/path', 'https://evil.com', 'www.evil.com', 5, '', 'amazon.in'] };
+// BG5: always-on that isn't exactly true is off, so the bridge never outlives the panel by accident.
+store = { mcpOn: 'yes', overlayOn: 1, alwaysOn: 'true', mcpSites: ['amazon.in', 'evil.com/path', 'https://evil.com', 'www.evil.com', 5, '', 'amazon.in'] };
 const bad = await recall();
-if (bad.mcpOn || bad.overlayOn || bad.mcpSites.join() !== 'amazon.in') fail(`bad values: ${JSON.stringify(bad)}`);
+if (bad.mcpOn || bad.overlayOn || bad.alwaysOn || bad.mcpSites.join() !== 'amazon.in') fail(`bad values: ${JSON.stringify(bad)}`);
+for (const alwaysOn of [1, 'on', {}, null]) {
+  store = { alwaysOn };
+  if ((await recall()).alwaysOn) fail(`always-on saved as ${JSON.stringify(alwaysOn)}`);
+}
 store = { mcpSites: 'amazon.in' };
 if ((await recall()).mcpSites.length) fail('Sites saved as a string, not a list');
 

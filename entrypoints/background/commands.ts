@@ -20,7 +20,7 @@ import { listSites } from '@/lib/site-store';
 import { askResume, closeAsk, nextCommand, runAndPrint } from './asks';
 import { agentDownloads, agentPage, bridge, endAgentTurn, forAgent, runEnded, save, skipRead, startBridge, stopBridge } from './bridge';
 import { checkText, realKey, realMouse, realPoints, typeHere, typingFrame } from './input';
-import { clearLog, leaveStep, print, show } from './panels';
+import { clearLog, leaveStep, print, show, showAlwaysOn } from './panels';
 
 // allow: run past a stop-line. Only the Allow once button passes true, never a typed command.
 // line: the whole command line as typed, for commands that take the rest of it as is (paste, type here).
@@ -289,6 +289,18 @@ export const commands: Record<string, Command> = {
         return `MCP bridge Sites: ${sites.join(', ') || 'none yet'}.`;
       }
       return startBridge(sites);
+    },
+  },
+  // BG5. Not in MCP_COMMANDS: only you can keep the bridge on past the panel.
+  'always-on': {
+    help: 'always-on on|off — keep MCP on when you close the side panel, and turn it back on when Chrome starts (remembered; off by default). An ask from the agent then waits until you open the panel',
+    run: async ([on]) => {
+      if (on !== 'on' && on !== 'off') throw new Error('Usage: always-on on|off');
+      showAlwaysOn(on === 'on');
+      await save({ alwaysOn: on === 'on' });
+      return on === 'on'
+        ? 'Always-on: MCP stays on when you close the side panel, and comes back on when Chrome starts.'
+        : 'Always-on off: closing the side panel stops MCP.';
     },
   },
   overlay: {

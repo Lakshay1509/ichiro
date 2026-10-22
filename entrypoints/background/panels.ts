@@ -9,6 +9,8 @@ type New<T> = T extends unknown ? Omit<T, 'id'> : never;
 const panels = new Set<Port>();
 const log: Log = { items: [], open: null };
 let mcp: McpState = 'off';
+// BG5 (/always-on): closing the last panel leaves the bridge on. Set from the saved setting, or by the command.
+export let alwaysOn = false;
 let lastId = 0;
 
 function post(msg: ToPanel) {
@@ -28,7 +30,7 @@ function change(op: LogOp) {
 
 // A panel that connects gets everything so far, then every change. true: it's the only one open.
 export function addPanel(port: Port, commands: Record<string, { help: string }>): boolean {
-  port.postMessage({ type: 'hello', log, mcp, commands } satisfies ToPanel);
+  port.postMessage({ type: 'hello', log, mcp, alwaysOn, commands } satisfies ToPanel);
   panels.add(port);
   return panels.size === 1;
 }
@@ -43,7 +45,12 @@ export function print(text: string, className = '') {
 // The command box's bottom row ("MCP" + this word). starting: the local helper is connecting; on: it said ready.
 export function showMcp(state: McpState) {
   mcp = state;
-  post({ type: 'mcp', state });
+  post({ type: 'mcp', state, alwaysOn });
+}
+
+export function showAlwaysOn(on: boolean) {
+  alwaysOn = on;
+  post({ type: 'mcp', state: mcp, alwaysOn });
 }
 
 // Adds an item at the bottom (inside the open agent call, if any). Returns it with its id, for swap.
