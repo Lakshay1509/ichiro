@@ -130,6 +130,15 @@ export function keyStop(k: KeyPress): string | null {
   return null;
 }
 
+// Chrome's own zoom keys, or null. A key we send goes to the page only, so Chrome itself never zooms (seen live: ctrl+=
+// said "ok"). It's still sent: the page may zoom its own canvas on it. Only zoom is listed: the keys Chrome's help gives
+// for it. Sources: https://support.google.com/chrome/answer/157179 (zoom: Ctrl and +, Ctrl and -, Ctrl + 0; ⌘ on Mac)
+// and dispatchKeyEvent ("Dispatches a key event to the page") in Input.pdl, linked at the top.
+export function browserKey(k: KeyPress): string | null {
+  const zoom = held(k, 'ctrl', 'meta') && !held(k, 'alt') && ['Equal', 'Minus', 'Digit0'].includes(k.code);
+  return zoom ? `${k.name} is Chrome's own zoom shortcut, which keys sent to the page can't do: Chrome didn't zoom (only the page's own zoom, if it has one, got the key)` : null;
+}
+
 // The keys F-phase pressKey can send as script events (actions.ts KEY_CODES), with no modifier. They go real like the
 // rest, and fall back to the script event for Escape to the panel on top, or where there's no real keyboard.
 export const SCRIPT_KEYS = ['Enter', 'Escape', 'Tab', 'Backspace', 'ArrowLeft', 'ArrowUp', 'ArrowRight', 'ArrowDown'];

@@ -9,7 +9,7 @@ import { chooseText, NO_REACTION, reaction, readText, textTargets } from './page
 import { waitForQuiet } from './settle.ts';
 import { checkPersonal } from './personal.ts';
 import { checkStopLine, clickTargets, enterTargets, stopWord } from './stop-lines.ts';
-import { keyRefusal, keyStop, parseKey } from './keys.ts';
+import { browserKey, keyRefusal, keyStop, parseKey } from './keys.ts';
 import { sameLayout, toViewport, type Point } from './real-input.ts';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -266,7 +266,9 @@ export function aimKey(input: string, allow = false): string | null {
     if (k.key === ' ') checkStopLine(`${k.name} on ${where}`, [focused]);
   }
   if (k.name === 'Escape' && keyTarget('Escape', focused, isField(focused) ? null : panelOnTop()) !== focused) return null;
-  return where;
+  // The panel replies "ok — pressed <key> on <where>", so a browser shortcut's note rides on where.
+  const browser = browserKey(k);
+  return browser ? `${where} — but ${browser}` : where;
 }
 
 // WR2: the checks before the panel types or pastes text where focus is (in the frame focus is in). A secret field is
