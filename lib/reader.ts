@@ -291,6 +291,8 @@ export function describe(el: Element): string {
 // Number → element from the latest read. Numbers stick to their element (lib/numbers.ts), so a number from an older
 // read finds the same element here, or nothing.
 let elements = new Map<number, Element>();
+// Where this frame was scrolled at the latest read: every listed element was on screen there.
+export let readScroll = { left: 0, top: 0 };
 
 export const getElements = () => elements;
 
@@ -490,6 +492,7 @@ export function read(next: number): Omit<ReadReply, 'page'> {
   const visible = tooSmall ? [] : dropDuplicates(all.filter(isVisible));
   const nums = stick(visible, visible.map(keyOf), next);
   elements = new Map(visible.map((el, i) => [nums[i]!, el]));
+  readScroll = { left: scrollX, top: scrollY };
   return {
     header: isTop ? header(visible, nums) : '',
     lines: visible.map((el, i) => `[${nums[i]}] ${describe(el)}`),
