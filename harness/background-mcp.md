@@ -22,7 +22,7 @@
 
 ## Slices
 
-- [ ] **BG1 · a clearer off-screen reply.** `OFF_SCREEN` (`lib/screenshot.ts`) tells the agent what to do. The agent sees: `no screenshot: the run's tab isn't on screen. Ask the user to keep it the front tab in a Chrome window that isn't minimized, or read the page as text.`
+- [x] **BG1 · a clearer off-screen reply.** `OFF_SCREEN` (`lib/screenshot.ts`) tells the agent what to do. The agent sees: `no screenshot: the run's tab isn't on screen. Ask the user to keep it the front tab in a Chrome window that isn't minimized, or read the page as text.`
   - It goes only in that reply, not in the tool description, so the agent hears it only when it happens (`harness/mcp-context.md`).
   - Done when: `lib/screenshot.test.ts` passes; typecheck + build pass; live: minimize Chrome, the agent sends `look`, and it gets the new text.
 - [ ] **BG2 · a hidden page reads PDFs.** pdf.js can't run in the background worker as it does today: a service worker can't start its own worker, and `import()` isn't allowed there.
@@ -61,3 +61,5 @@
 ## Log
 
 - 2026-10-22: tracker written from the developer's choices (engine to the background, badge for asks, keep setting off by default, hidden page for PDFs, clearer off-screen reply). Next: BG1.
+- 2026-10-22: BG1 built: new `OFF_SCREEN` text (`lib/screenshot.ts`); only the agent's `look` reply uses it. `lib/screenshot.test.ts`, typecheck and build pass. **Open:** live check (minimize Chrome, agent sends `look`).
+- 2026-10-22: BG1 live: Chrome minimized on wikipedia.org, `look` replied with the new text and the page as text. Ticked. Next: BG2.

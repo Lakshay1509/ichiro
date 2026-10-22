@@ -8,7 +8,7 @@ const MAX_WIDTH = 1280;
 // Heavy JPEG compression makes small text hard to read (vision docs); checked by eye in the live run.
 const JPEG_QUALITY = 0.85;
 
-export const OFF_SCREEN = "the run's tab isn't on screen";
+export const OFF_SCREEN = "the run's tab isn't on screen. Ask the user to keep it the front tab in a Chrome window that isn't minimized, or read the page as text";
 
 export interface Shot {
   data: string; // base64 JPEG
