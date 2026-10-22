@@ -185,10 +185,15 @@ lines(reaction([], ['x'.repeat(100)]), `page changed: now "${'x'.repeat(79)}…"
 lines(reaction([], ['say "hi"']), 'page changed: now "say \\"hi\\""', 'quoted, so page text stays one quoted piece');
 // The site changing the typed field counts: seen live, a money field took "200" as "$200" with no other text changing,
 // and every type said the page didn't react. As typed, or emptied (the value refused), it doesn't.
-lines(reaction(['a'], ['a'], { typed: '200', now: '$200' }), 'page changed: the site changed the field: "200" → "$200"', 'field reformatted');
-lines(reaction(['a'], ['a'], { typed: '200', now: '200' }), "the page didn't react (no other text on screen changed): the site may not have taken it", 'field as typed');
-lines(reaction(['a'], ['a'], { typed: 'abc', now: '' }), "the page didn't react (no other text on screen changed): the site may not have taken it", 'field emptied');
-lines(reaction(['Total: $0'], ['Total: $200'], { typed: '200', now: '$200.00' }), 'page changed: now "Total: $200", was "Total: $0"; the site changed the field: "200" → "$200.00"', 'text and field');
+lines(reaction(['a'], ['a'], { typed: '200', now: '$200', was: '' }), 'page changed: the site changed the field: "200" → "$200"', 'field reformatted');
+lines(reaction(['a'], ['a'], { typed: '200', now: '200', was: '' }), "the page didn't react (no other text on screen changed): the site may not have taken it", 'field as typed');
+lines(reaction(['a'], ['a'], { typed: 'abc', now: '', was: '' }), "the page didn't react (no other text on screen changed): the site may not have taken it", 'field emptied');
+lines(reaction(['Total: $0'], ['Total: $200'], { typed: '200', now: '$200.00', was: '' }), 'page changed: now "Total: $200", was "Total: $0"; the site changed the field: "200" → "$200.00"', 'text and field');
+// Typed what the field already held: nothing to change, so the page staying put is no refusal (seen live: "18" into
+// a box holding 18 said the site may not have taken it). A page that reacts anyway still says so.
+lines(reaction(['a'], ['a'], { typed: '18', now: '18', was: '18' }), 'the field already held "18", so nothing changed', 'value already there');
+lines(reaction(['a'], ['a', 'b'], { typed: '18', now: '18', was: '18' }), 'page changed: now "b"', 'already there, page reacted');
+lines(reaction(['a'], ['a'], { typed: '18', now: '', was: '18' }), "the page didn't react (no other text on screen changed): the site may not have taken it", 'already there, then emptied');
 
 // The text command's words (the AI writes them): text, text all, text page N; anything else is refused.
 if (JSON.stringify([textArgs([]), textArgs(['all']), textArgs(['page', '8'])]) !== '[{"all":false},{"all":true},{"all":true,"page":8}]') throw new Error('textArgs');

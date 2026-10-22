@@ -424,6 +424,7 @@ export async function typeText(n: number, text: string, enter: boolean, slow: bo
   moveFocus(el as HTMLElement);
 
   // Clear what's there. In an editor, selecting everything makes the first insert replace it.
+  const was = field?.value ?? '';
   if (field) setValue(field, '');
   else {
     getSelection()?.selectAllChildren(el);
@@ -461,7 +462,7 @@ export async function typeText(n: number, text: string, enter: boolean, slow: bo
     if (!suggests((a) => el.getAttribute(a))) moveFocus(null);
     // The page's reaction goes first: the field's own text proves nothing, since we put it there; the site changing it
     // does. Then the value now, which the site may have reformatted on leaving.
-    const fieldChange = () => (typed === undefined ? undefined : { typed, now: value() });
+    const fieldChange = () => (typed === undefined ? undefined : { typed, now: value(), was });
     notes.splice(1, 1, await reactionTo(before, screen, fieldChange), fieldNow());
   }
   return notes.join(' — ');
@@ -469,7 +470,7 @@ export async function typeText(n: number, text: string, enter: boolean, slow: bo
 
 // F4b: what changed on screen (and in the typed field) after typing. A site that asks its server first (a result
 // count) can sit quiet for a moment, so "no reaction" gets one more wait before it's said.
-async function reactionTo(before: string[], screen: () => string[], field: () => { typed: string; now: string } | undefined): Promise<string> {
+async function reactionTo(before: string[], screen: () => string[], field: () => { typed: string; now: string; was: string } | undefined): Promise<string> {
   await waitForQuiet(1500);
   const first = reaction(before, screen(), field());
   if (first !== NO_REACTION) return first;
