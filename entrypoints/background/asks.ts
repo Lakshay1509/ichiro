@@ -1,0 +1,93 @@
+// BG4: the one open ask (Allow once, Keep going, a new site, a download…) and the command count that makes old asks stale.
+import { StopLine } from '@/lib/messages';
+import { pressed } from '@/lib/panel-port';
+import { detachAll } from '@/lib/real-input';
+import { print, show, swap } from './panels';
+
+// The open choice: a stop-line's Allow once / I'll do it, or a run's pause. Valid only until another command starts:
+// a new read renumbers elements, and an old Allow must never land on a different element.
+// The log shows its button labels; buttons are their handlers, in the same order (a panel's press names one by index).
+let pendingAsk: { id: number; buttons: (() => void)[] } | null = null;
+export let lastCommand = 0; // counts started commands, so a late stop-line can tell another one ran meanwhile
+let onAskClosed: (() => void) | null = null; // a paused run waiting on the open ask: closing it any other way ends that run
+
+// A command starts, yours or the agent's: an ask from before it is stale from now on.
+export const nextCommand = () => ++lastCommand;
+
+export function closeAsk(note: string) {
+  if (!pendingAsk) return;
+  swap(pendingAsk, { kind: 'line', text: note });
+  pendingAsk = null;
+  onAskClosed?.();
+  onAskClosed = null;
+}
+
+// Shows the buttons in every open panel. Only a press of one (pressAsk) runs its handler, never a typed line or agent text.
+function openAsk(buttons: { label: string; onClick: () => void }[]) {
+  const { id } = show({ kind: 'ask', buttons: buttons.map((b) => b.label) });
+  pendingAsk = { id, buttons: buttons.map((b) => b.onClick) };
+}
+
+// A button pressed in a panel. A press for an ask that's closed or replaced does nothing (pressed).
+export const pressAsk = (press: { id: number; button: number }) => pressed(pendingAsk, press)?.();
+
+// Asks you mid-command (4.1 pause, 4.3 stop-lines, a new site, a download): the keep button goes on; the other button,
+// or any command you start, resolves false (a command also bumps lastCommand, so the caller can tell "I'll do it" from
+// being stopped). Focus stays in the command box, so a reflex Enter can never press Allow.
+export function askKeepGoing(message: string, keepLabel = 'Keep going', stopLabel = 'Stop'): Promise<boolean> {
+  print(message, 'stop');
+  return new Promise((resolve) => {
+    onAskClosed = () => resolve(false);
+    openAsk([
+      {
+        label: keepLabel,
+        // A promise settles once: Keep going's true wins over the false that closeAsk sends right after.
+        onClick: () => {
+          resolve(true);
+          closeAsk('Going on.');
+        },
+      },
+      { label: stopLabel, onClick: () => closeAsk(stopLabel === 'Stop' ? 'Stopped.' : `${stopLabel}.`) },
+    ]);
+  });
+}
+
+// 4.1 pause "reason": hands the page to you. The agent wrote the reason after reading the page, so it's shown quoted,
+// one line, capped, like its other words.
+export function askResume(args: string[]): Promise<boolean> {
+  const why = args.join(' ').replace(/\s+/g, ' ').trim().slice(0, 200) || '(no reason given)';
+  return askKeepGoing(`Paused: "${why}". Do what's needed on the page, then Resume.`, 'Resume');
+}
+
+type Run = (allow: boolean) => string | void | Promise<string | void>;
+
+// Runs a command and prints the result. A stop-line asks instead of failing: Allow once re-runs it one time with allow.
+export async function runAndPrint(run: Run, allow = false) {
+  const id = ++lastCommand;
+  try {
+    const result = await run(allow);
+    if (result) print(result);
+  } catch (err) {
+    if (!(err instanceof StopLine)) return print(err instanceof Error ? err.message : String(err), 'error');
+    askAllow(err, run, id);
+  } finally {
+    await detachAll(); // I1: the debugger is attached only while a command or run goes
+  }
+}
+
+// Shows a stop-line with Allow once / I'll do it. id: the command that hit it; stale if another one started since.
+function askAllow(err: StopLine, run: Run, id: number) {
+  print(err.message, 'stop');
+  if (id !== lastCommand) return print('Another command ran meanwhile. Run this one again to choose.', 'error');
+  // Focus stays in the command box, so a reflex Enter can never press Allow.
+  openAsk([
+    {
+      label: 'Allow once',
+      onClick: () => {
+        closeAsk('Allowed once.');
+        void runAndPrint(run, true);
+      },
+    },
+    { label: "I'll do it", onClick: () => closeAsk('Cancelled. This step is yours: do it by hand on the page.') },
+  ]);
+}

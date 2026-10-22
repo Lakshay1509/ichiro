@@ -1,5 +1,5 @@
 // Checks BG2's guard: the hidden page answers only this extension's own pages, and only a read-pdf ask. Run: npm test
-import { fromOwnPage, isPdfAsk } from './offscreen.ts';
+import { fromOwnPage, isPdfAsk, isTextAsk } from './offscreen.ts';
 
 const fail = (what: string): never => {
   throw new Error(what);
@@ -32,4 +32,16 @@ const asks: [unknown, boolean][] = [
 ];
 for (const [msg, want] of asks) {
   if (isPdfAsk(msg) !== want) fail(`isPdfAsk ${JSON.stringify(msg)}: want ${want}`);
+}
+
+// BG4: a text read is only ever a local file, never a web URL fetched with your cookies.
+const texts: [unknown, boolean][] = [
+  [{ type: 'read-text', url: 'file:///C:/Users/ann/Downloads/a.csv' }, true],
+  [{ type: 'read-text', url: 'https://example.com/a.csv' }, false],
+  [{ type: 'read-text', url: 'file://server/share/a.csv' }, false],
+  [{ type: 'read-text' }, false],
+  [{ type: 'read-pdf', url: 'file:///C:/a.pdf' }, false],
+];
+for (const [msg, want] of texts) {
+  if (isTextAsk(msg) !== want) fail(`isTextAsk ${JSON.stringify(msg)}: want ${want}`);
 }

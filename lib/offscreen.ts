@@ -4,10 +4,14 @@
 import type { PdfText } from './pdf-text.ts';
 
 export type PdfAsk = { type: 'read-pdf'; url: string };
-type PdfAnswer = { value: PdfText } | { error: string };
+// BG4: a downloaded text file. Only file:// URLs: the background worker can't fetch them itself, the hidden page can.
+export type TextAsk = { type: 'read-text'; url: string };
+type Answer<T> = { value: T } | { error: string };
 
 export const isPdfAsk = (msg: unknown): msg is PdfAsk =>
   typeof msg === 'object' && msg !== null && (msg as PdfAsk).type === 'read-pdf' && typeof (msg as PdfAsk).url === 'string';
+export const isTextAsk = (msg: unknown): msg is TextAsk =>
+  typeof msg === 'object' && msg !== null && (msg as TextAsk).type === 'read-text' && typeof (msg as TextAsk).url === 'string' && (msg as TextAsk).url.startsWith('file:///');
 
 // Only this extension's own pages: our id, an extension URL, and no tab. Content scripts carry our id too, but run in
 // tabs, and a page can drive one. Chrome fills in sender, so a page can't fake it.
@@ -26,13 +30,17 @@ async function openPage(): Promise<void> {
   await creating;
 }
 
-async function load(url: string): Promise<PdfText> {
+async function ask<T>(msg: PdfAsk | TextAsk): Promise<T> {
   await openPage();
-  const answer: PdfAnswer | undefined = await browser.runtime.sendMessage({ type: 'read-pdf', url } satisfies PdfAsk);
-  if (!answer) throw new Error("the PDF reader didn't answer");
+  const answer: Answer<T> | undefined = await browser.runtime.sendMessage(msg);
+  if (!answer) throw new Error("the hidden page didn't answer");
   if ('error' in answer) throw new Error(answer.error);
   return answer.value;
 }
+const load = (url: string) => ask<PdfText>({ type: 'read-pdf', url });
+
+// text download's text files (readDownload): the caller checked the size first.
+export const readTextFile = (url: string) => ask<string>({ type: 'read-text', url });
 
 // Per URL for this session: the same PDF is fetched and read once.
 const read = new Map<string, Promise<PdfText>>();

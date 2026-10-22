@@ -1,65 +1,32 @@
-// Side panel log: Preact draws the lines, asks and tip lists above the command box. main.ts says what to show.
+// Side panel log: Preact draws the background's log (lines, asks, agent calls, tip lists) above the command box.
 import { render } from 'preact';
 import { useState } from 'preact/hooks';
+import { apply, type FromPanel, type Item, type Log, type LogOp } from '@/lib/panel-port';
 import { stepStatus } from '@/lib/readable-log';
 import { deleteSite, deleteTip } from '@/lib/site-store';
 import { MAX_TIPS } from '@/lib/site-tips';
 
-// RL2: one agent call, its lines inside. raw: its commands as sent (RL3). ended: set once the call has replied.
-export type Step = { kind: 'step'; title: string; raw: string[]; items: Item[]; ended?: 'Done' | 'Stopped' };
-// One thing in the log. Its text is often page or agent text: JSX shows it as text, never as HTML.
-export type Item =
-  | { kind: 'line'; text: string; className?: string; more?: string } // more: behind a click (RL4)
-  | { kind: 'ask'; buttons: { label: string; onClick: () => void }[] }
-  | { kind: 'tips'; site: string; tips: string[] }
-  | Step;
-
 const out = document.querySelector<HTMLElement>('#out')!;
-let items: Item[] = [];
-let open: Step | null = null; // the agent call that new items go into
+let log: Log = { items: [], open: null };
+let send: (msg: FromPanel) => void = () => {};
 
 // shortcut: every change redraws the whole log (quick up to a few thousand lines); cache entries if long sessions lag.
-const draw = () => render(<>{items.map((item) => <Entry item={item} />)}</>, out);
+// Keyed by id, so a Tips box keeps its state when older entries drop off the top.
+const draw = () => render(<>{log.items.map((item) => <Entry key={item.id} item={item} />)}</>, out);
 
-// Adds an item at the bottom (inside the open agent call, if any) and scrolls to it. Returns it, for swap.
-export function show<T extends Item>(item: T): T {
-  (open ? open.items : items).push(item);
+// hello: the whole log at once, and where your button presses go.
+export function load(next: Log, post: (msg: FromPanel) => void) {
+  log = next;
+  send = post;
   draw();
   out.scrollTop = out.scrollHeight;
-  return item;
 }
 
-// Puts item where old is (an ask becomes what you chose). Nothing if /clear took old away.
-export function swap(old: Item, item: Item) {
-  for (const list of [items, ...items.flatMap((i) => (i.kind === 'step' ? [i.items] : []))]) {
-    const i = list.indexOf(old);
-    if (i < 0) continue;
-    list[i] = item;
-    return draw();
-  }
-}
-
-export function clearLog() {
-  items = [];
-  open = null;
+// One change, the same the background made to its copy. A new item scrolls to it.
+export function change(op: LogOp) {
+  apply(log, op);
   draw();
-}
-
-// RL2: an agent call's block; what prints until it ends goes inside it.
-export function openStep(title: string, raw: string[]): Step {
-  open = null; // a call never nests in another
-  return (open = show<Step>({ kind: 'step', title, raw, items: [] }));
-}
-
-export function closeStep(step: Step, ended: 'Done' | 'Stopped') {
-  step.ended = ended;
-  if (open === step) open = null;
-  draw();
-}
-
-// Your own commands print outside the agent's block (its status still updates when it ends).
-export function leaveStep() {
-  open = null;
+  if (op.type === 'show' || op.type === 'open') out.scrollTop = out.scrollHeight;
 }
 
 // While you're at the bottom, the log stays there when the panel gets shorter or narrower (Chrome's debugging bar
@@ -88,7 +55,18 @@ function Entry({ item }: { item: Item }) {
       </>
     );
   }
-  if (item.kind === 'ask') return <div class="ask">{item.buttons.map((b) => <button type="button" onClick={b.onClick}>{b.label}</button>)}</div>;
+  // The background decides what a press does; a press on an ask it already closed does nothing there.
+  if (item.kind === 'ask') {
+    return (
+      <div class="ask">
+        {item.buttons.map((label, button) => (
+          <button type="button" onClick={() => send({ type: 'press', id: item.id, button })}>
+            {label}
+          </button>
+        ))}
+      </div>
+    );
+  }
   if (item.kind === 'step') {
     const status = stepStatus({ ended: item.ended, asking: item.items.some((i) => i.kind === 'ask') });
     return (
@@ -97,7 +75,7 @@ function Entry({ item }: { item: Item }) {
           <span class={`status ${STATUS_CLASS[status]}`}>{status}</span>
           <span class="step-title">{item.title}</span>
         </div>
-        {item.items.map((i) => <Entry item={i} />)}
+        {item.items.map((i) => <Entry key={i.id} item={i} />)}
         {/* RL3: closed until you open it; redraws leave its open state alone (no open prop). Source:
             https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/details */}
         <details>
@@ -111,12 +89,20 @@ function Entry({ item }: { item: Item }) {
 }
 
 // /tips: one site's saved tips with Delete buttons. Once a delete worked, its line says what went. Tips go by their
-// text (deleteTip), so an old list is safe.
+// text (deleteTip), so an old list is safe. A failed delete says so inside the box: only the background adds log lines.
 function Tips({ site, tips }: { site: string; tips: string[] }) {
   const [allGone, setAllGone] = useState(false);
   const [gone, setGone] = useState<string[]>([]);
+  const [error, setError] = useState('');
   const deleter = (label: string, job: () => Promise<void>, done: () => void) => (
-    <button type="button" class="small danger" onClick={() => job().then(done, (err: Error) => void show({ kind: 'line', text: `Not deleted: ${err.message}`, className: 'error' }))}>
+    <button
+      type="button"
+      class="small danger"
+      onClick={() => {
+        setError('');
+        job().then(done, (err: Error) => setError(`Not deleted: ${err.message}`));
+      }}
+    >
       {label}
     </button>
   );
@@ -141,6 +127,7 @@ function Tips({ site, tips }: { site: string; tips: string[] }) {
           ),
         )}
       </ul>
+      {error && <div class="error">{error}</div>}
     </div>
   );
 }

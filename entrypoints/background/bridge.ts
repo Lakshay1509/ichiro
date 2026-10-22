@@ -1,0 +1,452 @@
+// BG4: the MCP bridge (/mcp on) and the coding agent's commands, each run like a typed one with the agent's guards.
+import { checkGoto, onSites, siteOn, siteToAdd, siteToOpen, wantsSite } from '@/lib/agent-prompt';
+import { allowOnce, batchProblem, batchReply, captchaHold, checkAgentTip, checkCommands, LOOK_HELP, lookShot, MAX_OUTPUT, MCP_COMMANDS, retryUnlisted, showsPage, TIP_HELP, tipsOnce, type BridgeImage, type BridgeReply } from '@/lib/bridge';
+import { fileName, RunDownloads } from '@/lib/downloads';
+import { captchaAll, labelFor, nameFor, readAll } from '@/lib/frames';
+import { HOST_NAME } from '@/lib/host-install';
+import { HandOver, StopLine } from '@/lib/messages';
+import { follow, pinTab, targetTabId } from '@/lib/navigation';
+import { pageReport } from '@/lib/page-diff';
+import { remember, type Remembered } from '@/lib/panel-memory';
+import type { Step } from '@/lib/panel-port';
+import { parseCommand } from '@/lib/parse-command';
+import { shownLine, splitReply } from '@/lib/readable-log';
+import { detachAll } from '@/lib/real-input';
+import { failed, recordLine } from '@/lib/repeat';
+import { saveTip, useSite } from '@/lib/site-store';
+import { MAX_TIPS } from '@/lib/site-tips';
+import { isCheckoutUrl } from '@/lib/stop-lines';
+import { askKeepGoing, askResume, closeAsk, lastCommand, nextCommand } from './asks';
+import { commands, runLine } from './commands';
+import { screenshot, tabSwitches } from './input';
+import { closeStep, openStep, print, show, showMcp } from './panels';
+import { runRepeat } from './repeat';
+
+// Where the run's tab is (its URL and site name) and whether that's one of the run's Sites.
+async function where(sites: string[]): Promise<{ onPlan: boolean; site: string; url: string; title: string }> {
+  const tab = await browser.tabs.get(await targetTabId());
+  return { onPlan: onSites(tab.url, sites), site: (tab.url && URL.parse(tab.url)?.hostname) || 'this page', url: tab.url ?? '', title: tab.title ?? '' };
+}
+
+// The tab's top document: a real page load makes a new one, a script's own URL change (pushState) keeps it. '' unknown.
+// Source: https://developer.chrome.com/docs/extensions/reference/api/webNavigation#method-getFrame
+const topDocument = (tabId: number) => browser.webNavigation.getFrame({ tabId, frameId: 0 }).then((f) => f?.documentId ?? '', () => '');
+
+// Settles once the agent's command has fully stopped. A command you type waits for it, so the agent's last step can't
+// land on your tab after the pin is gone, and your command can't land on the agent's tab.
+export let runEnded: Promise<void> = Promise.resolve();
+
+// Runs f with commands pinned to a run's tab (null: the active tab until the run pins its own), then unpins.
+async function inRunTab<T>(tab: number | null, f: () => T | Promise<T>): Promise<T> {
+  let ended = () => {};
+  runEnded = new Promise((resolve) => (ended = resolve));
+  pinTab(tab);
+  try {
+    return await f();
+  } finally {
+    pinTab(null);
+    ended(); // always, or a typed command would wait forever
+  }
+}
+
+// D2's ask. The punycode hostname, like S2's.
+function askDownload(item: Browser.downloads.DownloadItem, more = ''): Promise<boolean> {
+  const from = URL.parse(item.finalUrl)?.hostname || URL.parse(item.referrer)?.hostname || 'the page';
+  return askKeepGoing(`The agent started a download: "${fileName(item)}" from ${from}. Allow it?${more}`, 'Allow', 'No');
+}
+
+// The agent's turn is over: downloads still paused stay paused, and you decide.
+function unwatch(downloads: RunDownloads) {
+  browser.downloads.onCreated.removeListener(downloads.onCreated);
+  if (downloads.paused) print(`${downloads.paused} download(s) the agent started are paused, waiting for your ok: resume or cancel them in chrome://downloads.`, 'stop');
+}
+
+// F9: true while a step's earlier commands run. A read renumbers the page's elements, so it waits for the last one:
+// otherwise the step's next number could point at a different element.
+export let skipRead = false;
+// MCP option 1 (harness/mcp-context.md): true while a bridge command runs. Its page replies say what changed since the
+// last page list the agent got (bridge.page), not the whole list: the agent keeps every reply. agentRead is this
+// command's read; it becomes bridge.page only once it's sent (agentCommand).
+export let forAgent = false;
+let agentRead: string | null = null;
+
+// A fresh read as the agent gets it: the change since its last page list, or the whole list (pageReport says when).
+export function agentPage(page: string): string {
+  agentRead = page;
+  return pageReport(bridge?.page ?? null, page);
+}
+
+// The MCP bridge (/mcp on): a coding agent's commands come from the local helper's pipe (host/mcp.ts). Each shows
+// here and runs like a typed one, with the agent's guards: only MCP_COMMANDS, only on the bridge's Sites (a new site
+// asks you first, so a tricked agent can't take your data elsewhere), never past a stop-line or a hand-over.
+type Port = ReturnType<typeof browser.runtime.connectNative>;
+// RP1: one bridge call: its commands that worked, by label (recordLine), and the downloads count when it began.
+export type BridgeStep = { ran?: string[]; downloadsAt?: number };
+// page: the last page list the agent got (null: none yet, so the next one goes whole). tipped: the sites whose saved
+// tips the agent already got this session (F10, tipsOnce).
+// steps (RP1): one per call, with what worked, for repeat <step>; each reply starts with its number.
+// solved: the CAPTCHA you last resumed from (captchaHold), so a solved one still on screen doesn't ask again.
+export let bridge: { port: Port; sites: string[]; refused: Set<string>; page: string | null; tipped: Set<string>; steps: BridgeStep[]; solved: string } | null = null;
+
+// S2 for the bridge: a site off its Sites asks you first. No: refused and not asked again while the bridge is on.
+async function bridgeSite(site: string, url: string): Promise<void> {
+  const b = bridge;
+  if (!b) throw new Error('The MCP bridge is off.');
+  const id = lastCommand;
+  const add = !b.refused.has(site) && await askKeepGoing(`${wantsSite(site, url)}. Add ${site} to the bridge's Sites (${b.sites.join(', ') || 'none yet'})?`, 'Add site', 'No');
+  if (id !== lastCommand) throw new Error('Stopped: the user ran another command. Ask them what to do.');
+  if (add) {
+    b.sites.push(site);
+    return save({ mcpSites: b.sites });
+  }
+  b.refused.add(site);
+  throw new Error(`Refused: the user said no to ${site}. Use the bridge's Sites (${b.sites.join(', ') || 'none yet'}) or ask them.`);
+}
+
+// Saves a switch for the next panel open (panel-memory.ts). A failed save only loses that, so it says so and goes on.
+export const save = (change: Partial<Remembered>) => remember(change).catch((err: Error) => print(`Couldn't save settings: ${err.message}`, 'error'));
+
+// Connects to the local helper (host/mcp.ts) with these Sites. Used by mcp on and by the panel turning it back on.
+export function startBridge(sites: string[]): string {
+  const port = browser.runtime.connectNative(HOST_NAME);
+  bridge = { port, sites, refused: new Set(), page: null, tipped: new Set(), steps: [], solved: '' };
+  showMcp('starting');
+  port.onMessage.addListener((m) => void onBridge(port, m));
+  // Chrome's reason (not installed, host crashed) is in lastError.
+  port.onDisconnect.addListener(() => {
+    if (bridge?.port !== port) return; // you turned it off
+    bridge = null;
+    showMcp('off');
+    endAgentTurn();
+    print(`MCP bridge off: ${browser.runtime.lastError?.message ?? 'the local helper stopped'}`, 'error');
+  });
+  port.postMessage({ type: 'bridge' });
+  return `MCP bridge starting. Sites: ${sites.join(', ') || 'none yet'}. Any other site asks you first.`;
+}
+
+// Disconnects the local helper (mcp off, or the last panel closing). Saves nothing: mcp off saves mcpOn false itself,
+// and a closing panel leaves it on, so the next panel open turns it back on. false: it was already off.
+export function stopBridge(): boolean {
+  if (!bridge) return false;
+  bridge.port.disconnect();
+  bridge = null;
+  showMcp('off');
+  return true;
+}
+
+async function onBridge(port: Port, m: { type?: string; commands?: unknown; error?: unknown }) {
+  if (m.type === 'ready') return showMcp('on');
+  if (m.type === 'error') return print(`MCP bridge: ${String(m.error)}`, 'error');
+  if (m.type !== 'run') return;
+  let reply: BridgeReply;
+  // RP1: the call's step number goes first, so the agent can send repeat <step>; none when nothing was recorded.
+  const before = bridge?.steps.length ?? 0;
+  const numbered = () => ((bridge?.steps.length ?? 0) > before ? `Step ${bridge!.steps.length}.\n` : '');
+  // RL2: one block per call that passed checkCommands; agentBatch then always records its step, so the number holds.
+  let block: Step | null = null;
+  try {
+    const lines = checkCommands(m.commands);
+    block = openStep(`Step ${before + 1}`, lines);
+    const { text, image } = await agentBatch(lines);
+    const tips = await bridgeTips(); // first, so a long page can't cut them off
+    reply = { type: 'output', text: (numbered() + (tips ? `${tips}\n\n${text}` : text)).slice(0, MAX_OUTPUT), ...(image && { image }) };
+  } catch (err) {
+    // Cut too: a stopped batch's error carries a page report, and the reply must fit the host's frame.
+    const message = err instanceof Error ? err.message : String(err);
+    reply = { type: 'error', error: (numbered() + message).slice(0, MAX_OUTPUT) };
+    show({ kind: 'line', className: 'error', ...splitReply(message) }); // RL4: the block already says Step N
+  }
+  if (block) closeStep(block, reply.type === 'error' ? 'Stopped' : 'Done');
+  if (bridge?.port === port) port.postMessage(reply); // a port you closed meanwhile can't send
+}
+
+// 4.2–4.3 for the bridge (allowOnce): a stop-line asks Allow once / I'll do it, and a step you take
+// over waits for your Resume. A command you start meanwhile closes the ask and stops this one.
+const askYou = (keep: string, stop: string) => async (why: string): Promise<boolean> => {
+  const id = lastCommand;
+  const yes = await askKeepGoing(why, keep, stop);
+  if (id !== lastCommand) throw new Error('Stopped: the user ran another command. Ask them what to do.');
+  return yes;
+};
+const bridgeAsks = { allow: askYou('Allow once', "I'll do it"), resume: askYou('Resume', 'Stop') };
+
+// 4.2 (captchaHold): true once you solved a CAPTCHA on url and pressed Resume; false if none asked. Stop ends the call.
+async function bridgeCaptcha(name: string, url: string): Promise<boolean> {
+  const held = await captchaHold(name, url, captchaAll, bridge?.solved ?? '');
+  if (!held) return false;
+  if (!(await bridgeAsks.resume(held.ask))) throw new Error('Stopped: the user pressed Stop at a CAPTCHA. Ask them what to do.');
+  if (bridge) bridge.solved = held.seen;
+  return true;
+}
+
+// F10: the saved tips for the site the agent's tab is on, with its first reply there this session (tipsOnce); useSite
+// marks the site used. Not a guard: unreadable tips mean a reply without them, as before F10.
+async function bridgeTips(): Promise<string> {
+  const b = bridge;
+  if (!b) return '';
+  try {
+    const site = siteOn((await where(b.sites)).url, b.sites);
+    const tips = await tipsOnce(site, b.tipped, async (s) => (await useSite(s, Date.now())).map((t) => t.text));
+    if (tips) print(`   sent the agent the saved tips for ${site}`);
+    return tips;
+  } catch (err) {
+    print(`   saved tips unread: ${err instanceof Error ? err.message : String(err)}`, 'error');
+    return '';
+  }
+}
+
+// F10: the agent's tip "<text>": checkAgentTip first (a refused tip never asks you), then Save / No. Only your Save
+// keeps it; the reply tells the agent which.
+async function agentTip(args: string[], site: string): Promise<AgentReply> {
+  const text = checkAgentTip(args, site);
+  const id = lastCommand;
+  const save = await askKeepGoing(`The agent suggests a tip for ${site}: "${text}"`, 'Save', 'No');
+  if (id !== lastCommand) throw new Error('Stopped: the user ran another command. Ask them what to do.');
+  if (!save) return { text: 'Not saved: the user said no.' };
+  const saved = await saveTip(site, text, Date.now());
+  if ('why' in saved) throw new Error(`Not saved: ${saved.why}.`);
+  print(`Saved for ${site} (${saved.tips.length} of ${MAX_TIPS} tips).`);
+  return { text: `Saved: the user kept your tip for ${site}.` };
+}
+
+// MCP option 2 (harness/mcp-context.md): a run's commands in order, each through agentRun with all of its own checks
+// (Sites, a new site's ask, stop-lines, downloads, your takeover). Only the last reads the page, so the reply has one
+// change report. It stops early at an error, a new page or tab, a tab brought forward, or a command you typed: the
+// rest could land on a page the agent hasn't seen. The page then comes once at the end, unless you took over.
+async function agentBatch(lines: string[]): Promise<{ text: string; image?: BridgeImage }> {
+  // RP1: each call is one step of the bridge's history: what worked, by label (recordLine), for a later repeat.
+  const b = bridge;
+  const step = { ran: [] as string[], downloadsAt: agentCreated() };
+  try {
+    return await batchRun(lines, step.ran);
+  } finally {
+    b?.steps.push(step);
+  }
+}
+
+async function batchRun(lines: string[], ran: string[]): Promise<{ text: string; image?: BridgeImage }> {
+  if (lines.length === 1) {
+    const recorded = recordLine(lines[0]!, labelFor); // before it runs, while its number is still this read's
+    const reply = await agentRun(lines[0]!);
+    if (!failed(reply.text)) ran.push(recorded);
+    return reply;
+  }
+  const problem = batchProblem(lines);
+  if (problem) throw new Error(problem);
+  const replies: string[] = [];
+  const switches = tabSwitches;
+  for (const [i, line] of lines.entries()) {
+    const last = i === lines.length - 1;
+    const recorded = recordLine(line, labelFor);
+    const running = agentRun(line, last);
+    const id = lastCommand; // taken by agentRun before its first await; a command you type bumps it
+    let reply: Awaited<typeof running>;
+    try {
+      reply = await running;
+    } catch (err) {
+      replies.push(`Error: ${err instanceof Error ? err.message : String(err)}`);
+      throw new Error(batchReply(lines, replies, '', i && lastCommand === id ? await agentReport() : ''));
+    }
+    replies.push(reply.text);
+    if (!failed(reply.text)) ran.push(recorded);
+    if (last) return { text: batchReply(lines, replies), image: reply.image };
+    if (lastCommand !== id) throw new Error(batchReply(lines, replies, 'Stopped: the user ran another command. Ask them what to do.'));
+    const why = reply.stop ?? (tabSwitches !== switches ? 'another tab came forward' : '');
+    if (why && !showsPage(lines[i + 1]!)) return { text: batchReply(lines, replies, `Stopped: ${why}, so the rest could land on a page you haven't seen.`, await agentReport()) };
+  }
+  throw new Error('unreachable: a batch has a last command');
+}
+
+// A stopped batch's page, as the agent gets it: the change since its last list, with a command's Sites check.
+async function agentReport(): Promise<string> {
+  try {
+    const now = await where(bridge?.sites ?? []);
+    if (!now.onPlan) return `The tab is on ${now.site}, off the bridge's Sites, so its content is hidden.`;
+    const report = agentPage(await readAll(false));
+    if (bridge && agentRead !== null) bridge.page = agentRead; // sent with this reply
+    return report;
+  } catch (err) {
+    return `(read failed: ${err instanceof Error ? err.message : String(err)})`;
+  }
+}
+
+// D1, D2 for the bridge: from the agent's first command until you take over (a command you type, or the bridge stops),
+// every download is the agent's: paused until you say yes. Not only during a command: a page can start one seconds
+// after the click.
+export let agentDownloads: RunDownloads | null = null;
+// RP1: downloads counted by earlier agent turns, so agentCreated never goes back (the bridge's downloadsAt).
+let agentDownloadsBefore = 0;
+const agentCreated = () => agentDownloadsBefore + (agentDownloads?.created ?? 0);
+
+export function endAgentTurn() {
+  if (agentDownloads) {
+    agentDownloadsBefore += agentDownloads.created;
+    unwatch(agentDownloads);
+  }
+  agentDownloads = null;
+}
+
+// What one agent command gives back. stop: why a batch's next commands mustn't run (a new page, a new tab, off the Sites).
+type AgentReply = { text: string; image?: BridgeImage; stop?: string };
+
+// last: false for a batch's earlier commands, which don't read the page (agentBatch).
+async function agentRun(line: string, last = true): Promise<AgentReply> {
+  print(shownLine(line, nameFor), 'cmd'); // RL1: named before it runs, while its number is still this read's
+  // Like a command you type: closes an open ask first.
+  closeAsk('Closed, nothing ran: the agent sent a command.');
+  const id = nextCommand();
+  await runEnded;
+  // A command you type waits until this one has fully stopped, its downloads asked about.
+  return inRunTab(null, async () => {
+    if (!agentDownloads) browser.downloads.onCreated.addListener((agentDownloads = new RunDownloads()).onCreated);
+    const downloads = agentDownloads;
+    const late = await downloads.report(askDownload); // started after its last command ended
+    if (id !== lastCommand) throw new Error('Stopped: the user ran another command. Ask them what to do.');
+    let reply: AgentReply | undefined;
+    let error: unknown;
+    try {
+      reply = await agentCommand(line, last);
+    } catch (err) {
+      error = err;
+    }
+    // D1: a download doesn't change the page, so this line is all the agent learns of it, failed command or not.
+    const news = [...late, ...(await downloads.report(askDownload))].join('\n');
+    if (news) print(`   ${news.replaceAll('\n', '\n   ')}`);
+    if (!reply) throw news ? new Error(`${error instanceof Error ? error.message : String(error)}\n${news}`) : error;
+    return news ? { ...reply, text: `${reply.text}\n${news}` } : reply;
+  });
+}
+
+// RP1 2.5: repeat over the bridge (runRepeat). <step> is a bridge call ("Step N." starts each reply). Each recipe
+// command goes through agentCommand with all of its checks, without a read: only the page report at the end is the
+// agent's, so the change it gets is from the last page it saw.
+async function bridgeRepeat(args: string[]): Promise<string> {
+  const b = bridge;
+  const d = agentDownloads; // agentRun made it for this command
+  if (!b || !d) throw new Error('The MCP bridge is off.');
+  const now = await where(b.sites);
+  const result = await runRepeat(args, {
+    steps: b.steps,
+    site: now.site,
+    onSites: now.onPlan,
+    count: agentCreated,
+    allow: (n) => void (d.allowance = n),
+    news: () => d.report(askDownload),
+    run: async (line) => {
+      try {
+        return { output: (await agentCommand(line, false)).text };
+      } catch (err) {
+        return { output: `Error: ${err instanceof Error ? err.message : String(err)}` };
+      }
+    },
+  });
+  if (result === null) throw new Error('Stopped: the user ran another command. Ask them what to do.');
+  return `${result}\n\n${await agentReport()}`;
+}
+
+async function agentCommand(line: string, last: boolean): Promise<AgentReply> {
+  const [name = '', ...args] = parseCommand(line);
+  if (name === 'help') return { text: MCP_COMMANDS.map((n) => `${n} — ${n === 'look' ? LOOK_HELP : n === 'tip' ? TIP_HELP : commands[n]!.help}`).join('\n') };
+  if (!MCP_COMMANDS.includes(name)) throw new Error(`Not a command you can use: ${name.slice(0, 50)}. Send help for the list.`);
+  const sites = bridge?.sites ?? [];
+  // #16: one command, one tab. Its checks, action and read all go to the tab it started on, even if another comes
+  // forward meanwhile. Not back: with no earlier page it goes to the tab that opened this one (#15). The pin ends with
+  // the command (inRunTab).
+  const from = await targetTabId();
+  if (name !== 'back') pinTab(from);
+  // Checked right before acting: you may have switched tabs, or a click may have left the Sites. back and goto (to
+  // the Sites only, checked below) get it home.
+  const now = await where(sites);
+  // F10: a tip is for the site the tab is on, and never asks to add one.
+  if (name === 'tip') return agentTip(args, siteOn(now.url, sites));
+  if (!now.onPlan && name !== 'back' && name !== 'goto') {
+    const site = siteToAdd(now.url, sites);
+    if (!site) throw new Error(`Blocked: this tab (${now.site}) isn't a web page you can use. Use goto.`);
+    await bridgeSite(site, now.url);
+  }
+  // 4.2 (captchaHold). After the Sites check, so a site just added is checked too. "Refused" keeps it out of repeat's history.
+  if (await bridgeCaptcha(name, now.url)) {
+    return { text: "Refused: a CAPTCHA was on the page; the user solved it and pressed Resume. Your command didn't run: read the page, then send it again if it's still needed.", stop: 'the user solved a CAPTCHA' };
+  }
+  if (name === 'repeat') return { text: await bridgeRepeat(args) };
+  if (name === 'pause') {
+    if (await askResume(args)) return { text: 'The user pressed Resume. Report what the page shows now, not what you expect.' };
+    throw new Error('The user pressed Stop. Stop and ask them what to do.');
+  }
+  const docBefore = await topDocument(from);
+  // #8: a tab this command's page opens (a link with target=_blank) is followed: the next commands go to it.
+  let opened: number | undefined;
+  const onCreated = (tab: Browser.tabs.Tab) => {
+    if (tab.openerTabId === from) opened = tab.id;
+  };
+  browser.tabs.onCreated.addListener(onCreated);
+  let output: string | void;
+  let image: BridgeImage | undefined;
+  forAgent = true;
+  agentRead = null;
+  skipRead = !last; // F9's pattern: in a batch only the last command reads, so the reply has one change report
+  try {
+    if (name === 'goto') {
+      // Only a new site's bare home page asks: a path or query could carry page data to a site you never added.
+      const newSite = siteToOpen(args[0], sites);
+      if (newSite) await bridgeSite(newSite, args[0]!);
+      const href = checkGoto(args[0], sites);
+      output = await allowOnce(async (allow) => {
+        if (!allow && isCheckoutUrl(href)) throw new StopLine(`Stop-line: goto ${href} (checkout page)`);
+        return commands.goto!.run([href], allow);
+      }, bridgeAsks);
+    } else if (name === 'look') {
+      if (args.length) throw new Error('Usage: look (no arguments)');
+      const read = agentPage(await readAll(false));
+      // Right after the read, so the picture's numbers are this read's. Every screenshot guard (F1b) applies.
+      const shot = lookShot(await screenshot((await where(sites)).onPlan));
+      output = `${shot.line}\n\n${read}`;
+      image = shot.image;
+    } else if (name === 'read') {
+      output = agentRead = await readAll(false); // always the whole list
+    } else {
+      // The re-read isn't the agent's: agentRead and bridge.page stay as they were.
+      output = await allowOnce(async (allow) => {
+        // Downloads that start during an Allow once command are part of what you allowed.
+        if (agentDownloads) agentDownloads.allowing = allow;
+        try {
+          return await retryUnlisted(async () => runLine(commands[name]!, line, allow), () => readAll(false));
+        } finally {
+          if (agentDownloads) agentDownloads.allowing = false;
+        }
+      }, bridgeAsks);
+    }
+  } catch (err) {
+    // allowOnce took the first try's stop-line or hand-over; one from the allowed try (or goto's site ask) ends here.
+    if (err instanceof StopLine || err instanceof HandOver) throw new Error(`${err.message}. Not done: tell the user to do this step by hand.`);
+    throw err;
+  } finally {
+    forAgent = false;
+    skipRead = false;
+    browser.tabs.onCreated.removeListener(onCreated);
+    await detachAll(); // I1: the debugger is attached only while a command goes
+  }
+  // #14: once loaded, so the next read sees its page, not a blank tab.
+  let followed = false;
+  if (opened !== undefined && (await follow(opened, from))) {
+    pinTab(opened); // the Sites check below is of the new tab
+    followed = true;
+  }
+  // A click can land off the Sites (here or in the new tab): that page's text stays here, like a redirect's.
+  // In both returns below the read isn't sent, so bridge.page stays the last list the agent got.
+  const after = await where(sites);
+  if (!after.onPlan) return { text: `Done, but ${followed ? 'it opened a new tab' : 'the tab is now'} on ${after.site}, off the bridge's Sites, so its content is hidden. Use back, or send read to ask the user to add it.`, stop: "the tab left the bridge's Sites" };
+  // 4.2: a CAPTCHA this command brought (goto onto a Turnstile page) waits for you now, not at the next call. The read
+  // in output is of the page before you solved it, so it isn't sent.
+  if (await bridgeCaptcha('', after.url)) {
+    return { text: `${(output || 'ok').split('\n')[0]} — then a CAPTCHA showed; the user solved it and pressed Resume. Read the page to see it now.`, stop: 'the user solved a CAPTCHA' };
+  }
+  // The read in output is of the old tab: the agent reads the new one next.
+  if (followed) output = `${(output || 'ok').split('\n')[0]} — it opened a new tab, now the current one: ${after.url}. Send read to see it (text page 1 if it's a PDF).`;
+  else if (bridge && agentRead !== null) bridge.page = agentRead;
+  if (output) show({ kind: 'line', ...splitReply(output) }); // RL4: the result; the page behind a click
+  // A new document, not a new URL: Maps' tabs change the URL by script (pushState) on the same page. Unknown: stops.
+  const docAfter = await topDocument(await targetTabId());
+  const stop = followed ? 'it opened a new tab' : !docBefore || docBefore !== docAfter ? 'a new page loaded' : undefined;
+  return { text: output || 'ok', image, ...(stop && { stop }) };
+}
