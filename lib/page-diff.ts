@@ -81,7 +81,9 @@ export function pageReport(before: string | null, after: string): string {
     if (num) {
       if (!listed.has(`[${num}]`)) nums.push(Number(num));
     } else if (/^[A-Z]/.test(line)) {
-      if (!newWords.has(word(line))) heads.push(line); // a header line with no new value: the panel closed, focus left
+      // A header line with no new value: the panel closed, focus left. Its name only: its old value ("its elements:
+      // [6]–[8]") would read as still there.
+      if (!newWords.has(word(line))) heads.push(line.split(':', 1)[0]!);
     } else texts += n; // quoted page text, iframe lines
   }
   const gone = [nums.length && `${nums.length} element${nums.length > 1 ? 's' : ''} ${ranges(nums)}`, ...heads, texts && `${texts} text line${texts > 1 ? 's' : ''}`].filter(Boolean);
