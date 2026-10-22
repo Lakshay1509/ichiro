@@ -35,7 +35,7 @@ export type Message =
   | { type: 'shot'; on: boolean };
 
 // contentType: application/pdf in a PDF tab, whose content Chrome's own viewer shows (P1).
-export type PingReply = { url: string; title: string; contentType?: string };
+export type PingReply = { url: string; title: string; contentType?: string; visible: boolean }; // visible: BG3, isDrawn
 
 // One frame's part of a read: header (top frame only), numbered element lines, and how many were found in total.
 // page: what the AI reads (F2): the element lines with the visible text around them, in page order.

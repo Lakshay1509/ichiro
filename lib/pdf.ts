@@ -1,5 +1,5 @@
-// P1: reads a PDF tab's text in the side panel with pdf.js (Mozilla), the way browser-use downloads PDFs and reads them:
-// Chrome's own PDF viewer doesn't run our content script. No PDF script ever runs (scripting is a viewer feature we
+// P1: reads a PDF tab's text with pdf.js (Mozilla), the way browser-use downloads PDFs and reads them: Chrome's own PDF
+// viewer doesn't run our content script. Runs only in the hidden page (entrypoints/offscreen/); others ask through lib/offscreen.ts. No PDF script ever runs (scripting is a viewer feature we
 // don't load). pdf.js 6 has no eval at all (CVE-2024-4367 needed it; 4.2.67 removed it), so there's no
 // isEvalSupported to turn off.
 // Sources: https://github.com/mozilla/pdf.js, https://github.com/advisories/GHSA-wgrm-67xf-hhpq
@@ -14,18 +14,6 @@ const MAX_PAGES = 50;
 const MAX_MS = 15_000;
 const MAX_CHARS = 100_000; // read past text all's cut, so find reaches the later pages
 
-// Per URL for this panel session: the same PDF is fetched and read once.
-const read = new Map<string, Promise<PdfText>>();
-export function readPdf(url: string): Promise<PdfText> {
-  let p = read.get(url);
-  if (!p) {
-    p = load(url);
-    read.set(url, p);
-    p.catch(() => read.delete(url)); // a failed read can be tried again
-  }
-  return p;
-}
-
 // The tab's own URL, with its cookies, from the cache when it can be (browser-use fetches with force-cache too).
 async function fetchPdf(url: string): Promise<Uint8Array> {
   const res = await fetch(url, { credentials: 'include', cache: 'force-cache', signal: AbortSignal.timeout(MAX_MS) });
@@ -35,7 +23,7 @@ async function fetchPdf(url: string): Promise<Uint8Array> {
   return bytes;
 }
 
-async function load(url: string): Promise<PdfText> {
+export async function loadPdf(url: string): Promise<PdfText> {
   const deadline = Date.now() + MAX_MS;
   const task = getDocument({ data: await fetchPdf(url), disableFontFace: true, useSystemFonts: false, enableXfa: false });
   try {

@@ -17,7 +17,8 @@ const ACTIONS = new Set<Message['type']>(['click', 'clickText', 'aim', 'aimPoint
 const handlers: {
   [K in Message['type']]: (msg: Extract<Message, { type: K }>) => Replies[K] | Promise<Replies[K]>;
 } = {
-  ping: () => ({ url: location.href, title: document.title, contentType: document.contentType }),
+  // visible: read here, apart from the page's own scripts, so the page can't fake it. Source: https://developer.mozilla.org/en-US/docs/Web/API/Document/visibilityState
+  ping: () => ({ url: location.href, title: document.title, contentType: document.contentType, visible: document.visibilityState === 'visible' }),
   // The panel sends its overlay setting with every read, so a page opened since draws the numbers too.
   read: ({ next, overlay }) => {
     const reply = read(next);

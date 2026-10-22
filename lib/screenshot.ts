@@ -24,6 +24,14 @@ export interface ShotTab {
   capture(): Promise<string>; // the window's visible tab, as a data URL
 }
 
+// BG3: is the run's tab drawn on screen? Chrome stops drawing a window that is minimized or behind others, and a capture
+// then returns the last frame it drew, maybe of an earlier page or tab. The tab's own page knows (its ping's visible);
+// a page that can't answer (Chrome's PDF viewer, a page still loading) leaves the window: focused and not minimized.
+// Source: https://developer.chrome.com/docs/extensions/reference/api/windows#type-Window
+export function isDrawn(page: { visible: boolean } | null, win: { focused: boolean; state?: string }): boolean {
+  return page ? page.visible === true : win.focused && win.state !== 'minimized';
+}
+
 // F1b: a picture only of the run's tab, only on a plan Site, never with a secret field or on a checkout page.
 // captureVisibleTab shoots whatever tab is on screen, so the run's tab must be active before and after, with no switch
 // in between. Any doubt → no picture, and the reason.

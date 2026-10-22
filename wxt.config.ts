@@ -20,7 +20,9 @@ export default defineConfig({
     // debugger: real mouse input (I1) through the DevTools Protocol's Input domain only, on the command's tab, only while
     // a command or run goes; Chrome shows its "debugging this browser" bar then. Stronger install warning.
     // Source: https://developer.chrome.com/docs/extensions/reference/api/debugger
-    permissions: ['sidePanel', 'tabs', 'scripting', 'storage', 'webNavigation', 'webRequest', 'nativeMessaging', 'publicSuffix', 'downloads', 'debugger'],
+    // offscreen: the hidden page that reads PDFs with pdf.js (BG2, lib/offscreen.ts). No install warning.
+    // Source: https://developer.chrome.com/docs/extensions/reference/api/offscreen
+    permissions: ['sidePanel', 'tabs', 'scripting', 'storage', 'webNavigation', 'webRequest', 'nativeMessaging', 'publicSuffix', 'downloads', 'debugger', 'offscreen'],
     // chrome.publicSuffix arrived in Chrome 153; older Chrome can't install the extension.
     // Source: https://developer.chrome.com/docs/extensions/reference/manifest/minimum-chrome-version
     minimum_chrome_version: '153',

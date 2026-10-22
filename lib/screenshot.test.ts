@@ -1,5 +1,5 @@
 // Checks the screenshot guards (F1b). Run: npm test
-import { OFF_SCREEN, takeShot, type ShotTab } from './screenshot.ts';
+import { isDrawn, OFF_SCREEN, takeShot, type ShotTab } from './screenshot.ts';
 
 const fail = (what: string): never => {
   throw new Error(what);
@@ -68,3 +68,17 @@ const broken = fakeTab({ captureFails: true });
 let threw = false;
 await takeShot(true, broken.tab).catch(() => (threw = true));
 if (!threw || broken.marks.join() !== 'true,false') fail(`failed capture: threw ${threw}, marks ${broken.marks}`);
+
+// BG3: the page's own answer wins over the window; no answer falls back to the window (focused, not minimized).
+const front = { focused: true, state: 'normal' };
+const drawnCases: [string, { visible: boolean } | null, { focused: boolean; state?: string }, boolean][] = [
+  ['page visible, window beside another app', { visible: true }, { focused: false, state: 'normal' }, true],
+  ['page hidden, window in front', { visible: false }, front, false],
+  ['page answer missing visible', {} as { visible: boolean }, front, false],
+  ['no page answer, window in front', null, front, true],
+  ['no page answer, window not focused', null, { focused: false, state: 'normal' }, false],
+  ['no page answer, minimized', null, { focused: true, state: 'minimized' }, false],
+];
+for (const [what, page, win, want] of drawnCases) {
+  if (isDrawn(page, win) !== want) fail(`isDrawn, ${what}: want ${want}`);
+}

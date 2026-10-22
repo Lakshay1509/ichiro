@@ -14,15 +14,15 @@ import { capText, textArgs } from '@/lib/page-text';
 import { parseCommand, restOf } from '@/lib/parse-command';
 import { shownLine, splitReply } from '@/lib/readable-log';
 import { pickArgs } from '@/lib/pick';
-import { readPdf } from '@/lib/pdf';
+import { readPdf } from '@/lib/offscreen';
 import { downloadsSince, failed, filesLine, forItem, item1On, itemMiss, itemTarget, MAX_REPEAT_ITEMS, notAlikeError, parseRepeat, recipeFrom, recordLine, repeatAsk, repeatDone, stoppedAt } from '@/lib/repeat';
 import { pdfFind, pdfText } from '@/lib/pdf-text';
 import { downloadArgs, fileKind, fileUrl, MAX_TEXT_FILE, newestReadable } from '@/lib/run-files';
 import { attach, checkPoint, checkScriptClick, clickAtPoint, detachAll, dragAlong, MAX_POINTS, mouseFlags, moveTo, parsePoint, sendKeys, sendMouse, sendText, type Point } from '@/lib/real-input';
 import { keyEvents, parseKey, scriptKey } from '@/lib/keys';
-import { shrink, takeShot, type Shot } from '@/lib/screenshot';
+import { isDrawn, shrink, takeShot, type Shot } from '@/lib/screenshot';
 import { searchUrl } from '@/lib/search';
-import { sendToTab } from '@/lib/send-to-tab';
+import { send, sendToTab } from '@/lib/send-to-tab';
 import { settleAfter } from '@/lib/settle';
 import { listSites, pruneSites, saveTip, useSite } from '@/lib/site-store';
 import { recall, remember, type Remembered } from '@/lib/panel-memory';
@@ -430,8 +430,6 @@ async function screenshot(onPlan: boolean): Promise<Shot | string> {
   try {
     const tabId = await targetTabId();
     const { windowId } = await browser.tabs.get(tabId);
-    // Source: https://developer.chrome.com/docs/extensions/reference/api/windows#method-getCurrent
-    const panelWindow = (await browser.windows.getCurrent()).id;
     // WR1: attached first, so the picture has Chrome's debugging bar as real input will (it shows while attached and
     // 5 s after), and points in it map onto the page. A fresh attach gets a moment for the bar to come in.
     if (onPlan && (await attach(tabId)) === 'fresh') await new Promise((resolve) => setTimeout(resolve, 250));
@@ -439,9 +437,8 @@ async function screenshot(onPlan: boolean): Promise<Shot | string> {
       get: async () => {
         const tab = await browser.tabs.get(tabId);
         // Same window too: captureVisibleTab shoots the window's active tab, which isn't ours if ours moved away.
-        // And drawn: Chrome stops drawing a window that is minimized or behind others, and a capture then returns the
-        // last frame it drew, maybe of an earlier page or tab. This panel is in that window, so it's drawn only if we are.
-        const drawn = windowId === panelWindow && document.visibilityState === 'visible';
+        // And drawn (isDrawn), asked of the tab itself, so it holds in any window, with the panel open or not.
+        const drawn = isDrawn(await send(tabId, { type: 'ping' }).catch(() => null), await browser.windows.get(windowId));
         return { active: tab.active && tab.windowId === windowId && drawn, url: tab.url ?? '' };
       },
       switches: () => tabSwitches,
