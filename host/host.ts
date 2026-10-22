@@ -1,17 +1,12 @@
-// The native messaging host: Chrome starts it for our side panel; it adds the API key and asks Claude,
-// or (/mcp on) bridges a coding agent's commands from a local pipe to the panel.
-// stdout belongs to Chrome's message channel, so logs go to stderr only (console.error), and never the key or token.
+// The native messaging host: Chrome starts it for the side panel's /mcp on; it bridges a coding agent's commands from
+// a local pipe to the panel. stdout belongs to Chrome's message channel, so logs go to stderr only, and never the token.
 import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, type Socket } from 'node:net';
 import { dirname } from 'node:path';
 import { checkReply, checkRun, isBridgeStart, type BridgeReply } from '../lib/bridge.ts';
 import { hostPaths } from '../lib/host-install.ts';
-import { apiRequest, checkAsk, frame, readFrames, toReply } from '../lib/host-request.ts';
-import { readKey } from './key.ts';
-
-// Hard-coded so nothing the extension sends can point the key somewhere else.
-const API_URL = 'https://api.anthropic.com/v1/messages';
+import { frame, readFrames } from '../lib/host-request.ts';
 
 const send = (message: object) => process.stdout.write(frame(message));
 // Exit only after the error has reached Chrome.
@@ -25,41 +20,19 @@ if (!process.env.BA_ORIGIN || process.argv[2] !== process.env.BA_ORIGIN) {
   process.exit(1);
 }
 
-let key = ''; // read on the first ask, kept in memory only; the bridge never needs it
-let mode: 'ask' | 'bridge' | undefined; // set by the first message, then fixed for this process
+let bridging = false; // set by the first message, which must start the bridge; then fixed for this process
 
-async function handle(text: string) {
-  if (mode === 'bridge') return panelReply(text);
-  if (!mode && isStart(text)) return startBridge();
-  mode = 'ask';
-  let ask;
-  try {
-    ask = checkAsk(text);
-  } catch (e) {
-    return send({ type: 'error', error: (e as Error).message }); // refused: no API call
-  }
-  try {
-    key ||= await readKey();
-  } catch (e) {
-    return fail((e as Error).message);
-  }
-  try {
-    const res = await fetch(API_URL, apiRequest(ask, key));
-    const json: unknown = await res.json().catch(() => null);
-    const reply = toReply(res.status, json);
-    if (reply.type === 'error') console.error(reply.error, (json as { error?: { message?: string } } | null)?.error?.message ?? '');
-    send(reply);
-  } catch (e) {
-    console.error('API call failed:', String((e as Error).cause ?? (e as Error).message));
-    send({ type: 'error', error: 'Could not reach the API' });
-  }
+function handle(text: string) {
+  if (bridging) return panelReply(text);
+  if (!isStart(text)) return fail('The first message must be {"type":"bridge"}');
+  startBridge();
 }
 
 const isStart = (text: string) => {
   try {
     return isBridgeStart(text);
   } catch {
-    return false; // not JSON: checkAsk refuses it with its own message
+    return false; // not JSON
   }
 };
 
@@ -69,7 +42,7 @@ let waiting: ((reply: BridgeReply) => void) | null = null; // the agent waiting 
 let line: Promise<unknown> = Promise.resolve();
 
 function startBridge() {
-  mode = 'bridge';
+  bridging = true;
   const token = randomBytes(32).toString('hex');
   const file = hostPaths(process.platform, process.env).bridge;
   // Windows pipes vanish with the process. A Unix socket is a file: removed on exit.

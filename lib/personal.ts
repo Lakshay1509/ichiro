@@ -38,17 +38,6 @@ export function personalKind(autocomplete: string, type: string, labels: string,
   return WORDS.find(([, re]) => re.test(w))?.[0] ?? null;
 }
 
-// True if value is in the goal you typed, as whole words (case and spaces ignored): you already gave it for this task,
-// so typing it on the run's Sites needs no second yes. A value from anywhere else (read off a page, made up) still asks.
-export function inGoal(value: string, goal: string): boolean {
-  const norm = (s: string) => s.trim().replace(/\s+/g, ' ').toLowerCase();
-  const v = norm(value);
-  if (!v) return false;
-  const exact = v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  // Not inside a longer word: "Ann" is not in "annual report".
-  return new RegExp(`(?<![\\p{L}\\p{N}])${exact}(?![\\p{L}\\p{N}])`, 'u').test(norm(goal));
-}
-
 // Throws a stop-line (Allow once / I'll do it) if el takes personal data. Runs in the content script.
 export function checkPersonal(el: Element, what: string) {
   const labels = [name(el), el.getAttribute('name'), el.id].join(' ');

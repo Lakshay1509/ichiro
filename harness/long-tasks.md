@@ -1,5 +1,7 @@
 # Long tasks: research + backlog
 
+> **History (2026-10-22):** written for the panel's AI loop, which was removed: the extension is now pure MCP. Don't build from this doc.
+
 Ideas for tasks longer than ~30 steps, from web research on 2026-10-13. **Not scheduled yet:** `plan.md`'s order still rules. When you pick a task up, move it into `plan.md`.
 
 ## The short version

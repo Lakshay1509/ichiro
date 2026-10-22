@@ -92,13 +92,6 @@ export function findInteractive(): Element[] {
 // el can be clicked by findInteractive's rules: a control or generic clickable, itself or around it, or a pointer cursor.
 export const clickable = (el: Element) => !!el.closest(`${CONTROLS},${GENERIC}`) || getComputedStyle(el).cursor === 'pointer';
 
-// F9: how many form fields the page shows now, on screen or not. A step's choice that adds one (a select revealing
-// the next) stops the step before its next click. No read, so the step's numbers stay valid.
-const FIELDS = 'input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=reset]):not([type=image]), select, textarea, [role=combobox], [role=listbox], [role=textbox], [contenteditable=""], [contenteditable=true]';
-export const fieldCount = () => document.body
-  ? [...allElements(document.body)].filter((el) => el.matches(FIELDS) && el.checkVisibility({ visibilityProperty: true }) && el.getBoundingClientRect().width > 0).length
-  : 0;
-
 // Center of the part of rect r inside the viewport, or null if none of it is (also null for zero size).
 export function clippedCenter(r: DOMRect): { x: number; y: number } | null {
   const left = Math.max(r.left, 0), right = Math.min(r.right, innerWidth);

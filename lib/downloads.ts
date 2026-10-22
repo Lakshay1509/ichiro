@@ -1,4 +1,4 @@
-// The agent's downloads (D1, D2), in a goal run or over MCP: what it's told about each one, and the pause that waits for your yes.
+// The MCP agent's downloads (D1, D2): what it's told about each one, and the pause that waits for your yes.
 // Source: https://developer.chrome.com/docs/extensions/reference/api/downloads
 import { oneLine } from './agent-prompt.ts';
 

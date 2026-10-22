@@ -73,8 +73,8 @@ history = false;
 if ((await back()) !== 'ok — this tab had no earlier page, so went to the tab that opened it' || activated.at(-1) !== 1) throw new Error('back: to the opener');
 active = 3;
 await rejects(back(), 'in another window');
-pinTab(2); // a goal run: it switches with its own tab command
-await rejects(back(), 'switch to that one with tab <n>');
+pinTab(2); // a command pinned to its tab (a repeat's recipe) stays on it
+await rejects(back(), 'send back on its own to go there');
 pinTab(1);
 await rejects(back(), "Can't go back: this tab has no earlier page.");
 pinTab(7); // any other error stays Chrome's

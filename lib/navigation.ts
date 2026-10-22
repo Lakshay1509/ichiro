@@ -14,14 +14,14 @@ export function safeUrl(input: string): string {
   return url.href;
 }
 
-// The tab a goal run works in (3.7e). While set, every command goes to this tab by its id, never to whatever tab you're
-// looking at, so a run can't wander into your tabs. The panel clears it when you type a command.
+// The tab an agent command works in (#16). While set, every command goes to this tab by its id, never to whatever tab
+// you're looking at, so the agent can't wander into your tabs. The panel clears it when you type a command.
 let pinned: number | null = null;
 export const pinTab = (id: number | null) => {
   pinned = id;
 };
 
-// The tab commands go to: the run's pinned tab, else the active tab of this window (hand commands).
+// The tab commands go to: the agent command's pinned tab, else the active tab of this window (hand commands).
 export async function targetTabId(): Promise<number> {
   if (pinned !== null) return pinned;
   const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
@@ -102,8 +102,8 @@ export async function back(): Promise<string> {
   const opener = (await tabOf(id))?.openerTabId;
   const none = "Can't go back: this tab has no earlier page";
   if (opener === undefined) throw new Error(`${none}.`);
-  // A goal run keeps its own tab list (pinned), so it switches with its tab command.
-  if (pinned !== null) throw new Error(`${none}. Another tab opened it: switch to that one with tab <n> (see the Tabs line).`);
+  // A command pinned to its tab (a repeat's recipe) stays there, so it never jumps to the opener midway.
+  if (pinned !== null) throw new Error(`${none}. Another tab opened it: send back on its own to go there.`);
   if (!(await bringForward(opener, id))) throw new Error(`${none}, and the tab that opened it is in another window.`);
   return 'ok — this tab had no earlier page, so went to the tab that opened it';
 }

@@ -1,6 +1,4 @@
-// W1: the AI's search "words". Our code builds the one results URL (DuckDuckGo, browser-use's default); the model only
-// sends words, and you see them before anything opens: a model-written URL is how page data leaks out.
-import { onSites } from './agent-prompt.ts';
+// W1: /search "words". Our code builds the one results URL (DuckDuckGo, browser-use's default) from the words only.
 
 export const SEARCH_SITE = 'duckduckgo.com';
 const MAX_WORDS = 100;
@@ -13,9 +11,3 @@ export function searchUrl(words: string): string {
   if (w.includes('!')) throw new Error('search refused: no ! in the words (DuckDuckGo would send them on to another site)');
   return `https://${SEARCH_SITE}/?q=${encodeURIComponent(w)}`;
 }
-
-// Your ask before a search: the exact words that will leave, already checked by searchUrl.
-export const searchAsk = (words: string) => `The agent wants to search DuckDuckGo for: "${words.trim()}". Search?`;
-
-// A results page you allowed by a search, not a Site you added: typing there would search again without your ask.
-export const onlySearched = (url: string, sites: string[]) => onSites(url, [SEARCH_SITE]) && !onSites(url, sites);

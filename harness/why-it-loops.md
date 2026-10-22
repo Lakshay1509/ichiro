@@ -1,6 +1,8 @@
 # Making the agent smarter
 
-**This is the working plan until the agent gets smarter** (developer, 2026-10-14). Do these fixes before anything in `plan.md`.
+> **History (2026-10-22):** the panel's AI loop these fixes were for was removed: the extension is now pure MCP (no API key; the coding agent is the brain). Don't build from this doc.
+
+**This was the working plan until the agent gets smarter** (developer, 2026-10-14). Do these fixes before anything in `plan.md`.
 
 - Do the **first unticked fix**. One at a time.
 - Tick a box only when its **Done when** is verified (test, build or a live check you actually ran).

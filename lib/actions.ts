@@ -272,16 +272,16 @@ export function aimKey(input: string, allow = false): string | null {
 }
 
 // WR2: the checks before the panel types or pastes text where focus is (in the frame focus is in). A secret field is
-// yours; a field asking for personal data asks first (given: the text is in your goal). Typing needs a field; a paste
+// yours; a field asking for personal data asks first. Typing needs a field; a paste
 // may go to the page itself (drawing apps take it there). Returns where it lands.
-export function aimText(paste: boolean, allow = false, given = false): string {
+export function aimText(paste: boolean, allow = false): string {
   const focused = deepActive(document);
   const where = describe(focused);
   if (isFrame(focused)) throw new Error(`Not sent: focus is inside another site's frame (${where}), which can't be checked`);
   if (isSecret(focused)) throw new HandOver(`Sign-in or card details needed: ${where} is a password, card or one-time-code field: type it yourself on the page.`);
   const field = isField(focused);
   if (!field && !paste) throw new Error(`Nothing to type into: focus is on ${where}. Click (or double-click) where the text goes first`);
-  if (field && !allow && !given) checkPersonal(focused, paste ? 'paste into' : 'type into');
+  if (field && !allow) checkPersonal(focused, paste ? 'paste into' : 'type into');
   return where;
 }
 
@@ -289,8 +289,8 @@ export function aimText(paste: boolean, allow = false, given = false): string {
 // copied can reach the page. Apps that read pastes (a drawing app's JSON, rich editors) take it from the event; a plain
 // field that doesn't gets it at the cursor, like a real paste.
 // shortcut: an app that ignores script paste events won't take it; upgrade to the real clipboard + ctrl+v if one shows up.
-export function pasteText(text: string, allow = false, given = false): string {
-  const where = aimText(true, allow, given);
+export function pasteText(text: string, allow = false): string {
+  const where = aimText(true, allow);
   const focused = deepActive(document);
   const clipboardData = new DataTransfer();
   clipboardData.setData('text/plain', text);
@@ -403,7 +403,7 @@ async function pressEnter(el: Element, form: HTMLFormElement | null): Promise<st
   return note;
 }
 
-export async function typeText(n: number, text: string, enter: boolean, slow: boolean, allow = false, given = false): Promise<string> {
+export async function typeText(n: number, text: string, enter: boolean, slow: boolean, allow = false): Promise<string> {
   const el = getElement(n);
   // 4.2: secrets are yours to type, so this is refused even with Allow once; a run pauses and hands over.
   if (isSecret(el)) {
@@ -414,9 +414,9 @@ export async function typeText(n: number, text: string, enter: boolean, slow: bo
   if (!field && !(el instanceof HTMLElement && el.isContentEditable)) {
     throw new Error(`Element [${n}] is ${role(el)} ${JSON.stringify(name(el))}, not a text field`);
   }
-  // Checked before typing, so a refused command leaves the page as it was. Clearing a field shares nothing, and
-  // neither does text you gave in the goal. Secrets (above) and the Enter stop-line (below) still apply to it.
-  if (text && !allow && !given) checkPersonal(el, `type into [${n}]`);
+  // Checked before typing, so a refused command leaves the page as it was. Clearing a field shares nothing. Secrets
+  // (above) and the Enter stop-line (below) still apply to it.
+  if (text && !allow) checkPersonal(el, `type into [${n}]`);
   if (enter && !allow) checkStopLine(`Enter in ${JSON.stringify(name(el))}`, enterTargets(el));
   // F4b: the screen's text before typing, without the field's own text, to say afterwards how the page reacted.
   const screen = () => readText(false, el).split('\n');
@@ -479,12 +479,12 @@ async function reactionTo(before: string[], screen: () => string[], field: () =>
 }
 
 // Native <select> only. Custom dropdowns are divs: click them, read, click the option.
-export function selectOption(n: number, option: string, allow = false, given = false): string {
+export function selectOption(n: number, option: string, allow = false): string {
   const el = getElement(n);
   if (!(el instanceof HTMLSelectElement)) {
     throw new Error(`Element [${n}] is ${role(el)} ${JSON.stringify(name(el))}, not a <select>. For custom dropdowns: click it, read, then click the option`);
   }
-  if (!allow && !given) checkPersonal(el, `select in [${n}]`); // a birth month or a country is personal too (4.3)
+  if (!allow) checkPersonal(el, `select in [${n}]`); // a birth month or a country is personal too (4.3)
   const want = option.trim().toLowerCase();
   const opt = [...el.options].find((o) => o.text.trim().toLowerCase() === want || o.value === option);
   if (!opt) {

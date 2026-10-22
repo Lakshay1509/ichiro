@@ -1,6 +1,8 @@
 # Site memory: tips and saved routines per site
 
-Research for "cache per-site tips and boring repeat tasks, and where to save them" (developer, 2026-10-20). **Proposed, waits for the developer.**
+Research for "cache per-site tips and boring repeat tasks, and where to save them" (developer, 2026-10-20). Build progress: `remember-and-repeat.md`.
+
+> **Since 2026-10-22 (pure MCP):** tips reach the agent only through the bridge (`tip` and the first reply on a site). The post-run tip ask and the `<site_tips>` block went with the panel's AI loop.
 
 **Answer:** save two small things per site, in the extension's own storage (`chrome.storage.local`), keyed by the site's main domain:
 

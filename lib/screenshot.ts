@@ -1,6 +1,5 @@
-// Screenshot (F1): one picture of the run's tab per step, with element numbers on it, and the guards that keep any
-// other tab, off-plan site or secret out of it (F1b). Inspired by browser-use's numbered screenshots (set-of-marks).
-import { MAX_FRAME, type Ask, type TextAsk } from './host-request.ts';
+// Screenshot (F1): look's picture of the agent's tab, with element numbers on it, and the guards that keep any other
+// tab, off-Sites page or secret out of it (F1b). Inspired by browser-use's numbered screenshots (set-of-marks).
 import { isCheckoutUrl } from './stop-lines.ts';
 
 // Anthropic's computer-use docs suggest 1280×800 for web apps; wider costs more tokens for little gain.
@@ -71,26 +70,4 @@ export async function shrink(dataUrl: string): Promise<Shot> {
   let bin = '';
   for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
   return { data: btoa(bin), width, height };
-}
-
-// Image tokens = ⌈width / 28⌉ × ⌈height / 28⌉. Source: https://platform.claude.com/docs/en/build-with-claude/vision
-export const shotTokens = (s: Pick<Shot, 'width' | 'height'>) => Math.ceil(s.width / 28) * Math.ceil(s.height / 28);
-
-// The step ask with the screenshot before its text: Claude works best with images first (vision docs).
-export function withShot(ask: TextAsk, shot: Shot): Ask {
-  const [first, ...rest] = ask.messages;
-  if (!first) return ask;
-  const image = { type: 'image' as const, source: { type: 'base64' as const, media_type: 'image/jpeg' as const, data: shot.data } };
-  return { ...ask, messages: [{ role: first.role, content: [image, { type: 'text', text: first.content }] }, ...rest] };
-}
-
-// The host takes at most 1 MB per message, so a picture that would push the ask over is dropped, never the ask.
-export const fitsFrame = (ask: Ask) => new TextEncoder().encode(JSON.stringify({ type: 'ask', ...ask })).length <= MAX_FRAME;
-
-// The step ask with its screenshot when there is one and it fits, plus the line the panel prints about it.
-export function attachShot(ask: TextAsk, shot: Shot | string): [Ask, string] {
-  if (typeof shot === 'string') return [ask, `no screenshot: ${shot}`];
-  const pictured = withShot(ask, shot);
-  if (!fitsFrame(pictured)) return [ask, 'no screenshot: too big for the host (1 MB)'];
-  return [pictured, `screenshot: ${shot.width}×${shot.height} (~${(shotTokens(shot) / 1000).toFixed(1)}k tokens)`];
 }

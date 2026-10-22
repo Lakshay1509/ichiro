@@ -1,5 +1,7 @@
 # Token cost: research + options
 
+> **History (2026-10-22):** about the panel's own model calls, which were removed: the extension is now pure MCP, so the coding agent pays for its own tokens. For MCP reply size, see `mcp-context.md`.
+
 Web research on 2026-10-13: how other browser agents keep runs cheap, and what that means for ours. **Not scheduled yet:** `plan.md`'s order still rules.
 
 ## The short version

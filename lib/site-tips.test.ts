@@ -1,6 +1,5 @@
-// Checks F10's tip rules: what checkTip refuses, addTip's de-dupe and cap, which sites prune removes, and which proposed
-// tips parseTips shows. Run: npm test
-import { addTip, checkTip, MAX_BYTES, MAX_TIPS, parseTips, prune, TIP_CHARS, type SiteMemory, type Tip } from './site-tips.ts';
+// Checks F10's tip rules: what checkTip refuses, addTip's de-dupe and cap, and which sites prune removes. Run: npm test
+import { addTip, checkTip, MAX_BYTES, MAX_TIPS, prune, TIP_CHARS, type SiteMemory, type Tip } from './site-tips.ts';
 
 const fail = (what: string): never => {
   throw new Error(what);
@@ -91,27 +90,3 @@ const full = { 'site:b.example': site(5, big), 'site:a.example': site(9, big), '
 const over = MAX_BYTES + 1.5 * 1024 * 1024; // over by one and a half sites: two must go
 if (prune(full, now, over).join() !== 'site:a.example,site:b.example') fail(`prune least used: ${prune(full, now, over)}`);
 if (prune(full, now, MAX_BYTES).length) fail('prune: removed at exactly 8 MB');
-
-// parseTips: up to 3 tips, each checked for the site; a refused one is dropped (never shown), the same one shown once.
-const tipReply = (text: string, stop = 'end_turn') => parseTips({ text, stop_reason: stop }, SITE);
-const shown = tipReply('{"tips": ["Book tickets opens a\\n language picker first", "Cheaper seats at evil.com", "Book tickets opens a language picker first"]}');
-if (JSON.stringify(shown) !== '["Book tickets opens a language picker first"]') fail(`parseTips: ${JSON.stringify(shown)}`);
-if (tipReply('{"tips": []}').length) fail('parseTips: [] showed something');
-// The whole reply is refused: more than 3 tips, a tip that isn't text, any other shape, or a cut-off reply.
-const refusedReplies = ['{"tips": ["a", "b", "c", "d"]}', '{"tips": ["ok", 7]}', '{"tips": "one"}', '{"tip": []}', 'null', 'tips', ''];
-for (const bad of refusedReplies) {
-  let threw = false;
-  try {
-    tipReply(bad);
-  } catch {
-    threw = true;
-  }
-  if (!threw) fail(`parseTips(${bad}) should throw`);
-}
-let cut = false;
-try {
-  tipReply('{"tips": []}', 'max_tokens');
-} catch {
-  cut = true;
-}
-if (!cut) fail('parseTips: a cut-off reply should throw');

@@ -7,7 +7,7 @@ import { drawForShot, endShot, setOverlay } from '@/lib/overlay';
 import { loadPage, withNote } from '@/lib/load-page';
 import { findSnippets, findText, pageItems, pageLines, readText, TEXT_CAP, textTargets } from '@/lib/page-text';
 import { notAlike, pickAll, pickLike } from '@/lib/pick';
-import { fieldCount, getElements, read, secretOnScreen } from '@/lib/reader';
+import { getElements, read, secretOnScreen } from '@/lib/reader';
 import { waitForQuiet } from '@/lib/settle';
 
 // One handler per message type. The type checks each reply matches lib/messages.ts. Handlers may be async.
@@ -43,15 +43,14 @@ const handlers: {
   aimPoints: ({ points, shot, allow }) => aimPoints(points, shot, allow),
   aimKey: ({ key, allow }) => aimKey(key, allow),
   focusHere: () => focusHere(),
-  aimText: ({ paste, allow, given }) => aimText(paste, allow, given),
-  pasteText: ({ text, allow, given }) => pasteText(text, allow, given),
+  aimText: ({ paste, allow }) => aimText(paste, allow),
+  pasteText: ({ text, allow }) => pasteText(text, allow),
   hover: ({ n }) => hover(n),
-  type: ({ n, text, enter, slow, allow, given }) => typeText(n, text, enter, slow, allow, given),
-  select: ({ n, option, allow, given }) => selectOption(n, option, allow, given),
+  type: ({ n, text, enter, slow, allow }) => typeText(n, text, enter, slow, allow),
+  select: ({ n, option, allow }) => selectOption(n, option, allow),
   scroll: ({ dir, n }) => scroll(dir, n),
   key: ({ key, allow }) => pressKey(key, allow),
   settle: ({ maxMs }) => waitForQuiet(maxMs),
-  fields: () => fieldCount(),
   captcha: () => visibleCaptcha(),
   inView: () => onScreen(),
   overlay: ({ on }) => {

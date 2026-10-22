@@ -1,6 +1,5 @@
 // P1: a PDF's text for the model, from pdf.js's text items: the page list's line, text all and find on a PDF tab.
-// P2: text page N reads on from page N, and pages without text are named so their picture can be asked for.
-// Pure, so Node can test it; lib/pdf.ts does the reading and drawing.
+// P2: text page N reads on from page N, and pages without text are named. Pure, so Node can test it; lib/pdf.ts reads.
 import { findMatches, TEXT_CAP } from './page-text.ts';
 
 export type PdfText = { pages: string[]; total: number }; // the text of each page read, and how many pages there are
@@ -22,29 +21,23 @@ const ranges = (ns: number[]) => ns.reduce<[number, number][]>((r, n) => {
   return r;
 }, []).map(([a, b]) => (a === b ? `${a}` : `${a}–${b}`)).join(', ');
 
-// The page list for a PDF tab: there's nothing to click, only text to read, and the picture is a page drawn from the
-// file (pictured), not the screen.
-export const pdfPageLine = (p: PdfText, pictured = 1) =>
-  `PDF: ${pagesSaid(p)}. The picture shows page ${pictured}, drawn from the file. Read it with text all, text page N (also puts page N in the picture), or find "words"; it has nothing to click.`;
-
 // text all (from 1) or text page N (from N) on a PDF tab: page markers from that page on, up to text all's cap, cut at
-// a page so the note can say where to read on. pictured: the page the next step's picture shows.
-export function pdfText(p: PdfText, from = 1, pictured = 1): string {
+// a page so the note can say where to read on.
+export function pdfText(p: PdfText, from = 1): string {
   const read = p.pages.length < p.total ? ` (text read from the first ${p.pages.length})` : '';
   const blank = p.pages.flatMap((t, i) => (t ? [] : [i + 1]));
   const head = [
     `PDF, ${pagesSaid(p)}${read}.${from > 1 ? ` From page ${from}.` : ''} Its text is below; it has nothing to click.`,
-    ...(blank.length ? [`Pages without text (a scan, or text drawn as shapes): ${ranges(blank)}. text page N puts one in the picture.`] : []),
+    ...(blank.length ? [`Pages without text (a scan, or text drawn as shapes): ${ranges(blank)}.`] : []),
   ];
-  if (from > p.pages.length) return [...head, `Page ${from} isn't in the text read${pictured === from ? '; the picture with your next step shows it' : ''}.`].join('\n');
+  if (from > p.pages.length) return [...head, `Page ${from} isn't in the text read.`].join('\n');
   const parts: string[] = [];
   let size = 0;
   const unread = ranges(Array.from({ length: p.total - p.pages.length }, (_, i) => p.pages.length + i + 1));
-  let tail = unread ? `… page${p.total - p.pages.length > 1 ? 's' : ''} ${unread} weren't read as text (too long); text page N still puts one in the picture.` : '';
+  let tail = unread ? `… page${p.total - p.pages.length > 1 ? 's' : ''} ${unread} weren't read as text (too long).` : '';
   for (let i = from - 1; i < p.pages.length; i++) {
     const n = i + 1;
-    const noText = n === pictured ? '(no text on this page: the picture with your next step shows it)' : `(no text on this page: text page ${n} puts it in the picture)`;
-    const part = `— page ${n} —\n${p.pages[i] || noText}`;
+    const part = `— page ${n} —\n${p.pages[i] || '(no text on this page)'}`;
     if (size + part.length > TEXT_CAP) {
       parts.push(part.slice(0, Math.max(0, TEXT_CAP - size)));
       // Read on from the page that was cut; if that's the first one shown, it alone is too long for one read.

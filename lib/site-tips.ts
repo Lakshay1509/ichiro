@@ -1,6 +1,6 @@
 // F10 site tips, the rules: which tip text may be saved, the 10-per-site cap, and which sites to remove. Pure, so Node
 // can test it; loading and saving (chrome.storage.local) live elsewhere. Design: harness/site-memory.md.
-import { MAX_NEW_TIPS, NAMED_HOST, siteOf } from './agent-prompt.ts';
+import { NAMED_HOST, siteOf } from './agent-prompt.ts';
 
 export type Tip = { text: string; added: number }; // added: ms since 1970
 export type SiteMemory = { used: number; tips: Tip[] }; // used: the last run that read it, ms
@@ -26,25 +26,6 @@ export function checkTip(raw: string, site: string): { text: string } | { why: s
   }
   if ((text.match(NAMED_HOST) ?? []).some((host) => ![site, ''].includes(siteOf(host.toLowerCase())))) return { why: away };
   return { text };
-}
-
-// The tip ask's reply (buildTipAsk), untrusted like a step's: the model read page text. Anything but {"tips": [text]},
-// or more than MAX_NEW_TIPS, refuses the whole reply. Then each tip goes through checkTip for site: the refused ones
-// are dropped, never shown to you.
-export function parseTips(answer: { text: string; stop_reason: string }, site: string): string[] {
-  if (answer.stop_reason !== 'end_turn') throw new Error(`The tip ask stopped early (${answer.stop_reason}).`);
-  let tips: unknown;
-  try {
-    ({ tips } = JSON.parse(answer.text) ?? {});
-  } catch {
-    // not JSON: refused just below
-  }
-  if (!Array.isArray(tips) || !tips.every((t) => typeof t === 'string')) throw new Error(`The tip ask must reply {"tips": ["..."]}; got: ${JSON.stringify(answer.text.slice(0, 200))}`);
-  if (tips.length > MAX_NEW_TIPS) throw new Error(`The tip ask sent ${tips.length} tips; at most ${MAX_NEW_TIPS}.`);
-  return [...new Set(tips.flatMap((t) => {
-    const checked = checkTip(t, site);
-    return 'text' in checked ? [checked.text] : [];
-  }))];
 }
 
 // Checks raw for site, then adds it at the end. The same tip again (case and spaces ignored) replaces the old one, so

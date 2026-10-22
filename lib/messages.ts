@@ -18,18 +18,16 @@ export type Message =
   // WR1: a click or drag at points in the last screenshot (shot: its size), and a real key: checks only, the panel acts.
   | { type: 'aimPoints'; points: { x: number; y: number }[]; shot: { width: number; height: number }; allow?: boolean }
   | { type: 'aimKey'; key: string; allow?: boolean }
-  // WR2: does focus end in this frame; the checks before typing or pasting text there (given: the text is in your goal).
+  // WR2: does focus end in this frame; the checks before typing or pasting text there.
   | { type: 'focusHere' }
-  | { type: 'aimText'; paste: boolean; allow?: boolean; given?: boolean }
-  | { type: 'pasteText'; text: string; allow?: boolean; given?: boolean }
+  | { type: 'aimText'; paste: boolean; allow?: boolean }
+  | { type: 'pasteText'; text: string; allow?: boolean }
   | { type: 'hover'; n: number }
-  // given: the text is in the goal you typed (the panel checks, never the AI). Skips only the personal-data ask.
-  | { type: 'type'; n: number; text: string; enter: boolean; slow: boolean; allow?: boolean; given?: boolean }
-  | { type: 'select'; n: number; option: string; allow?: boolean; given?: boolean }
+  | { type: 'type'; n: number; text: string; enter: boolean; slow: boolean; allow?: boolean }
+  | { type: 'select'; n: number; option: string; allow?: boolean }
   | { type: 'scroll'; dir: 'up' | 'down' | 'left' | 'right'; n?: number }
   | { type: 'key'; key: string; allow?: boolean }
   | { type: 'settle'; maxMs: number }
-  | { type: 'fields' } // F9: how many form fields are shown (no read, so numbers stay)
   | { type: 'captcha' }
   | { type: 'inView' } // #16: does this frame show on the tab's screen (null: no answer, a hidden tab)
   | { type: 'overlay'; on: boolean }
@@ -68,7 +66,6 @@ export type Replies = {
   scroll: string;
   key: string;
   settle: boolean;
-  fields: number;
   captcha: string;
   inView: boolean | null;
   overlay: string;

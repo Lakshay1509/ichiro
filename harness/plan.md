@@ -1,8 +1,10 @@
 # Harness plan
 
+> **History (2026-10-22):** the AI loop this plan wraps was removed: the extension is now pure MCP (no API key, no AI in the panel). Still live in the MCP bridge: Phase 1 stop-lines, Phase 2 labels, Phase 4 pause and resume, Phase 7 real input. Phase 6 (recipes) is tracked in `remember-and-repeat.md` Build 3. Don't build from the rest.
+
 The safety and memory layer around the AI agent. Build it phase by phase; tick boxes as you go.
 
-**Status:** Checkpoint A passed · **Current task:** on hold. Until the agent gets smarter, work from `harness/why-it-loops.md` (developer, 2026-10-14). After that: Checkpoint B (tasks 4, 5, 6, 8, 9 from typed goals), then Phase 5. Also open: live checks for 3.6, 3.7b, 3.7d, 3.7e. Haiku runs the steps since 2026-10-13 (~9× cheaper). 3.5 The judge moved to the end (developer). L3 Re-plan on hold until a run gets stuck (3.1a + 3.1c pass on Windows; macOS/Linux checks still open) (0.1 parked: tasks #8, #9 still to run in your Chrome)
+**Status (before the removal):** Checkpoint A passed · **Current task:** on hold. Until the agent gets smarter, work from `harness/why-it-loops.md` (developer, 2026-10-14). After that: Checkpoint B (tasks 4, 5, 6, 8, 9 from typed goals), then Phase 5. Also open: live checks for 3.6, 3.7b, 3.7d, 3.7e. Haiku runs the steps since 2026-10-13 (~9× cheaper). 3.5 The judge moved to the end (developer). L3 Re-plan on hold until a run gets stuck (3.1a + 3.1c pass on Windows; macOS/Linux checks still open) (0.1 parked: tasks #8, #9 still to run in your Chrome)
 
 ## What we're building (one line each)
 

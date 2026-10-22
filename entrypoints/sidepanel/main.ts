@@ -1,39 +1,33 @@
-// Side panel: say what you want in plain words (a goal), or drive by hand with /commands. Output appears above; errors in red.
-import { buildAsk, buildDoneCheck, buildTipAsk, checkGoto, livePlan, MAX_BAD_REPLIES, MAX_CHECKS, MAX_NOTES, oneLine, onSites, parseStep, parseVerdict, progress, startSites, STEP_BUDGET, stepsAdded, submits, addVisit, visitedLines, type Visit, savedNotes, siteOn, siteToAdd, siteToOpen, summarize, wantsSite, type Step } from '@/lib/agent-prompt';
+// Side panel: drive the browser by hand with /commands, and run a coding agent's commands (/mcp on). Output appears above; errors in red.
+import { checkGoto, oneLine, onSites, siteOn, siteToAdd, siteToOpen, wantsSite } from '@/lib/agent-prompt';
 import { fileName, RunDownloads } from '@/lib/downloads';
 import { captchaAll, clickTextIn, focusedFrame, frameFor, textFrame, labelFor, nameFor, numberFor, numbersAll, pickInFrames, readAll, sendToAllFrames, setOverlayOn, textAll } from '@/lib/frames';
 import { allowOnce, batchProblem, batchReply, captchaHold, checkAgentTip, checkCommands, LOOK_HELP, lookShot, MAX_COMMAND, MAX_OUTPUT, MCP_COMMANDS, retryUnlisted, showsPage, TIP_HELP, tipsOnce, type BridgeImage, type BridgeReply } from '@/lib/bridge';
 import { HOST_NAME } from '@/lib/host-install';
-import { JUDGE, PLANNER, type Ask, type Reply } from '@/lib/host-request';
 import { HandOver, StopLine } from '@/lib/messages';
-import { back, follow, goto, loaded, pinTab, targetTabId } from '@/lib/navigation';
-import { LoopGuard } from '@/lib/loop-guard';
-import { pageChange, pageReport, stepKey } from '@/lib/page-diff';
+import { back, follow, goto, pinTab, targetTabId } from '@/lib/navigation';
+import { pageReport } from '@/lib/page-diff';
 import { capText, textArgs } from '@/lib/page-text';
 import { parseCommand, restOf } from '@/lib/parse-command';
-import { inGoal } from '@/lib/personal';
 import { pickArgs } from '@/lib/pick';
-import { readPdf, renderPage } from '@/lib/pdf';
+import { readPdf } from '@/lib/pdf';
 import { downloadsSince, failed, filesLine, forItem, item1On, itemMiss, itemTarget, MAX_REPEAT_ITEMS, notAlikeError, parseRepeat, recipeFrom, recordLine, repeatAsk, repeatDone, stoppedAt } from '@/lib/repeat';
-import { pdfFind, pdfPageLine, pdfText } from '@/lib/pdf-text';
+import { pdfFind, pdfText } from '@/lib/pdf-text';
 import { downloadArgs, fileKind, fileUrl, MAX_TEXT_FILE, newestReadable } from '@/lib/run-files';
-import { keep, lookAgainText, searchKept, type Kept } from '@/lib/read-store';
 import { attach, checkPoint, checkScriptClick, clickAtPoint, detachAll, dragAlong, MAX_POINTS, mouseFlags, moveTo, parsePoint, sendKeys, sendMouse, sendText, type Point } from '@/lib/real-input';
 import { keyEvents, parseKey, scriptKey } from '@/lib/keys';
-import { parseTab, RunTabs, type TabCommand } from '@/lib/run-tabs';
-import { attachShot, shrink, takeShot, type Shot } from '@/lib/screenshot';
-import { onlySearched, SEARCH_SITE, searchAsk, searchUrl } from '@/lib/search';
+import { shrink, takeShot, type Shot } from '@/lib/screenshot';
+import { searchUrl } from '@/lib/search';
 import { sendToTab } from '@/lib/send-to-tab';
 import { settleAfter } from '@/lib/settle';
 import { deleteSite, deleteTip, listSites, pruneSites, saveTip, useSite } from '@/lib/site-store';
 import { recall, remember, type Remembered } from '@/lib/panel-memory';
-import { MAX_TIPS, parseTips, TIP_CHARS } from '@/lib/site-tips';
+import { MAX_TIPS } from '@/lib/site-tips';
 import { isCheckoutUrl } from '@/lib/stop-lines';
 
 // allow: run past a stop-line. Only the Allow once button passes true, never a typed command.
-// goal: what you typed, passed only by a goal run. A value found in it skips the personal-data ask (4.3).
 // line: the whole command line as typed, for commands that take the rest of it as is (paste, type here).
-type Command = { help: string; run: (args: string[], allow: boolean, goal?: string, line?: string) => string | void | Promise<string | void> };
+type Command = { help: string; run: (args: string[], allow: boolean, line?: string) => string | void | Promise<string | void> };
 
 const out = document.querySelector<HTMLElement>('#out')!;
 const form = document.querySelector('form')!;
@@ -70,9 +64,9 @@ function closeAsk(note: string) {
   onAskClosed = null;
 }
 
-// Pauses a run (3.7c loop guard, 3.6 step budget, 4.1 pause, 4.3 stop-lines): the keep button continues the same run
-// and history; the other button, or any command you start, resolves false (a command also bumps lastCommand, so a run
-// can tell "I'll do it" from being stopped). Focus stays in the command box, so a reflex Enter can never press Allow.
+// Asks you mid-command (4.1 pause, 4.3 stop-lines, a new site, a download): the keep button goes on; the other button,
+// or any command you start, resolves false (a command also bumps lastCommand, so the caller can tell "I'll do it" from
+// being stopped). Focus stays in the command box, so a reflex Enter can never press Allow.
 function askKeepGoing(message: string, keepLabel = 'Keep going', stopLabel = 'Stop'): Promise<boolean> {
   print(message, 'stop');
   return new Promise((resolve) => {
@@ -143,41 +137,8 @@ async function where(sites: string[]): Promise<{ onPlan: boolean; site: string; 
 // Source: https://developer.chrome.com/docs/extensions/reference/api/webNavigation#method-getFrame
 const topDocument = (tabId: number) => browser.webNavigation.getFrame({ tabId, frameId: 0 }).then((f) => f?.documentId ?? '', () => '');
 
-// `Tabs: [1] amazon.in (current) · [2] flipkart.com`. Site names only: page titles are written by the page.
-async function tabsLine(run: RunTabs): Promise<string> {
-  const parts = await Promise.all(run.list().map(async ({ n, id }) => {
-    const url = await browser.tabs.get(id).then((t) => t.url || t.pendingUrl, () => undefined);
-    return `[${n}] ${(url && URL.parse(url)?.hostname) || 'new tab'}${id === run.current ? ' (current)' : ''}`;
-  }));
-  return `Tabs: ${parts.join(' · ')}`;
-}
-
-// The AI's tab command (3.7e), on the run's own tabs only. A run works in the background if you look elsewhere (your
-// choice), so it brings a tab to the front only while you're looking at the run's current tab.
-// Source: https://developer.chrome.com/docs/extensions/reference/api/tabs
-async function tabStep(run: RunTabs, cmd: TabCommand, allow: boolean): Promise<string> {
-  const now = await browser.tabs.get(run.current!);
-  if (cmd.kind === 'new') {
-    if (!allow && isCheckoutUrl(cmd.url)) throw new StopLine(`Stop-line: tab new ${cmd.url} (checkout page)`);
-    const tab = await browser.tabs.create({ url: cmd.url, active: !cmd.background && now.active, windowId: now.windowId, openerTabId: now.id });
-    const n = run.add(tab.id!);
-    pinTab(tab.id!);
-    await loaded(tab.id!);
-    return `ok — opened tab [${n}]`;
-  }
-  if (cmd.kind === 'close') {
-    const id = run.closing(cmd.n);
-    await browser.tabs.remove(id);
-    run.removed(id);
-  } else run.switchTo(cmd.n);
-  if (run.current === null) return `ok — closed tab [${cmd.n}]`;
-  pinTab(run.current);
-  if (now.active) await browser.tabs.update(run.current, { active: true });
-  return cmd.kind === 'close' ? `ok — closed tab [${cmd.n}]` : `ok — now in tab [${cmd.n}]`;
-}
-
-// Settles once the run's work (a goal run, or its Allow once) has fully stopped. A command you type waits for it, so
-// the run's last step can't land on your tab after the pin is gone, and your command can't land on the run's tab.
+// Settles once the agent's command has fully stopped. A command you type waits for it, so the agent's last step can't
+// land on your tab after the pin is gone, and your command can't land on the agent's tab.
 let runEnded: Promise<void> = Promise.resolve();
 
 // Runs f with commands pinned to a run's tab (null: the active tab until the run pins its own), then unpins.
@@ -193,93 +154,6 @@ async function inRunTab<T>(tab: number | null, f: () => T | Promise<T>): Promise
   }
 }
 
-// A goal's run, in the tab you're looking at when you send it. From then on it works in its own tabs only.
-// sites: the run's first Sites (startSites, G1).
-function runGoal(goal: string, sites: string[]): Promise<string> {
-  return inRunTab(null, async () => {
-    const run = new RunTabs(await targetTabId());
-    // A tab opened by one of the run's pages during one of its commands (a link with target=_blank) joins the run.
-    const onCreated = (tab: Browser.tabs.Tab) => {
-      if (run.acting && tab.id !== undefined && tab.openerTabId !== undefined && run.has(tab.openerTabId)) run.add(tab.id);
-    };
-    // A run's tab closed, by the run or by you, drops out.
-    const onRemoved = (tabId: number) => run.removed(tabId);
-    // D1, D2: every download that starts while the run goes is the run's, so it's reported and needs your yes.
-    const downloads = new RunDownloads();
-    browser.tabs.onCreated.addListener(onCreated);
-    browser.tabs.onRemoved.addListener(onRemoved);
-    browser.downloads.onCreated.addListener(downloads.onCreated);
-    goalDownloads = downloads;
-    try {
-      return await runSteps(goal, sites, run, downloads);
-    } finally {
-      goalDownloads = null;
-      browser.tabs.onCreated.removeListener(onCreated);
-      browser.tabs.onRemoved.removeListener(onRemoved);
-      unwatch(downloads);
-    }
-  });
-}
-
-// F10: the last goal run whose done check passed on one of its Sites, set by runSteps and taken by the goal command.
-let passedRun = null as { goal: string; site: string; steps: Step[] } | null;
-
-// F10: one proposed tip. Save keeps it as shown; Edit opens a box to change it first (checked again on save); No, or
-// any command you start, drops it. Resolves the text to save, or null.
-function askTip(site: string, tip: string): Promise<string | null> {
-  print(`Save this tip for ${site}? "${tip}"`, 'stop');
-  return new Promise((resolve) => {
-    const button = (label: string, onclick: () => void) => Object.assign(document.createElement('button'), { type: 'button', textContent: label, onclick });
-    const save = (text: string) => {
-      resolve(text);
-      closeAsk('Saving…');
-    };
-    const no = button('No', () => closeAsk('Not saved.'));
-    const box = Object.assign(document.createElement('textarea'), { value: tip, maxLength: TIP_CHARS, rows: 2, ariaLabel: 'Tip text' });
-    const edit = button('Edit', () => {
-      pendingAsk?.replaceChildren(box, button('Save', () => save(box.value)), no);
-      box.focus();
-    });
-    onAskClosed = () => resolve(null);
-    pendingAsk = Object.assign(document.createElement('div'), { className: 'ask' });
-    pendingAsk.append(button('Save', () => save(tip)), edit, no);
-    out.append(pendingAsk);
-    out.scrollTop = out.scrollHeight;
-  });
-}
-
-// F10: after a passed run, the model proposes up to 3 tips for the site it ended on. Each one checkTip lets through is
-// asked about in turn; only your Save keeps one. A tip refused on save comes back so you can edit it. Any command you
-// start ends this.
-async function offerTips({ goal, site, steps }: { goal: string; site: string; steps: Step[] }) {
-  const id = lastCommand;
-  let tips: string[];
-  try {
-    const reply = await askModel(buildTipAsk(goal, site, steps));
-    tips = parseTips(reply, site);
-    if (id !== lastCommand) return;
-    print(`Tips for ${site}: ${tips.length || 'none'} proposed (${reply.usage.input_tokens} tokens in, ${reply.usage.output_tokens} out).`);
-  } catch (err) {
-    // Not a guard: no tips is how runs were before F10.
-    return print(`No tips this time: ${(err as Error).message}`, 'error');
-  }
-  for (const tip of tips) {
-    let text = tip;
-    for (;;) {
-      const chosen = await askTip(site, text);
-      if (id !== lastCommand) return; // you moved on
-      if (chosen === null) break;
-      const saved = await saveTip(site, chosen, Date.now());
-      if ('tips' in saved) {
-        print(`Saved for ${site} (${saved.tips.length} of ${MAX_TIPS} tips).`);
-        break;
-      }
-      print(`Not saved: ${saved.why}. Edit it, or No.`, 'error');
-      text = chosen;
-    }
-  }
-}
-
 // D2's ask. The punycode hostname, like S2's.
 function askDownload(item: Browser.downloads.DownloadItem, more = ''): Promise<boolean> {
   const from = URL.parse(item.finalUrl)?.hostname || URL.parse(item.referrer)?.hostname || 'the page';
@@ -292,444 +166,19 @@ function unwatch(downloads: RunDownloads) {
   if (downloads.paused) print(`${downloads.paused} download(s) the agent started are paused, waiting for your ok: resume or cancel them in chrome://downloads.`, 'stop');
 }
 
-// F9: a step's results in its history line (each command's first line, "skipped …"), so 5 commands can't flood it.
-const MAX_STEP_RESULT = 400;
-
-// read → ask → run a step's commands, until done. At the step budget it asks you (+N steps / Stop). Any command you start stops it.
-async function runSteps(goal: string, firstSites: string[], run: RunTabs, downloads: RunDownloads): Promise<string> {
-  const id = lastCommand; // this run; any command you start bumps it, which stops the loop
-  passedRun = null;
-  const steps: Step[] = [];
-  let lastText = '';
-  let lastPage = ''; // the page the last command ran on, to say what it changed (3.7b)
-  let acted = false; // the last step ran a command that can change the page (not text, not an unusable reply)
-  let guard: LoopGuard | undefined; // set from the first page read
-  let tokensIn = 0;
-  let tokensOut = 0;
-  let badReplies = 0;
-  let checks = 0; // F7: done checks used this run
-  let missing = ''; // what the last done check said is missing ('' after a pass)
-  let budget = STEP_BUDGET; // only your +N click raises it, never the model
-  let added = 0; // B1: steps your last +N added; the next ask says so once
-  let solvedCaptcha = ''; // page + kind of the CAPTCHA you last resumed from: a solved one often stays on screen
-  const yours = new Set<string>(); // steps you took over (stepKey): a retry is refused, never asked twice
-  const cost = () => `${steps.length} / ${budget} steps · ${tokensIn} tokens in, ${tokensOut} out`;
-  const sites = [...firstSites]; // S2: this run's Sites. Only your Add site click grows it, never the model
-  const refused = new Set<string>(); // sites you said no to: never asked again this run
-  // W1: after a search you allowed, its results site can be read and clicked, but it never joins Sites: goto or
-  // tab new there would carry words you never saw.
-  let searched = false;
-  const readable = () => (searched ? [...sites, SEARCH_SITE] : sites);
-  let searchTab: number | null = null; // W1b: the run's one search tab
-  let visits: Visit[] = []; // N1: plan-site pages read this run, so one can be reopened by its URL
-  let kept: Kept[] = []; // V1: the text of plan-site pages read with text all, and PDFs, for the done check's search
-  const siteTips = new Map<string, string[]>(); // F10: each site's saved tips, read once per run
-  pdfShown = null; // P2: each run's PDF pictures start at page 1
-  // S2: asks you to add site for this run. true: added; false: no; null: the run was stopped meanwhile.
-  const askSite = async (site: string, url: string): Promise<boolean | null> => {
-    const add = await askKeepGoing(`${wantsSite(site, url)}, which isn't on this run's Sites (${sites.join(', ') || 'none yet'}). Add ${site} for this run? (${cost()})`, 'Add site', 'No');
-    if (id !== lastCommand) return null;
-    if (add) sites.push(site);
-    else refused.add(site);
-    return add;
-  };
-  for (;;) {
-    // 3.6: running out asks, never just dies. +N continues the same run and history; you see progress and cost first.
-    if (steps.length >= budget) {
-      const more = Math.ceil(STEP_BUDGET / 2);
-      if (!(await askKeepGoing(`Step budget used up. ${progress(steps)} · ${cost()}.`, `+${more} steps`)) || id !== lastCommand) {
-        return `Stopped at the step budget (${cost()}).`;
-      }
-      budget += more;
-      // B1: your +N means keep going: the model is told, and its next done gets a check again instead of passing
-      // unchecked because the checks ran out (live: it sent done at once and left 18 steps unused).
-      added = more;
-      checks = Math.min(checks, MAX_CHECKS - 1);
-    }
-    // Off the run's Sites the AI sees only the site name (no page text, so nothing there can steer it) and may only
-    // goto, back, tab or done. Like Chrome's agent origin sets: https://blog.google/security/architecting-security-for-agentic/
-    if (run.current === null) return `Stopped: all of its tabs were closed (${cost()}).`;
-    pinTab(run.current); // a tab its click opened, or one you closed, may have changed it
-    // T1: while you watch one of the run's tabs, the one it works in comes forward, so it can be pictured. Not a guard:
-    // if the tab is gone meanwhile, the step goes on without it.
-    try {
-      const [shown] = await browser.tabs.query({ active: true, windowId: (await browser.tabs.get(run.current)).windowId });
-      if (run.toFront(shown?.id)) await browser.tabs.update(run.current, { active: true });
-    } catch {
-      // the next read reports a closed tab
-    }
-    const here = await where(readable());
-    // S2: the run landed on a new site (a link, a redirect, a tab its page opened): you decide before the model sees it.
-    // Only after a command that can change the page: the start tab's site is left out only when your goal names others.
-    const landed = siteToAdd(here.url, readable());
-    if (landed && acted && !refused.has(landed)) {
-      if ((await askSite(landed, here.url)) === null) return `Stopped (${cost()}).`;
-      continue; // read again: on the Sites now, or hidden
-    }
-    // 4.2: a CAPTCHA is yours. Pause before the model sees the page; Resume reads it again. Once per page and kind.
-    const captcha = here.onPlan ? await captchaAll() : '';
-    if (captcha && `${here.url} ${captcha}` !== solvedCaptcha) {
-      if (!(await askKeepGoing(`CAPTCHA on the page (${captcha}). Solve it yourself, then Resume. (${cost()})`, 'Resume')) || id !== lastCommand) {
-        return `Stopped at a CAPTCHA (${cost()}).`;
-      }
-      solvedCaptcha = `${here.url} ${captcha}`;
-      continue;
-    }
-    // D2: a download you hadn't allowed waits, paused, for your yes. D1: the page doesn't show downloads, so their news
-    // goes in the last step's result.
-    const fetched = await downloads.report((item) => askDownload(item, ` (${cost()})`));
-    if (id !== lastCommand) return `Stopped (${cost()}).`;
-    const hidden = `(Page hidden: ${here.site} is not one of the run's Sites${refused.has(landed) ? '; the user said no to adding it' : ''}. Only goto, back, tab, search and done work here.)`;
-    // P1: a PDF tab is read from its file: Chrome's own viewer doesn't run our content script.
-    const pdf = here.onPlan ? await pdfTabUrl() : null;
-    const seen = `${await tabsLine(run)}\n${!here.onPlan ? hidden : pdf ? await pdfPage(pdf, here.title) : await readAll(false)}`;
-    // Sites only: a search results page is readable but never a goto target (W1).
-    if (onSites(here.url, sites)) visits = addVisit(visits, { url: here.url, title: here.title });
-    // V1: a PDF the run saw is kept whole (readPdf reads each URL once, so this costs nothing more).
-    if (pdf && onSites(pdf, sites)) {
-      const pages = await readPdf(pdf).then((p) => p.pages, () => []);
-      if (pages.length) kept = keep(kept, { url: pdf, pages });
-    }
-    // Right after the read, so the numbers on the picture are this read's.
-    // P2: on a PDF tab the picture is a page drawn from the file (it works in a background tab and on scans); if that
-    // fails, a screenshot of the tab as before.
-    let shot: Shot | string = pdf ? await pdfPicture(pdf) : '';
-    if (typeof shot === 'string') {
-      if (shot) print(`   ${shot}`);
-      shot = await screenshot(here.onPlan, !!pdf);
-    }
-    let page = seen;
-    const last = steps.at(-1);
-    if (acted && last) {
-      const change = pageChange(lastPage, seen);
-      last.result += ` — ${change.note}`;
-      page = change.page;
-      print(`   ${change.note}`);
-    }
-    if (fetched.length) {
-      if (last) last.result += ` — ${fetched.join(' — ')}`;
-      print(`   ${fetched.join('\n   ')}`);
-    }
-    lastPage = seen;
-    // Loop guard (3.7c), in code: warn the model, then pause and ask you. The warning is ours, so it goes outside the
-    // untrusted blocks; its reason is built from counts only.
-    let warning = '';
-    if (!guard) guard = new LoopGuard(seen);
-    else if (last) {
-      // U1: a step refused before it ran isn't an outcome of its command.
-      const check = guard.after(last.command, seen, !/^Refused\b/.test(last.result));
-      if (check.pause) {
-        if (!(await askKeepGoing(`Looks stuck after ${cost()}: ${check.pause}.`)) || id !== lastCommand) return `Stopped: it looked stuck (${cost()}).`;
-        guard.reset();
-      } else {
-        // U1: a repeat with a known result steers; going in circles asks for a rethink before another way.
-        warning = [
-          check.repeat && `Warning from the harness: ${check.repeat}.`,
-          check.warn && `Warning from the harness: you seem to be going in circles (${check.warn}). Stop and rethink: in memory, write what you know and why the last tries failed, send a new plan that avoids it, then try another way (the rule on other ways lists them), or send done and say why you can't finish.`,
-        ].filter(Boolean).join('\n');
-        if (check.repeat) print('   loop guard: repeated a command with the same result');
-        if (check.warn) print(`   loop guard: ${check.warn}`);
-      }
-    }
-    if (added) {
-      warning = [warning, stepsAdded(added, steps.length, budget, !!missing)].filter(Boolean).join('\n');
-      added = 0;
-    }
-    // F10: the tips you saved for this page's site (on the Sites only), read the first time the run is there: useSite
-    // marks the site used. Not a guard: unreadable tips mean a step without them, as before F10.
-    const tipSite = siteOn(here.url, sites);
-    if (tipSite && !siteTips.has(tipSite)) {
-      const tips = await useSite(tipSite, Date.now()).catch((err: Error) => (print(`   saved tips unread: ${err.message}`, 'error'), []));
-      siteTips.set(tipSite, tips.map((t) => t.text));
-      if (tips.length) print(`   ${tips.length} saved tip(s) for ${tipSite}`);
-    }
-    // The model reads the budget every step: after your +N it must see the raised one, or it thinks it's out and quits.
-    const [ask, shotLine] = attachShot(buildAsk(goal, { sites, budget }, page, commands, steps, lastText, warning, guard.tried(), visitedLines(visits), { site: tipSite, tips: siteTips.get(tipSite) ?? [] }), shot);
-    print(`   ${shotLine}`);
-    let answer = await askModel(ask);
-    if (id !== lastCommand) return `Stopped (${cost()}).`;
-    // Haiku (the executor) has no server-side fallback, and its filters can decline harmless pages. So a declined step
-    // is asked once more on the planner model, which has one. Same ask, so nothing new reaches it.
-    if (answer.stop_reason === 'refusal') {
-      tokensIn += answer.usage.input_tokens;
-      tokensOut += answer.usage.output_tokens;
-      print('   step model declined; asking the planner model instead', 'error');
-      answer = await askModel({ ...ask, model: PLANNER });
-      if (id !== lastCommand) return `Stopped (${cost()}).`;
-    }
-    tokensIn += answer.usage.input_tokens;
-    tokensOut += answer.usage.output_tokens;
-    let parsed: ReturnType<typeof parseStep>;
-    try {
-      parsed = parseStep(answer, livePlan(steps).items.length);
-      badReplies = 0;
-    } catch (err) {
-      // A refusal or cut-off ends the run. A bad format or a command it may not use goes back to the model, which
-      // usually fixes it; nothing runs, and it counts toward the step cap.
-      if (answer.stop_reason !== 'end_turn' || ++badReplies >= MAX_BAD_REPLIES) throw err;
-      const result = `Error: ${(err as Error).message}`;
-      steps.push({ command: `(unusable reply) ${summarize(answer.text)}`, result });
-      print(`${steps.length}. (unusable reply)\n   ${result}`, 'error');
-      lastText = '';
-      acted = false;
-      continue;
-    }
-    const { commands: batch, lastStep, memory, note, plan, nextGoal, item, doneItems } = parsed;
-    // F9: the step's commands as one history line. done and pause always come alone, so they're the first.
-    const line = batch.map((c) => c.line).join(' ; ');
-    const [name = '', ...stepArgs] = batch[0]!.words;
-    const full = savedNotes(steps).length >= MAX_NOTES; // the model was told; you see it here too
-    // G1: a new plan from the agent is shown in full when it arrives; the progress line after each step tracks it.
-    const planned = plan.length ? `\n   new plan:\n${plan.map((p, i) => `     ${i + 1}. ${p}`).join('\n')}` : '';
-    print(`${steps.length + 1}. ${line}\n   last step: ${lastStep}\n   why: ${nextGoal}\n   memory: ${memory}${note ? `\n   note${full ? ' (not saved: notes full)' : ''}: ${note}` : ''}${planned}`);
-    // F7: a done check before the run ends; a fail sends the model back with what's missing, as this step's result.
-    // After MAX_CHECKS the next done is accepted, and you see what the last check missed.
-    if (name === 'done') {
-      const said = stepArgs.join(' ') || '(no answer)';
-      let passed = false; // this done's check said pass (not a broken check, not one accepted unchecked)
-      if (checks < MAX_CHECKS) {
-        checks++;
-        let lookFor: string[] = [];
-        try {
-          const reply = await askModel(buildDoneCheck(goal, [...steps, parsed], said, page, lastText));
-          tokensIn += reply.usage.input_tokens;
-          tokensOut += reply.usage.output_tokens;
-          ({ missing, lookFor } = parseVerdict(reply));
-          passed = !missing;
-          print(`   done check ${checks} / ${MAX_CHECKS}: ${missing ? `fail: ${missing}` : 'pass'}`);
-        } catch (err) {
-          // Not a security guard: a broken check leaves done as it was before F7.
-          missing = '';
-          print(`   done check failed, answer accepted: ${(err as Error).message}`, 'error');
-        }
-        if (id !== lastCommand) return `Stopped (${cost()}).`;
-        // V1: what the answer leaves out or says it couldn't find is searched for in the pages this run read, even on a
-        // pass (an honest "couldn't find" passes the check). Any match sends it back with the matches to read.
-        const hits = searchKept(kept, lookFor);
-        const words = lookFor.map((p) => JSON.stringify(p)).join(', ');
-        if (lookFor.length) print(`   look again for ${words} in ${kept.length} kept page(s): ${hits.length ? `${hits.length} match(es)\n   ${hits.join('\n   ')}` : 'no match'}`);
-        if (missing || hits.length) {
-          const told = [missing && `The done check says what's missing: ${missing}`, hits.length && 'Pages you already read mention it: see the output below'].filter(Boolean).join('. ');
-          steps.push({ command: line, result: `Not done yet. ${told}`, nextGoal, memory, plan, item, doneItems, note, lastStep });
-          print(`   ${progress(steps)} · ${cost()}`);
-          lastText = hits.length ? lookAgainText(lookFor, hits) : ''; // page text: it goes inside <page_content>, defused
-          if (!missing) missing = `pages already read mention ${words}`; // shown with the answer if the next done is accepted
-          acted = false;
-          continue;
-        }
-      }
-      // F10: a passed check on one of the run's Sites offers tips for that site once the run has ended (offerTips).
-      const tipSite = passed ? siteOn((await where(sites).catch(() => null))?.url, sites) : '';
-      if (tipSite) passedRun = { goal, site: tipSite, steps: [...steps] };
-      return `Done: ${said}${missing ? `\n(The done check still says missing: ${missing})` : ''}\n(${progress([...steps, parsed])} · ${cost()})`;
-    }
-    // 4.1: wait for you; Resume goes on with the same run and history. Works on any site: it doesn't touch the page.
-    if (name === 'pause') {
-      if (!(await askResume(stepArgs)) || id !== lastCommand) return `Stopped while paused (${cost()}).`;
-      steps.push({ command: line, result: 'the user resumed you', nextGoal, memory, plan, item, doneItems, note, lastStep });
-      lastText = '';
-      acted = true; // you may have changed the page: the next read is fresh and says what changed
-      continue;
-    }
-    // U1: this exact step already gave the same result twice on this exact page: refused, not run (OpenRouter's
-    // block@3). It costs a step, but the page isn't touched and the model is pushed to another way.
-    const known = guard.known(line);
-    if (known && known.times >= 2) {
-      steps.push({ command: line, result: `Refused: you already ran this on this exact page ${known.times} times, and each time: ${known.outcome}. It won't do anything new; try another way (the rule on other ways lists them).`, nextGoal, memory, plan, item, doneItems, note, lastStep });
-      print(`   ${steps.at(-1)!.result}`, 'error');
-      lastText = '';
-      acted = false;
-      continue;
-    }
-    // One command with every check of its own: Sites, stop-lines, hand-overs. Returns its output, whether it needed
-    // you (stop-line or hand-over, which ends the step), or null if the run was stopped meanwhile.
-    const runCommand = async (line: string, [name = '', ...stepArgs]: string[]): Promise<{ output: string | void; stop: boolean; took?: boolean } | null> => {
-      // S2: goto or tab new to a new site's home page asks you first. No: refused, nothing opens.
-      const opening = name === 'goto' ? stepArgs[0] : name === 'tab' && stepArgs[0] === 'new' ? stepArgs[1] : undefined;
-      const newSite = siteToOpen(opening, sites);
-      if (newSite) {
-        const added = refused.has(newSite) ? false : await askSite(newSite, opening!);
-        if (added === null) return null;
-        if (!added) return { output: `Refused: the user said no to adding ${newSite}. Use the run's Sites.`, stop: true };
-      }
-      // The AI never sets allow: only your Allow once does, for this exact step, never a new model call.
-      // goto: checked against the run's Sites, and a checkout URL is a stop-line like a checkout button.
-      const step: Run = name === 'goto'
-        ? (allow) => {
-            const href = checkGoto(stepArgs[0], sites);
-            if (!allow && isCheckoutUrl(href)) throw new StopLine(`Stop-line: goto ${href} (checkout page)`);
-            return commands.goto!.run([href], allow);
-          }
-        : name === 'tab'
-        ? (allow) => tabStep(run, parseTab(stepArgs, sites), allow)
-        : name === 'search'
-        ? async () => {
-            // W1: you see the exact words before they leave; No refuses. A new tab, so the run keeps its place.
-            const words = stepArgs.join(' ');
-            const url = searchUrl(words);
-            if (!(await askKeepGoing(`${searchAsk(words)} (${cost()})`, 'Search', 'No'))) throw new Error("Refused: the user said no to this search. Use the run's Sites, or search other words.");
-            searched = true;
-            // W1b: one search tab per run, in the background so it never takes your screen (no screenshots there). Reused
-            // while it still shows results; once the model opened a result in it, that page stays and a new one opens.
-            const said = `in the background: DuckDuckGo results for "${words.trim()}"`;
-            if (searchTab !== null && run.has(searchTab) && onSites((await browser.tabs.get(searchTab)).url, [SEARCH_SITE])) {
-              const n = run.add(searchTab);
-              pinTab(searchTab);
-              await settleAfter(() => goto(url));
-              return `ok — tab [${n}] ${said}`;
-            }
-            const opened = await tabStep(run, { kind: 'new', url, background: true }, false);
-            searchTab = run.current;
-            return `${opened} ${said}`;
-          }
-        : async (allow) => {
-            // Checked again right before acting: the page may have moved to another site while the model thought.
-            const now = await where(readable());
-            if (!now.onPlan && name !== 'back') throw new Error(`Blocked: ${now.site} is not one of the run's Sites. Use goto, back, tab or search.`);
-            if (name === 'type' && onlySearched(now.url, sites)) throw new Error('Typing on search results is refused: use search "words" to search again (the user sees the words first).');
-            return runLine(commands[name]!, line, allow, goal);
-          };
-      let output: string | void;
-      let handOver = '';
-      let stopLine = '';
-      const attempt = async (allow: boolean): Promise<string | void> => {
-        run.acting = true;
-        downloads.allowing = allow;
-        try {
-          return await step(allow);
-        } catch (err) {
-          if (err instanceof StopLine) stopLine = err.message;
-          else if (err instanceof HandOver) handOver = err.message;
-          return `Error: ${err instanceof Error ? err.message : String(err)}`; // the model sees it and tries another way
-        } finally {
-          run.acting = false;
-          downloads.allowing = false;
-        }
-      };
-      output = await attempt(false);
-      if (id !== lastCommand) return null;
-      // In code, not the prompt: the model ignored "don't redo it" and handed the same password back to you.
-      const key = stepKey(here.url, stopLine || handOver);
-      if ((stopLine || handOver) && yours.has(key)) {
-        stopLine = handOver = '';
-        return { output: "Refused: the user already took this step over on this page. It stays theirs: don't try it again. Report what the page shows.", stop: true };
-      }
-      // 4.3: a stop-line (pay, submit, personal data…) asks you inside the run. Allow once runs this exact command and
-      // goes on; I'll do it hands it to you (below).
-      const neededYou = !!(stopLine || handOver);
-      if (stopLine) {
-        const allowed = await askKeepGoing(`${stopLine} (${cost()})`, 'Allow once', "I'll do it");
-        if (id !== lastCommand) return null;
-        if (allowed) output = await attempt(true);
-        else handOver = `You chose to do this step yourself (${line}): do it on the page.`;
-        if (id !== lastCommand) return null;
-      }
-      // 4.2: a secret field or a CAPTCHA is never the agent's, not even with Allow once: you do it, then Resume.
-      if (handOver) {
-        if (!(await askKeepGoing(`${handOver} Then press Resume. (${cost()})`, 'Resume')) || id !== lastCommand) return null;
-        yours.add(key);
-        // Said first (summarize keeps 200 chars): without it the model retypes a secret forever, or claims you filled it.
-        output = `The user had this step, then resumed you. Don't redo it. Report what the page shows, not what you expect: a filled secret reads value=•••, an empty one has no value. Was: ${handOver}`;
-      }
-      return { output, stop: neededYou, took: !!handOver };
-    };
-
-    const downloadsAt = downloads.created; // RP1: item 1's downloads count from here
-    // RP1: repeat runs item 1's recorded commands on each item (runRepeat); it comes alone (ALONE). The page must be one
-    // the model saw: on the Sites, not a PDF.
-    if (name === 'repeat') {
-      let result: string | null;
-      try {
-        result = await runRepeat(stepArgs, {
-          steps,
-          site: here.site,
-          onSites: here.onPlan && !pdf,
-          count: () => downloads.created,
-          allow: (n) => void (downloads.allowance = n),
-          news: () => downloads.report((d) => askDownload(d, ` (${cost()})`)),
-          run: (cmd) => runCommand(cmd, parseCommand(cmd)),
-          more: ` (${cost()})`,
-        });
-      } catch (err) {
-        result = `Error: ${err instanceof Error ? err.message : String(err)}`;
-      }
-      if (result === null) return `Stopped (${cost()}).`;
-      // Kept in ran when it ran, so a later recipe that would hold it is refused (recipeFrom).
-      steps.push({ command: line, result: oneLine(result, MAX_STEP_RESULT), nextGoal, memory, plan, item, doneItems, note, lastStep, ran: failed(result) ? [] : [line], downloadsAt });
-      print(`   ${steps.at(-1)!.result}\n   ${progress(steps)} · ${cost()}`);
-      lastText = '';
-      acted = true;
-      continue;
-    }
-
-    // F9: the step's commands in order. The rest are skipped once one fails, needed you, or changed the URL. Only the
-    // last re-reads the page, so every number stays this read's; a command whose element is gone fails, which skips the
-    // rest too.
-    const results: string[] = [];
-    let output: string | void = '';
-    let ranAll = false; // the last command ran too: only then is its read the next turn's "output of your last command"
-    // A choice can reveal new fields the model hasn't seen (live: Calculate pressed with a required field still empty),
-    // so the step stops before anything that can submit once the page shows more fields than at its start.
-    // shortcut: counts the top page's fields only; upgrade if a form inside a frame needs it.
-    const fields = () => sendToTab({ type: 'fields' }).catch(() => -1);
-    const startFields = batch.some((c, i) => i > 0 && submits(c.words)) ? await fields() : -1;
-    takeRead(); // one from your own typed text all isn't this step's
-    const worked: string[] = []; // RP1: by label, for a later repeat
-    for (const [i, cmd] of batch.entries()) {
-      const before = (await where(readable())).url;
-      const recorded = recordLine(cmd.line, labelFor); // before it runs, while its number is still this read's
-      skipRead = i < batch.length - 1;
-      let ran: Awaited<ReturnType<typeof runCommand>>;
-      try {
-        ran = await runCommand(cmd.line, cmd.words);
-      } finally {
-        skipRead = false;
-      }
-      if (!ran) return `Stopped (${cost()}).`;
-      output = ran.output;
-      results.push(summarize(output));
-      const bad = failed(output);
-      if (!bad) worked.push(recorded);
-      const left = batch.length - i - 1;
-      ranAll = !left;
-      if (!left) break;
-      const why = ran.stop ? 'it needed you'
-        : bad ? 'it failed'
-        : (await where(readable())).url !== before ? 'the URL changed'
-        : startFields >= 0 && submits(batch[i + 1]!.words) && (await fields()) > startFields ? 'new fields appeared: fill them first'
-        : '';
-      if (why) {
-        results.push(`skipped the next ${left}: ${why}`);
-        break;
-      }
-    }
-    if (parsed.cut) results.push(`not run: ${parsed.cut}`);
-    if (parsed.slip) results.push(parsed.slip);
-    steps.push({ command: line, result: oneLine(results.join(' ; '), MAX_STEP_RESULT), nextGoal, memory, plan, item, doneItems, note, lastStep, ran: worked, downloadsAt });
-    // V1: a text all on the Sites is kept whole (search results aren't: they're not the run's pages).
-    const read = takeRead();
-    if (read && onSites(read.url, sites)) kept = keep(kept, read);
-    const lastName = batch.at(-1)!.words[0];
-    lastText = ranAll && (lastName === 'text' || lastName === 'find' || lastName === 'pick') && output ? output : '';
-    acted = batch.some(({ words: [n] }) => n !== 'text' && n !== 'pick'); // read-only: the page didn't change
-    print(`   ${steps.at(-1)!.result}\n   ${progress(steps)} · ${cost()}`);
-  }
-}
-
-// RP1 (2.4, 2.5): repeat <step> on <numbers>, for a goal run and the MCP bridge: item 1's recorded commands on each
-// item, with no AI calls. You approve the list once, and each item may start as many downloads as item 1 did; any
+// RP1 (2.4, 2.5): repeat <step> on <numbers>, for the MCP bridge: item 1's recorded commands on each item, with no
+// agent calls. You approve the list once, and each item may start as many downloads as item 1 did; any
 // other download still asks. Each command gets a CAPTCHA check and a fresh read (its names resolve on the page it's on
 // now), then the caller's run with all of its own checks (Sites, stop-lines, hand-overs). It stops at the first item
 // that doesn't go like item 1. Returns the step's result, or null when you stopped it; throws when refused first.
 type RepeatRun = {
-  steps: Pick<Step, 'ran' | 'downloadsAt'>[]; // the history <step> points into
+  steps: BridgeStep[]; // the history <step> points into
   site: string; // the page's, for the ask
   onSites: boolean; // the page is one the agent may see; else its names stay hidden
   count: () => number; // downloads so far, on downloadsAt's scale
   allow: (n: number) => void; // RunDownloads.allowance
   news: () => Promise<string[]>; // download lines since the last call
   run: (line: string) => Promise<{ output: string | void; took?: boolean } | null>; // null: stopped
-  more?: string; // after the ask (a goal run's cost)
 };
 async function runRepeat(args: string[], r: RepeatRun): Promise<string | null> {
   const id = lastCommand;
@@ -744,7 +193,7 @@ async function runRepeat(args: string[], r: RepeatRun): Promise<string | null> {
   const names = items.map(named);
   const targets = items.map((n) => itemTarget(n, labelFor));
   const perItem = downloadsSince(r.steps, step, r.count());
-  if (!(await askKeepGoing(`${repeatAsk(step, r.steps.length, r.site, names, perItem)}${r.more ?? ''}`, 'Repeat', 'No'))) {
+  if (!(await askKeepGoing(repeatAsk(step, r.steps.length, r.site, names, perItem), 'Repeat', 'No'))) {
     return id !== lastCommand ? null : 'Refused: the user said no to this repeat. Do the items one by one, or pause to ask the user.';
   }
   const allNews: string[] = []; // every item's download lines, named in the result (filesLine)
@@ -785,9 +234,9 @@ async function runRepeat(args: string[], r: RepeatRun): Promise<string | null> {
   return repeatDone(names, filesLine(allNews));
 }
 
-// Runs one command line, yours or the AI's. Quoted element words are looked up as labels here, where the quotes are
+// Runs one command line, yours or the agent's. Quoted element words are looked up as labels here, where the quotes are
 // still known (click "19"). R1: click "text" that names no element clicks the shown page text reading exactly that.
-function runLine(command: Command, line: string, allow: boolean, goal?: string) {
+function runLine(command: Command, line: string, allow: boolean) {
   let words: string[];
   try {
     words = parseCommand(line, numberFor);
@@ -799,7 +248,7 @@ function runLine(command: Command, line: string, allow: boolean, goal?: string) 
       return realMouse({ text }, allow, false, frameId, () => clickTextIn(frameId, text, allow));
     });
   }
-  return command.run(words.slice(1), allow, goal, line);
+  return command.run(words.slice(1), allow, line);
 }
 
 // I1: a click (or hover) with the real mouse when it can: an element on the top page, and the debugger attached.
@@ -894,10 +343,9 @@ function checkText(text: string, usage: string): string {
 
 // WR2: type here: text typed where the cursor is with the real keyboard's input method (Input.insertText), after the
 // checks in the frame focus is in. For text boxes that aren't in the page list (a drawing app's, a slide's).
-async function typeHere(text: string, allow: boolean, goal?: string): Promise<string> {
+async function typeHere(text: string, allow: boolean): Promise<string> {
   const tabId = await targetTabId();
-  const given = goal !== undefined && inGoal(text, goal);
-  const where = await sendToTab({ type: 'aimText', paste: false, allow, given }, await typingFrame());
+  const where = await sendToTab({ type: 'aimText', paste: false, allow }, await typingFrame());
   if (!(await sendText(tabId, text))) throw new Error(NO_REAL_KEYBOARD);
   return `ok — typed ${text.length} characters into ${where}`;
 }
@@ -915,17 +363,6 @@ function target(arg: string | undefined, usage: string): number {
 // F9: true while a step's earlier commands run. A read renumbers the page's elements, so it waits for the last one:
 // otherwise the step's next number could point at a different element.
 let skipRead = false;
-// P2: the PDF page the next step's picture shows: page 1, or the page the last text page N named on that PDF.
-let pdfShown: { url: string; page: number } | null = null;
-const pictured = (url: string) => (pdfShown?.url === url ? pdfShown.page : 1);
-// V1: the whole text of the last text all (before capText's cut) and its page's URL; the run loop takes and keeps it.
-let lastRead: Kept | null = null;
-const takeRead = () => {
-  const read = lastRead;
-  lastRead = null;
-  return read;
-};
-
 // MCP option 1 (harness/mcp-context.md): true while a bridge command runs. Its page replies say what changed since the
 // last page list the agent got (bridge.page), not the whole list: the agent keeps every reply. agentRead is this
 // command's read; it becomes bridge.page only once it's sent (agentCommand).
@@ -946,10 +383,6 @@ function agentPage(page: string): string {
   return pageReport(bridge?.page ?? null, page);
 }
 
-// Asks the model through the local host, called straight from the panel: no background relay, so content scripts
-// have no path to it. The key stays in the host; only the answer comes back.
-// shortcut: one host process per ask (it re-reads the key each time); keep one port open if the loop (3.3) feels slow.
-// Source: https://developer.chrome.com/docs/extensions/develop/concepts/native-messaging
 // Tab switches in any window. A switch during a capture means the picture may show your tab, so it's dropped (takeShot).
 let tabSwitches = 0;
 browser.tabs.onActivated.addListener(() => tabSwitches++);
@@ -963,15 +396,12 @@ async function pdfTabUrl(): Promise<string | null> {
   return /^https?:/.test(url) && (await readPdf(url).then(() => true, () => false)) ? url : null;
 }
 
-// The goal run's downloads while it goes (the bridge's are agentDownloads), for text download.
-let goalDownloads: RunDownloads | null = null;
-
-// text download [page N]: this run's newest download you allowed (run-files.ts), a PDF or a text file, read from where
-// Chrome saved it. Never a path the agent names, never a download from before the run, never a command you type.
+// text download [page N]: the agent's newest download you allowed (run-files.ts), a PDF or a text file, read from where
+// Chrome saved it. Never a path the agent names, never a download from before its turn, never a command you type.
 async function readDownload(args: string[]): Promise<string> {
   const from = downloadArgs(args);
-  const own = forAgent ? agentDownloads : goalDownloads;
-  if (!own) throw new Error("text download reads only a run's own downloads");
+  const own = forAgent ? agentDownloads : null;
+  if (!own) throw new Error("text download reads only the agent's own downloads");
   const items = (await Promise.all(own.allowed.map((id) => browser.downloads.search({ id })))).flat();
   const item = newestReadable(own.allowed, items);
   if (!item) throw new Error('No download to read: none that the user allowed in this run has finished and is still on disk');
@@ -985,41 +415,15 @@ async function readDownload(args: string[]): Promise<string> {
     throw new Error(`Can't read ${name}: Chrome's "Allow access to file URLs" is off for this extension. Ask the user to turn it on (chrome://extensions → Browser Agent → Details), then try again`);
   }
   const url = fileUrl(item.filename);
-  if (kind === 'pdf') return `Download ${name}:\n${pdfText(await readPdf(url), from, 0)}`;
+  if (kind === 'pdf') return `Download ${name}:\n${pdfText(await readPdf(url), from)}`;
   return `Download ${name}:\n${capText(await (await fetch(url)).text())}`;
-}
-
-// P1: the page list for a PDF tab, in read's own header shape.
-async function pdfPage(url: string, title: string): Promise<string> {
-  const head = `URL: ${url}\nTitle: ${title}`;
-  try {
-    return `${head}\n${pdfPageLine(await readPdf(url), pictured(url))}`;
-  } catch (err) {
-    return `${head}\nPDF: couldn't read its text (${err instanceof Error ? err.message : String(err)}). The picture shows page ${pictured(url)}.`;
-  }
-}
-
-// P2: the PDF page the picture shows, drawn from the file, or why not. A checkout URL gets none, like a screenshot;
-// the caller only asks on the run's Sites.
-async function pdfPicture(url: string): Promise<Shot | string> {
-  if (isCheckoutUrl(url)) return 'no PDF picture: checkout or payment page';
-  const page = pictured(url);
-  try {
-    const shot = await renderPage(url, page);
-    print(`   picture: PDF page ${page}, drawn from the file`);
-    return shot;
-  } catch (err) {
-    return `no PDF picture of page ${page} (${err instanceof Error ? err.message : String(err)}); trying a screenshot`;
-  }
 }
 
 // WR1: the last screenshot's tab and size: click x,y and drag points are its pixels, what the model saw.
 let lastShot: { tabId: number; width: number; height: number } | null = null;
 
-// F1a: one screenshot of the run's tab with the latest read's numbers on it, or why there's none (F1b guards).
-// pdf: a PDF tab (P1). Its viewer can't answer the frames' secret-field check, which fails closed, and a PDF has no web
-// form fields to hide; every other guard (Sites, checkout page, the run's tab on screen, no switch) still applies.
-async function screenshot(onPlan: boolean, pdf = false): Promise<Shot | string> {
+// F1a: look's screenshot of the agent's tab with the latest read's numbers on it, or why there's none (F1b guards).
+async function screenshot(onPlan: boolean): Promise<Shot | string> {
   try {
     const tabId = await targetTabId();
     const { windowId } = await browser.tabs.get(tabId);
@@ -1038,7 +442,7 @@ async function screenshot(onPlan: boolean, pdf = false): Promise<Shot | string> 
         return { active: tab.active && tab.windowId === windowId && drawn, url: tab.url ?? '' };
       },
       switches: () => tabSwitches,
-      numbers: pdf ? async () => '' : numbersAll,
+      numbers: numbersAll,
       // PNG, so the only lossy step is shrink's one JPEG pass. Source: https://developer.chrome.com/docs/extensions/reference/api/tabs#method-captureVisibleTab
       capture: () => browser.tabs.captureVisibleTab(windowId, { format: 'png' }),
     });
@@ -1051,29 +455,17 @@ async function screenshot(onPlan: boolean, pdf = false): Promise<Shot | string> 
   }
 }
 
-function askModel(ask: Ask): Promise<Extract<Reply, { type: 'answer' }>> {
-  return new Promise((resolve, reject) => {
-    const port = browser.runtime.connectNative(HOST_NAME);
-    port.onMessage.addListener((reply: Reply) => {
-      port.disconnect();
-      if (reply.type === 'error') reject(new Error(`Model: ${reply.error}`));
-      else resolve(reply);
-    });
-    // Chrome's reason (not installed, forbidden, host crashed) is in lastError.
-    port.onDisconnect.addListener(() => reject(new Error(`Model helper: ${browser.runtime.lastError?.message ?? 'disconnected'}`)));
-    port.postMessage({ type: 'ask', ...ask });
-  });
-}
-
 // The MCP bridge (/mcp on): a coding agent's commands come from the local helper's pipe (host/mcp.ts). Each shows
-// here and runs like a typed one, with a goal run's guards: only MCP_COMMANDS, only on the bridge's Sites (a new site
+// here and runs like a typed one, with the agent's guards: only MCP_COMMANDS, only on the bridge's Sites (a new site
 // asks you first, so a tricked agent can't take your data elsewhere), never past a stop-line or a hand-over.
 type Port = ReturnType<typeof browser.runtime.connectNative>;
+// RP1: one bridge call: its commands that worked, by label (recordLine), and the downloads count when it began.
+type BridgeStep = { ran?: string[]; downloadsAt?: number };
 // page: the last page list the agent got (null: none yet, so the next one goes whole). tipped: the sites whose saved
 // tips the agent already got this session (F10, tipsOnce).
 // steps (RP1): one per call, with what worked, for repeat <step>; each reply starts with its number.
 // solved: the CAPTCHA you last resumed from (captchaHold), so a solved one still on screen doesn't ask again.
-let bridge: { port: Port; sites: string[]; refused: Set<string>; page: string | null; tipped: Set<string>; steps: Pick<Step, 'ran' | 'downloadsAt'>[]; solved: string } | null = null;
+let bridge: { port: Port; sites: string[]; refused: Set<string>; page: string | null; tipped: Set<string>; steps: BridgeStep[]; solved: string } | null = null;
 
 // S2 for the bridge: a site off its Sites asks you first. No: refused and not asked again while the bridge is on.
 async function bridgeSite(site: string, url: string): Promise<void> {
@@ -1129,7 +521,7 @@ async function onBridge(port: Port, m: { type?: string; commands?: unknown; erro
   if (bridge?.port === port) port.postMessage(reply); // a port you closed meanwhile can't send
 }
 
-// 4.2–4.3 for the bridge (allowOnce), as in a goal run: a stop-line asks Allow once / I'll do it, and a step you take
+// 4.2–4.3 for the bridge (allowOnce): a stop-line asks Allow once / I'll do it, and a step you take
 // over waits for your Resume. A command you start meanwhile closes the ask and stops this one.
 const askYou = (keep: string, stop: string) => async (why: string): Promise<boolean> => {
   const id = lastCommand;
@@ -1261,11 +653,11 @@ type AgentReply = { text: string; image?: BridgeImage; stop?: string };
 // last: false for a batch's earlier commands, which don't read the page (agentBatch).
 async function agentRun(line: string, last = true): Promise<AgentReply> {
   print(`agent> ${line}`);
-  // Like a command you type: closes an open ask and stops a goal run first.
+  // Like a command you type: closes an open ask first.
   closeAsk('Closed, nothing ran: the agent sent a command.');
   const id = ++lastCommand;
   await runEnded;
-  // Like a goal run: a command you type waits until this one has fully stopped, its downloads asked about.
+  // A command you type waits until this one has fully stopped, its downloads asked about.
   return inRunTab(null, async () => {
     if (!agentDownloads) browser.downloads.onCreated.addListener((agentDownloads = new RunDownloads()).onCreated);
     const downloads = agentDownloads;
@@ -1367,7 +759,7 @@ async function agentCommand(line: string, last: boolean): Promise<AgentReply> {
     } else if (name === 'look') {
       if (args.length) throw new Error('Usage: look (no arguments)');
       const read = agentPage(await readAll(false));
-      // Right after the read, so the picture's numbers are this read's. Every guard of a goal step's picture applies.
+      // Right after the read, so the picture's numbers are this read's. Every screenshot guard (F1b) applies.
       const shot = lookShot(await screenshot((await where(sites)).onPlan));
       output = `${shot.line}\n\n${read}`;
       image = shot.image;
@@ -1376,7 +768,7 @@ async function agentCommand(line: string, last: boolean): Promise<AgentReply> {
     } else {
       // The re-read isn't the agent's: agentRead and bridge.page stay as they were.
       output = await allowOnce(async (allow) => {
-        // As in a goal run: downloads that start during an Allow once command are part of what you allowed.
+        // Downloads that start during an Allow once command are part of what you allowed.
         if (agentDownloads) agentDownloads.allowing = allow;
         try {
           return await retryUnlisted(async () => runLine(commands[name]!, line, allow), () => readAll(false));
@@ -1424,7 +816,7 @@ async function agentCommand(line: string, last: boolean): Promise<AgentReply> {
 const commands: Record<string, Command> = {
   help: {
     help: 'list commands',
-    run: () => ['Type what you want in plain words. To drive by hand, start with /:', ...Object.entries(commands).map(([name, c]) => `/${name} — ${c.help}`)].join('\n'),
+    run: () => ['Commands start with /:', ...Object.entries(commands).map(([name, c]) => `/${name} — ${c.help}`)].join('\n'),
   },
   clear: {
     help: 'empty the output',
@@ -1446,7 +838,7 @@ const commands: Record<string, Command> = {
     run: () => readAll(),
   },
   text: {
-    help: 'text [all | page N | download [page N]] — show the plain text on screen, like dates and prices (iframes included); text all reads the whole page, not just the screen; text page N reads a PDF from page N on and puts that page in the next picture; text download reads the newest file this run downloaded with the user\'s ok (a PDF, from page N, or a text file)',
+    help: 'text [all | page N | download [page N]] — show the plain text on screen, like dates and prices (iframes included); text all reads the whole page, not just the screen; text page N reads a PDF from page N on; text download reads the newest file you downloaded with the user\'s ok (a PDF, from page N, or a text file)',
     run: async (args) => {
       if (args[0] === 'download') return readDownload(args.slice(1));
       const { all, page } = textArgs(args); // the AI writes these words, so anything else is refused
@@ -1454,16 +846,11 @@ const commands: Record<string, Command> = {
       let text: string;
       if (pdf) {
         const doc = await readPdf(pdf);
-        if (page !== undefined) {
-          if (page > doc.total) throw new Error(`Usage: text page 1 to ${doc.total}: the PDF has ${doc.total} pages`);
-          pdfShown = { url: pdf, page }; // P2: the next step's picture
-        }
-        text = pdfText(doc, page ?? 1, pictured(pdf));
+        if (page !== undefined && page > doc.total) throw new Error(`Usage: text page 1 to ${doc.total}: the PDF has ${doc.total} pages`);
+        text = pdfText(doc, page ?? 1);
       } else {
         if (page !== undefined) throw new Error('text page N works on a PDF tab only: use text all or find here');
-        const full = await textAll(all);
-        if (all && full) lastRead = { url: (await browser.tabs.get(await targetTabId())).url ?? '', pages: [full] };
-        text = capText(full) || `(no text ${all ? 'on the page' : 'on screen'})`;
+        text = capText(await textAll(all)) || `(no text ${all ? 'on the page' : 'on screen'})`;
       }
       // Debug footer, like read's. Tokens ≈ characters ÷ 4.
       return `${text}\n(~${Math.round(text.length / 4)} tokens)`;
@@ -1511,23 +898,21 @@ const commands: Record<string, Command> = {
   },
   type: {
     help: 'type <n|"label"> "text" [enter] [slow] — type into field n; enter also presses Enter, slow types letter by letter. type here <text> types the rest of the line, as is, where the cursor is: for a text box you opened by clicking or double-clicking (a shape label, a slide text)',
-    run: ([nArg, text, ...flags], allow, goal, line) => {
-      if (nArg === 'here') return act(() => typeHere(checkText(restOf(line ?? '', 2), 'type here <text>'), allow, goal));
+    run: ([nArg, text, ...flags], allow, line) => {
+      if (nArg === 'here') return act(() => typeHere(checkText(restOf(line ?? '', 2), 'type here <text>'), allow));
       const usage = 'type <number|"label"> "text" [enter] [slow], e.g. type 3 "new york" enter';
       const n = target(nArg, usage);
       if (text === undefined || flags.some((f) => f !== 'enter' && f !== 'slow')) throw new Error(`Usage: ${usage}`);
-      const given = goal !== undefined && inGoal(text, goal);
-      return act(() => sendToTab({ type: 'type', n, text, enter: flags.includes('enter'), slow: flags.includes('slow'), allow, given }, frameFor(n)));
+      return act(() => sendToTab({ type: 'type', n, text, enter: flags.includes('enter'), slow: flags.includes('slow'), allow }, frameFor(n)));
     },
   },
   select: {
     help: 'select <n|"label"> "option" — pick an option in dropdown n (real <select> only)',
-    run: ([nArg, option], allow, goal) => {
+    run: ([nArg, option], allow) => {
       const usage = 'select <number|"label"> "option", e.g. select 5 "Price: low to high"';
       const n = target(nArg, usage);
       if (option === undefined) throw new Error(`Usage: ${usage}`);
-      const given = goal !== undefined && inGoal(option, goal);
-      return act(() => sendToTab({ type: 'select', n, option, allow, given }, frameFor(n)));
+      return act(() => sendToTab({ type: 'select', n, option, allow }, frameFor(n)));
     },
   },
   scroll: {
@@ -1553,10 +938,9 @@ const commands: Record<string, Command> = {
   },
   paste: {
     help: 'paste <text> — paste the rest of the line, as is (quotes and all), where focus is: for what an app reads on paste, like a drawing app JSON. Your own clipboard is not used',
-    run: (_args, allow, goal, line) => {
+    run: (_args, allow, line) => {
       const text = checkText(restOf(line ?? '', 1), 'paste <text>, e.g. paste {"type":"…"}');
-      const given = goal !== undefined && inGoal(text, goal);
-      return act(async () => sendToTab({ type: 'pasteText', text, allow, given }, await typingFrame()));
+      return act(async () => sendToTab({ type: 'pasteText', text, allow }, await typingFrame()));
     },
   },
   key: {
@@ -1572,24 +956,17 @@ const commands: Record<string, Command> = {
     run: ([url]) => act(() => goto(url ?? '')),
   },
   search: {
-    help: 'search "words" — look the words up on DuckDuckGo; in a run the user sees them first and the results open in a new tab',
+    help: 'search "words" — look the words up on DuckDuckGo in this tab',
     run: (args) => act(() => goto(searchUrl(args.join(' ')))),
   },
   back: {
     help: 'go back one page (in a tab a link opened, back to the tab that opened it)',
     run: () => act(back),
   },
-  tab: {
-    help: 'tab new <url> | tab <n> | tab close <n> — open a page on the run\'s Sites in a new tab, switch to one of the run\'s tabs, or close one it opened',
-    // Typing any command ends a run, so by hand there are no run tabs to use.
-    run: () => {
-      throw new Error('tab is for the agent during a goal run: it works in its own tabs, never yours');
-    },
-  },
   repeat: {
     help: `repeat <step> on <numbers> — once item 1 of a list is fully done, redo its commands (from step <step> of your history to your last step) on each other item, by their numbers in the current page list (usually from a pick like item 1 just before), 1 to ${MAX_REPEAT_ITEMS} items, e.g. repeat 5 on 15-23 or repeat 5 on 15, 17, 20-23. Step <step> must start with item 1's click. The user approves the list once; it runs with no AI steps and stops at the first item that doesn't go like item 1, saying which are done and left`,
     run: async () => {
-      throw new Error("repeat works only inside a goal: it redoes steps of the agent's history");
+      throw new Error("repeat is the MCP agent's: it redoes steps of its history");
     },
   },
   pause: {
@@ -1598,34 +975,15 @@ const commands: Record<string, Command> = {
       await askResume(args);
     },
   },
-  goal: {
-    help: `goal "what you want" — the agent starts at once and plans as it goes. Sites: the ones your goal names, else this tab's; any other asks you. Step budget ${STEP_BUDGET}, then +N asks you; stop-lines ask you; any command stops it`,
-    // G1: no plan to approve first (frontier agents plan as they go). Sites stay enforced in code from the first step.
-    run: async (args) => {
-      const goal = args.join(' ');
-      if (!goal) throw new Error('Usage: goal "what you want", e.g. goal "open the Alan Turing article and read his birth date"');
-      const tab = await browser.tabs.get(await targetTabId());
-      const sites = startSites(goal, tab.url);
-      print(`Sites: ${sites.join(', ') || 'none yet'}. The agent asks you before using any other site.`);
-      const done = await runGoal(goal, sites);
-      const pass = passedRun;
-      passedRun = null;
-      if (!pass) return done;
-      // F10: tips are asked after the run's Done line, with the run's tab and debugger let go.
-      print(done);
-      await detachAll();
-      await offerTips(pass);
-    },
-  },
   stop: {
-    help: 'stop a running goal (any other command stops it too)',
+    help: "stop the agent's running command (any other command stops it too)",
     run: () => {},
   },
   tips: {
     help: 'tips — the tips you saved for each site, with Delete buttons. The agent reads a site\'s tips only while it works there',
     run: async () => {
       const sites = await listSites();
-      if (!sites.length) return 'No saved tips yet. After a run passes its done check, you can save tips for its site.';
+      if (!sites.length) return 'No saved tips yet. The MCP agent can suggest one with tip; you choose Save or No.';
       // A Delete button: once it worked, its line says what went. Tips go by their text (deleteTip), so an old list is safe.
       const deleter = (line: HTMLElement, label: string, job: () => Promise<void>, gone: string) =>
         Object.assign(document.createElement('button'), {
@@ -1646,13 +1004,6 @@ const commands: Record<string, Command> = {
       }
       out.scrollTop = out.scrollHeight;
       return `${sites.length} site(s) with saved tips.`;
-    },
-  },
-  model: {
-    help: 'model ["question"] — ask the small model through the local helper (tests the setup)',
-    run: async ([question = 'Say OK.']) => {
-      const r = await askModel({ model: JUDGE, max_tokens: 300, messages: [{ role: 'user', content: question }] });
-      return `${r.text}\n(${r.stop_reason} · ${r.usage.input_tokens} tokens in, ${r.usage.output_tokens} out)`;
     },
   },
   mcp: {
@@ -1707,17 +1058,16 @@ form.addEventListener('submit', async (event) => {
   const line = input.value.trim();
   input.value = '';
   if (!line) return;
-  closeAsk('Closed, nothing ran: you moved on.');
   print(`> ${line}`);
-  // Stop a goal run and wait until it has: it finishes its current step in its own tab and unpins, so what you type
-  // goes to the tab you're looking at.
+  // Only /commands: a sentence never runs one by accident, and nothing else runs at all.
+  if (!line.startsWith('/')) return print('Commands start with /. Type /help for the list.', 'error');
+  closeAsk('Closed, nothing ran: you moved on.');
+  // Stop the agent's command and wait until it has: it finishes in its own tab and unpins, so what you type goes to
+  // the tab you're looking at.
   lastCommand++;
   await runEnded;
   endAgentTurn(); // what you do from here is yours, downloads included
 
-  // You talk in plain words: that's always a goal (it only writes a plan; nothing touches the page before Run).
-  // Commands are the agent's hands and eyes; type them with / to drive by hand, so a sentence never runs one by accident.
-  if (!line.startsWith('/')) return runAndPrint((allow) => commands.goal!.run([line], allow));
   const [name = ''] = parseCommand(line.slice(1));
   // hasOwn so names like "toString" don't match built-in object methods.
   const command = Object.hasOwn(commands, name) ? commands[name] : undefined;

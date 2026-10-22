@@ -20,7 +20,7 @@
   - Done when: tests + build pass ✅; live ✅ one `paste` drew Idea → Good? → Ship it with bound arrows; `type here` typed into a text box; Escape finished editing. **Open:** live check that `type here` / `paste` into a name or email field stops (needs a test page with such a field).
   - Later: HTML and image paste (needs a sanitizer: pasted HTML can load images from any host).
 - [ ] **WR3 · zoom for look.** A full-resolution crop of one area, so small targets are hit.
-- [ ] **WR4 · plan first, check after.** Prompt only: write the layout (boxes, sizes, arrows) before acting; screenshot and compare after each chunk.
+- [ ] **WR4 · plan first, check after.** The MCP tool's description only (`host/mcp.ts`; the panel has no prompt since 2026-10-22): write the layout (boxes, sizes, arrows) before acting; screenshot and compare after each chunk.
 - Later: drop a file onto the page (`Input.dispatchDragEvent`, experimental).
 
 ## Log

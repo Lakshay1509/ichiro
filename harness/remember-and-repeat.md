@@ -7,6 +7,7 @@ One place to follow the build that makes the agent faster on sites it has seen b
 
 **Status (2026-10-21):** Build 1 done (live check passed: 8 → 6 calls). 1.5's live check (delete a tip) still open.
 **Current slice:** Build 2 done (live check passed 2026-10-21: 10 / 10 files in 6 MCP calls). Next: "Decide here: is Build 3 needed?"
+**Pure MCP (2026-10-22):** the panel's AI loop is gone, so everything here runs through the MCP bridge only. Slices 1.3 and 1.4 (and the goal-loop half of 2.4 and 2.5) were removed with it; see the log.
 
 ---
 
@@ -71,11 +72,13 @@ Design: `repeat-tasks.md`, RP1.
 
 ## Decide here: is Build 3 needed?
 
-- [ ] Run 2–3 goals twice with Builds 1 and 2 in. If second runs are fast enough, stop; Build 3 stays in `plan.md`.
+- [ ] Run 2–3 goals twice over MCP with Builds 1 and 2 in. If second runs are fast enough, stop; Build 3 stays unbuilt.
 
 ## Build 3 · Saved recipes (Phase 6) · ~1–2 weeks · the riskiest
 
 Each slice's "Done when" is in `plan.md` Phase 6.
+
+> **Redesign before building (2026-10-22):** 3.1, 3.4 and 3.5 assume the removed AI loop (a passed run, an AI call to fix a step, a typed goal). Over MCP, a recipe would come from the bridge's steps, and the coding agent would fix a broken step. Agree the new shape with the developer first.
 
 - [ ] **3.1 Save** (6.1): a passed run becomes a recipe in `site:<site>.recipes`, by label, on your click. Fix digit-only labels in `parseCommand` first.
 - [ ] **3.2 Replay** (6.2): a button runs it with zero AI calls, then its checks.
@@ -109,3 +112,4 @@ Each slice's "Done when" is in `plan.md` Phase 6.
 - 2026-10-21 · **Build 2 live check passed** (through the MCP bridge, fresh Opus subagent given only the goal "Download assignments 1 to 10 from my course page" plus 2.5's new description line, since the running MCP server still had the old one). Site: `harness/test-site/serve.ts` on `http://assignments.localtest.me:8123/` (localtest.me resolves to 127.0.0.1; plain localhost can't be a Site). **6 MCP calls** (target ≤ 8): help + read · click Assignment 1 · click Download (item 1's download asked, allowed) · back (+ a `pick like 4` cut by the new page) · `repeat 2 on 22-30` (one list approval) · read. **10 / 10 files** in Downloads, in order, ~3 s apart (repeat ≈ 24 s for 9 items); server log: each assignment page and file fetched once. ~67k subagent tokens, 100 s. No insecure-download block on the http page. Found: (1) the repeat's reply says only "9 downloads started", no file names or finished lines, so the agent couldn't confirm the files (the per-item download news went to the panel only); (2) the tool description's "Earlier numbers stay valid" is wrong after leaving and coming back to a page (new document, new numbers), which cost the agent a cut `pick`.
 - 2026-10-21 · fix (live check finding 1) · The repeat's result now names its files: `filesLine(news)` in `lib/repeat.ts` sorts every item's download lines into finished / still going / failed or refused, each list by its first and last quoted name; a file told twice (started, then done) counts once, as its last state. `repeatDone(names, files)` and `stoppedAt(…, files)` end with it, e.g. `Repeat done: all 9 items went like item 1 ("Assignment 2" to "Assignment 10"). Files: 9 finished ("assignment-2.txt" to "assignment-10.txt").` A file still going gets its "downloaded" line later, like any download. Test, typecheck, build pass; not re-run live. Finding 2 (the description's "Earlier numbers stay valid") not fixed here.
 - 2026-10-21 · fix (live check finding 2) · `host/mcp.ts` description: "Earlier numbers stay valid while you stay on the page; a page you leave and come back to (back, a link) has new numbers, so use the ones in its reply." Typecheck passes. Takes effect when Claude Code restarts the MCP server.
+- 2026-10-22 · pure MCP · The API key and the panel's AI loop were removed. Gone with it: 1.3 (`buildTipAsk`, `parseTips`, the tip ask after a passed run), 1.4 (`<site_tips>` in the step ask), and the goal-loop half of 2.4 and 2.5 (`repeat` as an AI command, its prompt rule). Still here: tip rules and storage (1.1, 1.2), `/tips` (1.5), tips and `tip` over MCP (1.6), and `repeat` over MCP (`runRepeat`, now the bridge's only). Tests, typecheck, build pass.

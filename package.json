@@ -10,9 +10,6 @@
     "typecheck": "tsc --noEmit",
     "postinstall": "wxt prepare",
     "test": "node --test lib/*.test.ts",
-    "key:set": "node host/key.ts set",
-    "key:check": "node host/key.ts check",
-    "key:clear": "node host/key.ts clear",
     "host:install": "node host/install.ts install",
     "host:uninstall": "node host/install.ts uninstall"
   },

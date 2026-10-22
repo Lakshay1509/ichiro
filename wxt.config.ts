@@ -1,18 +1,7 @@
 // WXT build config: manifest settings for the extension.
-import { resolve } from 'node:path';
 import { defineConfig } from 'wxt';
 
 export default defineConfig({
-  // P2: pdf.js decodes scanned images (CCITT fax, JBIG2, JPEG 2000) with wasm, which the extension's CSP blocks, so it
-  // imports these plain-JS decoders from `${wasmUrl}<name>` instead (no eval in them). Fixed names, so copied, not
-  // bundled. Sources: node_modules/pdfjs-dist/build/pdf.worker.mjs (WasmImage), https://wxt.dev/api/reference/wxt/interfaces/WxtHooks
-  hooks: {
-    'build:publicAssets': (_wxt, files) => {
-      for (const name of ['jbig2_nowasm_fallback.js', 'openjpeg_nowasm_fallback.js']) {
-        files.push({ absoluteSrc: resolve(import.meta.dirname, 'node_modules/pdfjs-dist/wasm', name), relativeDest: `pdfjs/${name}` });
-      }
-    },
-  },
   manifest: {
     name: 'Browser Agent',
     // Toolbar icon. Chrome needs this key so clicking the icon can open the side panel.
@@ -22,7 +11,7 @@ export default defineConfig({
     // webNavigation: list a tab's frames (iframes). Source: https://developer.chrome.com/docs/extensions/reference/api/webNavigation
     // webRequest: see which requests a page still has running, so settle waits for slow connections.
     // Source: https://developer.chrome.com/docs/extensions/reference/api/webRequest
-    // nativeMessaging: talk to the local host that holds the API key (host/host.ts).
+    // nativeMessaging: talk to the local host that bridges a coding agent's commands (/mcp on, host/host.ts).
     // Source: https://developer.chrome.com/docs/extensions/develop/concepts/native-messaging
     // publicSuffix: a page's site (in.bookmyshow.com → bookmyshow.com) for the plan's Sites (S1). No install warning.
     // Source: https://developer.chrome.com/docs/extensions/reference/api/publicSuffix

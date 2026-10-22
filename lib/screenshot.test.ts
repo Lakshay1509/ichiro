@@ -1,6 +1,5 @@
-// Checks the screenshot guards (F1b), the picture's place in the ask and the host accepting it. Run: npm test
-import { checkAsk, EXECUTOR, MAX_FRAME } from './host-request.ts';
-import { attachShot, fitsFrame, OFF_SCREEN, shotTokens, takeShot, withShot, type ShotTab } from './screenshot.ts';
+// Checks the screenshot guards (F1b). Run: npm test
+import { OFF_SCREEN, takeShot, type ShotTab } from './screenshot.ts';
 
 const fail = (what: string): never => {
   throw new Error(what);
@@ -69,28 +68,3 @@ const broken = fakeTab({ captureFails: true });
 let threw = false;
 await takeShot(true, broken.tab).catch(() => (threw = true));
 if (!threw || broken.marks.join() !== 'true,false') fail(`failed capture: threw ${threw}, marks ${broken.marks}`);
-
-// Tokens: the vision docs' formula; 1280×800 ≈ 1.3k.
-if (shotTokens({ width: 1280, height: 800 }) !== 1334) fail(`tokens: ${shotTokens({ width: 1280, height: 800 })}`);
-
-// The picture goes first, the text unchanged after it, and the host accepts the result.
-const ask = { model: EXECUTOR, max_tokens: 100, system: 'rules', messages: [{ role: 'user' as const, content: 'Goal: x' }] };
-const pictured = withShot(ask, { data: '/9j/4AAQ', width: 1280, height: 800 });
-const blocks = pictured.messages[0]?.content;
-if (!Array.isArray(blocks) || blocks[0]?.type !== 'image' || blocks[1]?.type !== 'text' || blocks[1].text !== 'Goal: x' || blocks.length !== 2) {
-  fail(`withShot: ${JSON.stringify(pictured)}`);
-}
-if (pictured.system !== 'rules' || pictured.model !== EXECUTOR) fail('withShot keeps the rest of the ask');
-checkAsk(JSON.stringify({ type: 'ask', ...pictured }));
-
-// Too big for the host's 1 MB frame → the panel drops the picture.
-if (!fitsFrame(pictured)) fail('a small ask fits');
-if (fitsFrame(withShot(ask, { data: 'A'.repeat(MAX_FRAME), width: 1, height: 1 }))) fail('a 1 MB picture should not fit');
-
-// What the panel sends and prints: the picture when it fits, else the text ask and why.
-const [sent, line] = attachShot(ask, { data: '/9j/4AAQ', width: 1280, height: 800 });
-if (sent.messages[0]?.content === 'Goal: x' || line !== 'screenshot: 1280×800 (~1.3k tokens)') fail(`attach: ${line}`);
-const [plain, offLine] = attachShot(ask, OFF_SCREEN);
-if (plain !== ask || offLine !== "no screenshot: the run's tab isn't on screen") fail(`attach without picture: ${offLine}`);
-const [tooBig, bigLine] = attachShot(ask, { data: 'A'.repeat(MAX_FRAME), width: 1, height: 1 });
-if (tooBig !== ask || bigLine !== 'no screenshot: too big for the host (1 MB)') fail(`attach too big: ${bigLine}`);

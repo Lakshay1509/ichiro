@@ -1,3 +1,5 @@
+> **History (2026-10-22):** the panel's goal runs were removed (pure MCP). To reuse this task, give it to a coding agent over MCP with `/mcp on amazon.in flipkart.com`.
+
 Test goal for 3.7 Stuck-proofing: the run that got stuck on 2026-10-13 (30 steps, looped on Amazon results). Paste it as the goal; plan Sites: amazon.in, flipkart.com.
 
 Task: Shop for a Laptop

@@ -52,7 +52,7 @@ export async function scriptReady(tabId: number, deadline: number): Promise<bool
 // How long a command waits for a loading page before giving up.
 const LOAD_WAIT_MS = 15000;
 
-// To the tab commands go to: a goal run's own tab, else the active one (targetTabId).
+// To the tab commands go to: the agent command's own tab, else the active one (targetTabId).
 export async function sendToTab<M extends Message>(msg: M, frameId = 0): Promise<Replies[M['type']]> {
   const tab = await browser.tabs.get(await targetTabId());
   if (!tab.id || !canRunOn(tab.url)) throw new Error("Can't run on this page");

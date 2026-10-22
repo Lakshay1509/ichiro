@@ -1,6 +1,8 @@
 # Repeat tasks: do one, repeat the rest
 
-Research for "download assignment 1–10" (developer, 2026-10-19). **Proposed, waits for the developer.**
+Research for "download assignment 1–10" (developer, 2026-10-19). Built as RP1: `remember-and-repeat.md` Build 2.
+
+> **Since 2026-10-22 (pure MCP):** `repeat` runs only through the MCP bridge; the panel's AI loop is gone. "The AI" below is now the coding agent.
 
 **Answer:** let the AI do **item 1** normally. Then **code** finds the other items (everything built like item 1) and **replays item 1's commands** on each, with **zero AI calls**. The AI steps back in only when an item doesn't go like item 1. Every serious agent that "learns once" works this way.
 
