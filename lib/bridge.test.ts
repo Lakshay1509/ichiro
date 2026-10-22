@@ -1,5 +1,5 @@
 // Checks the MCP bridge's rules: the strict run check with its token, batches, the panel's reply check, and the untrusted block. Run: npm test
-import { allowOnce, batchProblem, batchReply, captchaHold, checkAgentTip, checkReply, checkRun, isBridgeStart, lookShot, MAX_BATCH, MAX_COMMAND, MAX_IMAGE, MAX_OUTPUT, MCP_COMMANDS, retryUnlisted, tipsOnce, untrusted } from './bridge.ts';
+import { allowOnce, batchProblem, batchReply, captchaHold, checkAgentTip, checkReply, checkRun, isBridgeStart, lookShot, MAX_BATCH, MAX_COMMAND, MAX_IMAGE, MAX_OUTPUT, MCP_COMMANDS, retryUnlisted, showsPage, tipsOnce, untrusted } from './bridge.ts';
 import { MAX_FRAME } from './host-request.ts';
 import { HandOver, StopLine } from './messages.ts';
 
@@ -47,6 +47,9 @@ if (Buffer.byteLength(run({ type: 'run', token: TOKEN, commands: Array(MAX_BATCH
 // Batches: read, look and pause only last; nothing runs otherwise.
 if (batchProblem(batch) || batchProblem(['look']) || batchProblem(['key ctrl+a', 'pause "check it"'])) fail('read, look or pause last refused');
 if (!batchProblem(['read', 'click 4']).startsWith('Nothing ran: read can only be the last command (it was 1 of 2)')) fail('read first allowed');
+for (const [line, want] of [['look', true], [' read ', true], ['click 4', false], ['type 3 "read"', false], ['', false]] as const) {
+  if (showsPage(line) !== want) fail(`showsPage(${JSON.stringify(line)}) should be ${want}`);
+}
 if (!batchProblem(['key Tab', 'look', 'key Tab']) || !batchProblem(['pause', 'click 4'])) fail('look or pause in the middle allowed');
 
 // The batch's reply: numbered replies, why it stopped, what didn't run (one short line each), then the page once.

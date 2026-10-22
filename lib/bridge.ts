@@ -72,6 +72,9 @@ export function batchProblem(lines: string[]): string {
   return i < 0 ? '' : `Nothing ran: ${parseCommand(lines[i]!)[0]} can only be the last command (it was ${i + 1} of ${lines.length}).`;
 }
 
+// read and look only show the page, so a batch's stop (a new page loaded) still runs them next: goto + look works.
+export const showsPage = (line: string) => ['read', 'look'].includes(parseCommand(line)[0] ?? '');
+
 // A batch's reply: each command's reply in order, numbered; why it stopped early and what didn't run; then the page
 // once. When all ran, the last reply already carries the page.
 export function batchReply(lines: string[], replies: string[], why = '', page = ''): string {

@@ -2,13 +2,13 @@
 import { buildAsk, buildDoneCheck, buildTipAsk, checkGoto, livePlan, MAX_BAD_REPLIES, MAX_CHECKS, MAX_NOTES, oneLine, onSites, parseStep, parseVerdict, progress, startSites, STEP_BUDGET, stepsAdded, submits, addVisit, visitedLines, type Visit, savedNotes, siteOn, siteToAdd, siteToOpen, summarize, type Step } from '@/lib/agent-prompt';
 import { fileName, RunDownloads } from '@/lib/downloads';
 import { captchaAll, clickTextIn, focusedFrame, frameFor, textFrame, labelFor, nameFor, numberFor, numbersAll, pickInFrames, readAll, sendToAllFrames, setOverlayOn, textAll } from '@/lib/frames';
-import { allowOnce, batchProblem, batchReply, captchaHold, checkAgentTip, checkCommands, LOOK_HELP, lookShot, MAX_COMMAND, MAX_OUTPUT, MCP_COMMANDS, retryUnlisted, TIP_HELP, tipsOnce, type BridgeImage, type BridgeReply } from '@/lib/bridge';
+import { allowOnce, batchProblem, batchReply, captchaHold, checkAgentTip, checkCommands, LOOK_HELP, lookShot, MAX_COMMAND, MAX_OUTPUT, MCP_COMMANDS, retryUnlisted, showsPage, TIP_HELP, tipsOnce, type BridgeImage, type BridgeReply } from '@/lib/bridge';
 import { HOST_NAME } from '@/lib/host-install';
 import { JUDGE, PLANNER, type Ask, type Reply } from '@/lib/host-request';
 import { HandOver, StopLine } from '@/lib/messages';
 import { back, follow, goto, loaded, pinTab, targetTabId } from '@/lib/navigation';
 import { LoopGuard } from '@/lib/loop-guard';
-import { pageChange, pagePath, pageReport, stepKey } from '@/lib/page-diff';
+import { pageChange, pageReport, stepKey } from '@/lib/page-diff';
 import { capText, textArgs } from '@/lib/page-text';
 import { parseCommand, restOf } from '@/lib/parse-command';
 import { inGoal } from '@/lib/personal';
@@ -138,6 +138,10 @@ async function where(sites: string[]): Promise<{ onPlan: boolean; site: string; 
   const tab = await browser.tabs.get(await targetTabId());
   return { onPlan: onSites(tab.url, sites), site: (tab.url && URL.parse(tab.url)?.hostname) || 'this page', url: tab.url ?? '', title: tab.title ?? '' };
 }
+
+// The tab's top document: a real page load makes a new one, a script's own URL change (pushState) keeps it. '' unknown.
+// Source: https://developer.chrome.com/docs/extensions/reference/api/webNavigation#method-getFrame
+const topDocument = (tabId: number) => browser.webNavigation.getFrame({ tabId, frameId: 0 }).then((f) => f?.documentId ?? '', () => '');
 
 // `Tabs: [1] amazon.in (current) · [2] flipkart.com`. Site names only: page titles are written by the page.
 async function tabsLine(run: RunTabs): Promise<string> {
@@ -1217,7 +1221,7 @@ async function batchRun(lines: string[], ran: string[]): Promise<{ text: string;
     if (last) return { text: batchReply(lines, replies), image: reply.image };
     if (lastCommand !== id) throw new Error(batchReply(lines, replies, 'Stopped: the user ran another command. Ask them what to do.'));
     const why = reply.stop ?? (tabSwitches !== switches ? 'another tab came forward' : '');
-    if (why) return { text: batchReply(lines, replies, `Stopped: ${why}, so the rest could land on a page you haven't seen.`, await agentReport()) };
+    if (why && !showsPage(lines[i + 1]!)) return { text: batchReply(lines, replies, `Stopped: ${why}, so the rest could land on a page you haven't seen.`, await agentReport()) };
   }
   throw new Error('unreachable: a batch has a last command');
 }
@@ -1338,6 +1342,7 @@ async function agentCommand(line: string, last: boolean): Promise<AgentReply> {
     if (await askResume(args)) return { text: 'The user pressed Resume. Report what the page shows now, not what you expect.' };
     throw new Error('The user pressed Stop. Stop and ask them what to do.');
   }
+  const docBefore = await topDocument(from);
   // #8: a tab this command's page opens (a link with target=_blank) is followed: the next commands go to it.
   let opened: number | undefined;
   const onCreated = (tab: Browser.tabs.Tab) => {
@@ -1409,7 +1414,9 @@ async function agentCommand(line: string, last: boolean): Promise<AgentReply> {
   if (followed) output = `${(output || 'ok').split('\n')[0]} — it opened a new tab, now the current one: ${after.url}. Send read to see it (text page 1 if it's a PDF).`;
   else if (bridge && agentRead !== null) bridge.page = agentRead;
   if (output) print(output);
-  const stop = followed ? 'it opened a new tab' : pagePath(now.url) !== pagePath(after.url) ? 'a new page loaded' : undefined;
+  // A new document, not a new URL: Maps' tabs change the URL by script (pushState) on the same page. Unknown: stops.
+  const docAfter = await topDocument(await targetTabId());
+  const stop = followed ? 'it opened a new tab' : !docBefore || docBefore !== docAfter ? 'a new page loaded' : undefined;
   return { text: output || 'ok', image, ...(stop && { stop }) };
 }
 
