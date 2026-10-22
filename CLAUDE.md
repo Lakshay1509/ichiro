@@ -3,10 +3,11 @@
 A Chrome extension that lets a coding agent (Claude Code, Codex…) read any web page and act on it, through one MCP tool: `browser`.
 
 - **Pure MCP** (developer, 2026-10-22): the extension has **no API key and no AI of its own**. The coding agent is the brain. The side panel shows its commands, asks you at stop-lines and new sites, and takes `/commands` from you (plain text is refused).
-- Work trackers: `harness/remember-and-repeat.md` (site tips, repeat, saved recipes: faster on sites it has seen; tick slices there, not in the docs it points to) and `harness/write.md` (draw and design on canvas sites). Do the first unticked slice of the one the developer names; if they haven't said, ask.
+- Work trackers: `harness/remember-and-repeat.md` (site tips, repeat, saved recipes: faster on sites it has seen; tick slices there, not in the docs it points to), `harness/write.md` (draw and design on canvas sites) and `harness/readable-log.md` (a side panel log in plain words). Do the first unticked slice of the one the developer names; if they haven't said, ask.
 - MCP design notes: `harness/mcp-context.md` (why replies say only what changed, batches).
 - **History, don't build from it:** the removed AI loop (`harness/plan.md`, `harness/why-it-loops.md`, `harness/long-tasks.md`, `harness/token-cost.md`, `phase-2/`) and Phase 1's typed-command plan (`phase-A.md` … `phase-F.md`, `tasks.md`, `results.md`).
 - Stack: WXT 0.21 + TypeScript 7, Chrome side panel (Chrome 153+: `chrome.publicSuffix` for Sites).
+- **Side panel UI:** read `DESIGN.md` (Notion style) before writing any. Use its calm base (off-white, dark text, one blue); skip the sticker colors, since the panel has no decoration.
 
 ## Commands
 

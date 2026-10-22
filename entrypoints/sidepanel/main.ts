@@ -1,4 +1,7 @@
 // Side panel: drive the browser by hand with /commands, and run a coding agent's commands (/mcp on). Output appears above; errors in red.
+// Inter, shipped inside the extension (no font request leaves it). Source: https://www.npmjs.com/package/@fontsource-variable/inter
+import '@fontsource-variable/inter/wght.css';
+import './style.css';
 import { checkGoto, oneLine, onSites, siteOn, siteToAdd, siteToOpen, wantsSite } from '@/lib/agent-prompt';
 import { fileName, RunDownloads } from '@/lib/downloads';
 import { captchaAll, clickTextIn, focusedFrame, frameFor, textFrame, labelFor, nameFor, numberFor, numbersAll, pickInFrames, readAll, sendToAllFrames, setOverlayOn, textAll } from '@/lib/frames';
@@ -9,6 +12,7 @@ import { back, follow, goto, pinTab, targetTabId } from '@/lib/navigation';
 import { pageReport } from '@/lib/page-diff';
 import { capText, textArgs } from '@/lib/page-text';
 import { parseCommand, restOf } from '@/lib/parse-command';
+import { shownLine, splitReply } from '@/lib/readable-log';
 import { pickArgs } from '@/lib/pick';
 import { readPdf } from '@/lib/pdf';
 import { downloadsSince, failed, filesLine, forItem, item1On, itemMiss, itemTarget, MAX_REPEAT_ITEMS, notAlikeError, parseRepeat, recipeFrom, recordLine, repeatAsk, repeatDone, stoppedAt } from '@/lib/repeat';
@@ -20,45 +24,39 @@ import { shrink, takeShot, type Shot } from '@/lib/screenshot';
 import { searchUrl } from '@/lib/search';
 import { sendToTab } from '@/lib/send-to-tab';
 import { settleAfter } from '@/lib/settle';
-import { deleteSite, deleteTip, listSites, pruneSites, saveTip, useSite } from '@/lib/site-store';
+import { listSites, pruneSites, saveTip, useSite } from '@/lib/site-store';
 import { recall, remember, type Remembered } from '@/lib/panel-memory';
 import { MAX_TIPS } from '@/lib/site-tips';
 import { isCheckoutUrl } from '@/lib/stop-lines';
+import { clearLog, closeStep, leaveStep, openStep, show, swap, type Item, type Step } from './log';
 
 // allow: run past a stop-line. Only the Allow once button passes true, never a typed command.
 // line: the whole command line as typed, for commands that take the rest of it as is (paste, type here).
 type Command = { help: string; run: (args: string[], allow: boolean, line?: string) => string | void | Promise<string | void> };
 
-const out = document.querySelector<HTMLElement>('#out')!;
 const form = document.querySelector('form')!;
 const input = form.querySelector('input')!;
 
 function print(text: string, className = '') {
-  const line = document.createElement('div');
-  line.textContent = text;
-  line.className = className;
-  out.append(line);
-  out.scrollTop = out.scrollHeight;
+  show({ kind: 'line', text, className });
 }
 
-// While you're at the bottom, the log stays there when the panel gets shorter or narrower (Chrome's debugging bar
-// coming in, a resize): else an ask's buttons slide below the visible area. Only the scroll changes, so no resize loop.
-// Source: https://developer.mozilla.org/en-US/docs/Web/API/ResizeObserver
-let atBottom = true;
-out.addEventListener('scroll', () => (atBottom = out.scrollHeight - out.scrollTop - out.clientHeight < 8));
-new ResizeObserver(() => {
-  if (atBottom) out.scrollTop = out.scrollHeight;
-}).observe(out);
+// The command box's bottom row ("MCP" + this word). starting: the local helper is connecting; on: it said ready.
+const mcpStatus = document.querySelector<HTMLElement>('#mcp')!;
+function showMcp(state: 'off' | 'starting' | 'on') {
+  mcpStatus.dataset.state = state;
+  mcpStatus.querySelector('.mcp-state')!.textContent = state;
+}
 
 // The open choice: a stop-line's Allow once / I'll do it, or a run's pause. Valid only until another command starts:
 // a new read renumbers elements, and an old Allow must never land on a different element.
-let pendingAsk: HTMLElement | null = null;
+let pendingAsk: Item | null = null;
 let lastCommand = 0; // counts started commands, so a late stop-line can tell another one ran meanwhile
 let onAskClosed: (() => void) | null = null; // a paused run waiting on the open ask: closing it any other way ends that run
 
 function closeAsk(note: string) {
   if (!pendingAsk) return;
-  pendingAsk.replaceWith(Object.assign(document.createElement('div'), { textContent: note }));
+  swap(pendingAsk, { kind: 'line', text: note });
   pendingAsk = null;
   onAskClosed?.();
   onAskClosed = null;
@@ -70,19 +68,21 @@ function closeAsk(note: string) {
 function askKeepGoing(message: string, keepLabel = 'Keep going', stopLabel = 'Stop'): Promise<boolean> {
   print(message, 'stop');
   return new Promise((resolve) => {
-    const keep = Object.assign(document.createElement('button'), { type: 'button', textContent: keepLabel });
-    const stop = Object.assign(document.createElement('button'), { type: 'button', textContent: stopLabel });
-    // A promise settles once: Keep going's true wins over the false that closeAsk sends right after.
-    keep.onclick = () => {
-      resolve(true);
-      closeAsk('Going on.');
-    };
-    stop.onclick = () => closeAsk(stopLabel === 'Stop' ? 'Stopped.' : `${stopLabel}.`);
     onAskClosed = () => resolve(false);
-    pendingAsk = Object.assign(document.createElement('div'), { className: 'ask' });
-    pendingAsk.append(keep, stop);
-    out.append(pendingAsk);
-    out.scrollTop = out.scrollHeight;
+    pendingAsk = show({
+      kind: 'ask',
+      buttons: [
+        {
+          label: keepLabel,
+          // A promise settles once: Keep going's true wins over the false that closeAsk sends right after.
+          onClick: () => {
+            resolve(true);
+            closeAsk('Going on.');
+          },
+        },
+        { label: stopLabel, onClick: () => closeAsk(stopLabel === 'Stop' ? 'Stopped.' : `${stopLabel}.`) },
+      ],
+    });
   });
 }
 
@@ -113,18 +113,20 @@ async function runAndPrint(run: Run, allow = false) {
 function askAllow(err: StopLine, run: Run, id: number) {
   print(err.message, 'stop');
   if (id !== lastCommand) return print('Another command ran meanwhile. Run this one again to choose.', 'error');
-  const allowOnce = Object.assign(document.createElement('button'), { type: 'button', textContent: 'Allow once' });
-  const mine = Object.assign(document.createElement('button'), { type: 'button', textContent: "I'll do it" });
-  allowOnce.onclick = () => {
-    closeAsk('Allowed once.');
-    void runAndPrint(run, true);
-  };
-  mine.onclick = () => closeAsk('Cancelled. This step is yours: do it by hand on the page.');
   // Focus stays in the command box, so a reflex Enter can never press Allow.
-  pendingAsk = Object.assign(document.createElement('div'), { className: 'ask' });
-  pendingAsk.append(allowOnce, mine);
-  out.append(pendingAsk);
-  out.scrollTop = out.scrollHeight;
+  pendingAsk = show({
+    kind: 'ask',
+    buttons: [
+      {
+        label: 'Allow once',
+        onClick: () => {
+          closeAsk('Allowed once.');
+          void runAndPrint(run, true);
+        },
+      },
+      { label: "I'll do it", onClick: () => closeAsk('Cancelled. This step is yours: do it by hand on the page.') },
+    ],
+  });
 }
 
 // Where the run's tab is (its URL and site name) and whether that's one of the run's Sites.
@@ -489,11 +491,13 @@ const save = (change: Partial<Remembered>) => remember(change).catch((err: Error
 function startBridge(sites: string[]): string {
   const port = browser.runtime.connectNative(HOST_NAME);
   bridge = { port, sites, refused: new Set(), page: null, tipped: new Set(), steps: [], solved: '' };
+  showMcp('starting');
   port.onMessage.addListener((m) => void onBridge(port, m));
   // Chrome's reason (not installed, host crashed) is in lastError.
   port.onDisconnect.addListener(() => {
     if (bridge?.port !== port) return; // you turned it off
     bridge = null;
+    showMcp('off');
     endAgentTurn();
     print(`MCP bridge off: ${browser.runtime.lastError?.message ?? 'the local helper stopped'}`, 'error');
   });
@@ -502,22 +506,28 @@ function startBridge(sites: string[]): string {
 }
 
 async function onBridge(port: Port, m: { type?: string; commands?: unknown; error?: unknown }) {
-  if (m.type === 'ready') return print('MCP bridge on: a coding agent can use the browser tool now.');
+  if (m.type === 'ready') return showMcp('on');
   if (m.type === 'error') return print(`MCP bridge: ${String(m.error)}`, 'error');
   if (m.type !== 'run') return;
   let reply: BridgeReply;
   // RP1: the call's step number goes first, so the agent can send repeat <step>; none when nothing was recorded.
   const before = bridge?.steps.length ?? 0;
   const numbered = () => ((bridge?.steps.length ?? 0) > before ? `Step ${bridge!.steps.length}.\n` : '');
+  // RL2: one block per call that passed checkCommands; agentBatch then always records its step, so the number holds.
+  let block: Step | null = null;
   try {
-    const { text, image } = await agentBatch(checkCommands(m.commands));
+    const lines = checkCommands(m.commands);
+    block = openStep(`Step ${before + 1}`, lines);
+    const { text, image } = await agentBatch(lines);
     const tips = await bridgeTips(); // first, so a long page can't cut them off
     reply = { type: 'output', text: (numbered() + (tips ? `${tips}\n\n${text}` : text)).slice(0, MAX_OUTPUT), ...(image && { image }) };
   } catch (err) {
     // Cut too: a stopped batch's error carries a page report, and the reply must fit the host's frame.
-    reply = { type: 'error', error: (numbered() + (err instanceof Error ? err.message : String(err))).slice(0, MAX_OUTPUT) };
-    print(reply.error, 'error');
+    const message = err instanceof Error ? err.message : String(err);
+    reply = { type: 'error', error: (numbered() + message).slice(0, MAX_OUTPUT) };
+    show({ kind: 'line', className: 'error', ...splitReply(message) }); // RL4: the block already says Step N
   }
+  if (block) closeStep(block, reply.type === 'error' ? 'Stopped' : 'Done');
   if (bridge?.port === port) port.postMessage(reply); // a port you closed meanwhile can't send
 }
 
@@ -652,7 +662,7 @@ type AgentReply = { text: string; image?: BridgeImage; stop?: string };
 
 // last: false for a batch's earlier commands, which don't read the page (agentBatch).
 async function agentRun(line: string, last = true): Promise<AgentReply> {
-  print(`agent> ${line}`);
+  print(shownLine(line, nameFor), 'cmd'); // RL1: named before it runs, while its number is still this read's
   // Like a command you type: closes an open ask first.
   closeAsk('Closed, nothing ran: the agent sent a command.');
   const id = ++lastCommand;
@@ -805,7 +815,7 @@ async function agentCommand(line: string, last: boolean): Promise<AgentReply> {
   // The read in output is of the old tab: the agent reads the new one next.
   if (followed) output = `${(output || 'ok').split('\n')[0]} — it opened a new tab, now the current one: ${after.url}. Send read to see it (text page 1 if it's a PDF).`;
   else if (bridge && agentRead !== null) bridge.page = agentRead;
-  if (output) print(output);
+  if (output) show({ kind: 'line', ...splitReply(output) }); // RL4: the result; the page behind a click
   // A new document, not a new URL: Maps' tabs change the URL by script (pushState) on the same page. Unknown: stops.
   const docAfter = await topDocument(await targetTabId());
   const stop = followed ? 'it opened a new tab' : !docBefore || docBefore !== docAfter ? 'a new page loaded' : undefined;
@@ -820,7 +830,7 @@ const commands: Record<string, Command> = {
   },
   clear: {
     help: 'empty the output',
-    run: () => out.replaceChildren(),
+    run: () => clearLog(),
   },
   echo: {
     help: 'print each argument on its own line',
@@ -984,25 +994,7 @@ const commands: Record<string, Command> = {
     run: async () => {
       const sites = await listSites();
       if (!sites.length) return 'No saved tips yet. The MCP agent can suggest one with tip; you choose Save or No.';
-      // A Delete button: once it worked, its line says what went. Tips go by their text (deleteTip), so an old list is safe.
-      const deleter = (line: HTMLElement, label: string, job: () => Promise<void>, gone: string) =>
-        Object.assign(document.createElement('button'), {
-          type: 'button',
-          textContent: label,
-          onclick: () => job().then(() => line.replaceChildren(gone), (err: Error) => print(`Not deleted: ${err.message}`, 'error')),
-        });
-      for (const { site, tips } of sites) {
-        const block = Object.assign(document.createElement('div'), { className: 'tips' });
-        const head = document.createElement('div');
-        head.append(`${site} (${tips.length} of ${MAX_TIPS} tips) `, deleter(block, 'Delete all', () => deleteSite(site), `${site}: all tips deleted.`));
-        block.append(head, ...tips.map((t) => {
-          const line = document.createElement('div');
-          line.append(`- ${t.text} `, deleter(line, 'Delete', () => deleteTip(site, t.text), `- deleted: ${t.text}`));
-          return line;
-        }));
-        out.append(block);
-      }
-      out.scrollTop = out.scrollHeight;
+      for (const { site, tips } of sites) show({ kind: 'tips', site, tips: tips.map((t) => t.text) });
       return `${sites.length} site(s) with saved tips.`;
     },
   },
@@ -1014,6 +1006,7 @@ const commands: Record<string, Command> = {
         if (!bridge) return 'MCP bridge is already off.';
         bridge.port.disconnect();
         bridge = null;
+        showMcp('off');
         return 'MCP bridge off.';
       }
       if (on !== 'on') throw new Error('Usage: mcp on [sites…] | mcp off');
@@ -1046,7 +1039,7 @@ pruneSites(Date.now()).catch((err: Error) => print(`Couldn't tidy saved site tip
 
 // Turns back on what you left on (panel-memory.ts): the MCP bridge with its saved Sites, and the overlay.
 recall().then(async ({ mcpOn, mcpSites, overlayOn }) => {
-  if (mcpOn && !bridge) print(`Remembered from last time: ${startBridge(mcpSites)}`);
+  if (mcpOn && !bridge) startBridge(mcpSites); // the line under the command box shows it, not the log
   // A tab with no page to draw on (chrome://, the Web Store) just stays as it is; the next /overlay on draws it.
   if (!overlayOn) return;
   setOverlayOn(true);
@@ -1058,7 +1051,8 @@ form.addEventListener('submit', async (event) => {
   const line = input.value.trim();
   input.value = '';
   if (!line) return;
-  print(`> ${line}`);
+  leaveStep();
+  print(`> ${line}`, 'mine');
   // Only /commands: a sentence never runs one by accident, and nothing else runs at all.
   if (!line.startsWith('/')) return print('Commands start with /. Type /help for the list.', 'error');
   closeAsk('Closed, nothing ran: you moved on.');

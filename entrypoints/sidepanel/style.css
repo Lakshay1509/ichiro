@@ -1,0 +1,236 @@
+/* Side panel look: DESIGN.md's calm base (warm off-white, dark ink, one blue), Inter for words, mono for commands. */
+
+:root {
+  color-scheme: light;
+  --canvas: #f6f5f4;
+  --surface: #ffffff;
+  --ink: rgba(0, 0, 0, 0.92);
+  --ink-2: #31302e;
+  --ink-muted: #615d59;
+  --placeholder: #78736e; /* ink-faint is too light for 4.5:1 */
+  --hairline: #e6e6e6;
+  --line: rgba(0, 0, 0, 0.12);
+  --hover: rgba(55, 53, 47, 0.06);
+  --blue: #0075de;
+  --blue-ink: #005bab; /* DESIGN.md primary-active: 4.5:1 on --blue-soft, which #0075de misses */
+  --blue-soft: rgba(0, 117, 222, 0.08);
+  --danger: #d1242f;
+  --danger-soft: #fdeeee;
+  --warn: #8a4b00;
+  --warn-soft: #fdf5e8;
+  --warn-line: #f0dcb8;
+  --sans: 'Inter Variable', system-ui, 'Segoe UI', sans-serif;
+  --mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  --gap: 8px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--canvas);
+  color: var(--ink-2);
+  font: 13px/1.5 var(--sans);
+  font-feature-settings: 'cv11'; /* Inter's single-storey a: calmer at small sizes */
+}
+
+/* The log */
+
+#out {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 16px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.18) transparent;
+}
+
+#out:empty::before {
+  content: 'Type /mcp on to let a coding agent use this browser, or /help for the list.';
+  margin: auto;
+  max-width: 250px;
+  text-align: center;
+  color: var(--ink-muted);
+}
+/* MCP on, nothing yet: a Newton's cradle loop (art/cradle/build.mjs) above the words. 2x pixels shown at 200 × 122. */
+body:has(#mcp:not([data-state='off'])) #out:empty::before {
+  content: "When a coding agent uses the browser, its steps show here.";
+  box-sizing: border-box;
+  width: 280px;
+  max-width: 100%;
+  padding: 138px 15px 0;
+  background: url(/cradle.gif) center top / 200px 122px no-repeat;
+}
+@media (prefers-reduced-motion: reduce) {
+  body:has(#mcp:not([data-state='off'])) #out:empty::before { background-image: url(/cradle.png); }
+}
+
+.error { color: var(--danger); font-weight: 500; }
+
+/* Your own commands, as typed. Not a chat bubble: the panel takes /commands, not messages. */
+.mine { color: var(--ink); font: 12px/1.5 var(--mono); }
+
+/* Needs you: a stop-line or a pause. Its buttons (.ask, right after) join it into one card. */
+.stop {
+  padding: 10px 12px;
+  border: 1px solid var(--warn-line);
+  border-radius: 8px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-weight: 500;
+}
+.stop:has(+ .ask) { border-bottom: 0; border-radius: 8px 8px 0 0; padding-bottom: 2px; }
+.stop + .ask {
+  margin-top: calc(-1 * var(--gap));
+  padding: 8px 12px 12px;
+  border: 1px solid var(--warn-line);
+  border-top: 0;
+  border-radius: 0 0 8px 8px;
+  background: var(--warn-soft);
+}
+
+/* Both choices look the same on purpose: the panel never nudges you toward Allow. */
+.ask { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* One agent call */
+
+.step, .tips {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px 8px;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink-muted);
+}
+
+.step-head { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; }
+.step-title { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* One status mark: the word on a tint of its colour. */
+.status { padding: 1px 8px; border-radius: 9999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.status.running { color: var(--blue-ink); background: var(--blue-soft); }
+.status.waiting { color: var(--warn); background: var(--warn-soft); }
+.status.stopped { color: var(--danger); background: var(--danger-soft); }
+.status.done { color: var(--ink-muted); background: rgba(55, 53, 47, 0.06); }
+
+/* The agent's commands, named; the plain lines under each are its results. */
+.cmd { margin-top: 4px; color: var(--ink); font: 12px/1.5 var(--mono); }
+
+/* Show / hide: the agent's full reply and the commands as sent */
+
+summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  margin-left: -4px;
+  padding: 2px 6px 2px 4px;
+  border-radius: 4px;
+  color: var(--ink-muted);
+  font-size: 12px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+summary::-webkit-details-marker { display: none; }
+summary::before {
+  content: '';
+  border-left: 4px solid currentColor;
+  border-top: 3.5px solid transparent;
+  border-bottom: 3.5px solid transparent;
+}
+details[open] > summary::before { transform: rotate(90deg); }
+summary:hover { color: var(--ink); background: var(--hover); }
+
+.well {
+  max-height: 240px;
+  overflow: auto;
+  margin: 4px 0 4px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--canvas);
+  color: var(--ink-2);
+  font: 12px/1.5 var(--mono);
+  scrollbar-width: thin;
+}
+
+/* Saved tips */
+
+.tips-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-bottom: 6px; }
+.tips-site { color: var(--ink); font-weight: 600; }
+.tips ul { margin: 0; padding: 0; list-style: none; }
+.tips li { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; border-top: 1px solid var(--hairline); color: var(--ink-2); }
+.tips li > span { flex: 1; }
+.tips li.gone { color: var(--ink-muted); }
+
+/* Buttons: DESIGN.md's utility button */
+
+button {
+  flex: none;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font: 500 12.5px/1 var(--sans);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s, transform 0.1s;
+}
+button:hover { background: #f1f0ef; }
+button:active { transform: scale(0.97); }
+button.small { height: 26px; padding: 0 10px; font-size: 12px; }
+button.danger { color: var(--danger); }
+button.danger:hover { background: var(--danger-soft); border-color: rgba(209, 36, 47, 0.3); }
+
+:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+/* The command box */
+
+/* The command box, built like a composer: a roomy field for what you type, then a quieter bottom row for
+   MCP on/off, set apart by space and size rather than a line. */
+form {
+  margin: 8px 16px 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  transition: border-color 0.15s;
+}
+form:focus-within { border-color: var(--blue); }
+
+input {
+  display: block;
+  width: 100%;
+  padding: 14px 16px 18px;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: 14px/20px var(--sans);
+}
+input::placeholder { color: var(--placeholder); }
+input:focus-visible { outline: none; } /* the card's blue border shows focus, not a second ring */
+
+/* MCP on or off, at the right like a setting: the name in ink, its state quieter, the icon blue when on. */
+#mcp { display: flex; justify-content: flex-end; align-items: center; gap: 6px; padding: 0 14px 12px; color: var(--ink-muted); font-size: 12.5px; line-height: 16px; }
+#mcp svg { width: 14px; height: 14px; flex: none; }
+.mcp-name { color: var(--ink-2); font-weight: 500; }
+#mcp[data-state='on'] svg { color: var(--blue-ink); }
+#mcp[data-state='off'] .plug, #mcp:not([data-state='off']) .unplug { display: none; }
+
+/* Motion: only what says something (a new line arrives, a section opens). */
+
+@media (prefers-reduced-motion: no-preference) {
+  #out > *, .step > * { animation: arrive 0.18s ease-out; }
+  summary::before { transition: transform 0.15s; }
+}
+@keyframes arrive { from { opacity: 0; transform: translateY(3px); } }
