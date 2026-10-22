@@ -2,22 +2,30 @@
 // Known limit: these events have isTrusted = false. A few sites ignore them; harness Phase 7 adds real input.
 import {
   clickable, clickPoint, deepContains, deepElementFromPoint, findInteractive, getElement, getElements, isSecret, name, NO_VALUE, panelOnTop,
-  parentOf, role, roomOf, scrollLine, shadowRootOf, sideLine, sideways, suggests, visibleCenter,
+  parentOf, readScroll, role, roomOf, scrollLine, shadowRootOf, sideLine, sideways, suggests, visibleCenter,
 } from './reader.ts';
 import { HandOver, StopLine } from './messages.ts';
 import { chooseText, NO_REACTION, reaction, readText, textTargets } from './page-text.ts';
 import { waitForQuiet } from './settle.ts';
 import { checkPersonal } from './personal.ts';
 import { checkStopLine, clickTargets, enterTargets, stopWord } from './stop-lines.ts';
-import { keyRefusal, keyStop, parseKey } from './keys.ts';
+import { browserKey, keyRefusal, keyStop, parseKey } from './keys.ts';
 import { sameLayout, toViewport, type Point } from './real-input.ts';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Scrolls el into view and finds what's under its center. Throws if something covers it. what names it in errors.
 // Returns the event init for a mouse at that point; events fire at `hit`, the innermost element there.
-function aimAt(el: Element, what: string) {
+async function aimAt(el: Element, what: string) {
   el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });
+  // Still off screen: it sits in a bar the page hides as you scroll (a header that slides away), which scrolling to it
+  // can't reach. Seen live: click after find scrolled away. So back where the latest read saw it on screen, and a
+  // moment for the page to show it again. Source: https://developer.mozilla.org/en-US/docs/Web/API/Window/scrollTo
+  // shortcut: only the window's scroll is put back, not an inner box's; upgrade if a live miss is in an app that scrolls a box.
+  if (!visibleCenter(el)) {
+    scrollTo({ ...readScroll, behavior: 'instant' });
+    await waitForQuiet(1500);
+  }
 
   // A wrapped link's center can miss it; clickPoint tries each line. Fall back to the center to name what covers it.
   const point = clickPoint(el) ?? visibleCenter(el);
@@ -35,8 +43,8 @@ function aimAt(el: Element, what: string) {
 }
 
 // Opens menus that appear on hover via JavaScript. Menus made only with CSS :hover won't open (fake events can't trigger it).
-export function hover(n: number): string {
-  const { hit, mouse, pointer } = aimAt(getElement(n), `Element [${n}]`);
+export async function hover(n: number): Promise<string> {
+  const { hit, mouse, pointer } = await aimAt(getElement(n), `Element [${n}]`);
   hit.dispatchEvent(new PointerEvent('pointerover', pointer));
   hit.dispatchEvent(new PointerEvent('pointerenter', pointer));
   hit.dispatchEvent(new MouseEvent('mouseover', mouse));
@@ -81,8 +89,8 @@ export async function clickText(want: string, allow = false): Promise<string> {
 
 // Where a click on el lands, after every check a click needs: on screen, not covered, stop-lines (unless allowed).
 // Shared by our script click and I1's real one.
-function prepareClick(el: Element, what: string, allow: boolean) {
-  const aimed = aimAt(el, what);
+async function prepareClick(el: Element, what: string, allow: boolean) {
+  const aimed = await aimAt(el, what);
   if (!allow) checkStopLine(JSON.stringify(name(el)), clickTargets(el, aimed.hit));
   return aimed;
 }
@@ -172,10 +180,10 @@ export function endGuard(): string {
 // I1: everything a click needs except the click itself: the checked point, in the top page's viewport (what the
 // protocol wants), with the guard on. A hover needs only the point. In a frame: null, and the panel clicks there with
 // script events (frame offsets aren't mapped to the top page).
-export function aim(target: { n?: number; text?: string }, allow = false, hover = false): { x: number; y: number; note: string } | null {
+export async function aim(target: { n?: number; text?: string }, allow = false, hover = false): Promise<{ x: number; y: number; note: string } | null> {
   if (window !== window.top) return null;
   const t = target.text !== undefined ? textTarget(target.text, allow) : { el: getElement(target.n!), what: `Element [${target.n}]`, note: '' };
-  const { mouse } = hover ? aimAt(t.el, t.what) : prepareClick(t.el, t.what, allow);
+  const { mouse } = await (hover ? aimAt(t.el, t.what) : prepareClick(t.el, t.what, allow));
   if (!hover) guardClick(allow, t.el);
   return { x: mouse.clientX, y: mouse.clientY, note: t.note };
 }
@@ -258,7 +266,9 @@ export function aimKey(input: string, allow = false): string | null {
     if (k.key === ' ') checkStopLine(`${k.name} on ${where}`, [focused]);
   }
   if (k.name === 'Escape' && keyTarget('Escape', focused, isField(focused) ? null : panelOnTop()) !== focused) return null;
-  return where;
+  // The panel replies "ok — pressed <key> on <where>", so a browser shortcut's note rides on where.
+  const browser = browserKey(k);
+  return browser ? `${where} — but ${browser}` : where;
 }
 
 // WR2: the checks before the panel types or pastes text where focus is (in the frame focus is in). A secret field is
@@ -300,7 +310,7 @@ function formButton(hit: Element): HTMLButtonElement | HTMLInputElement | null {
 }
 
 async function clickAt(el: Element, what: string, allow: boolean): Promise<string> {
-  const { hit, mouse, pointer } = prepareClick(el, what, allow);
+  const { hit, mouse, pointer } = await prepareClick(el, what, allow);
   const before = location.href;
   hit.dispatchEvent(new PointerEvent('pointerover', pointer));
   hit.dispatchEvent(new PointerEvent('pointerenter', pointer));
@@ -414,6 +424,7 @@ export async function typeText(n: number, text: string, enter: boolean, slow: bo
   moveFocus(el as HTMLElement);
 
   // Clear what's there. In an editor, selecting everything makes the first insert replace it.
+  const was = field?.value ?? '';
   if (field) setValue(field, '');
   else {
     getSelection()?.selectAllChildren(el);
@@ -451,7 +462,7 @@ export async function typeText(n: number, text: string, enter: boolean, slow: bo
     if (!suggests((a) => el.getAttribute(a))) moveFocus(null);
     // The page's reaction goes first: the field's own text proves nothing, since we put it there; the site changing it
     // does. Then the value now, which the site may have reformatted on leaving.
-    const fieldChange = () => (typed === undefined ? undefined : { typed, now: value() });
+    const fieldChange = () => (typed === undefined ? undefined : { typed, now: value(), was });
     notes.splice(1, 1, await reactionTo(before, screen, fieldChange), fieldNow());
   }
   return notes.join(' — ');
@@ -459,7 +470,7 @@ export async function typeText(n: number, text: string, enter: boolean, slow: bo
 
 // F4b: what changed on screen (and in the typed field) after typing. A site that asks its server first (a result
 // count) can sit quiet for a moment, so "no reaction" gets one more wait before it's said.
-async function reactionTo(before: string[], screen: () => string[], field: () => { typed: string; now: string } | undefined): Promise<string> {
+async function reactionTo(before: string[], screen: () => string[], field: () => { typed: string; now: string; was: string } | undefined): Promise<string> {
   await waitForQuiet(1500);
   const first = reaction(before, screen(), field());
   if (first !== NO_REACTION) return first;

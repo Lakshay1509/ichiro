@@ -76,11 +76,13 @@ report(s1, slides(`${deck}#slide=id.p1`, '[3] button "Bold" pressed', '[4] textb
 report(s1, slides(`${deck}?slide=2#slide=id.p2`, '[3] button "Bold"', '[4] textbox "Title" value "Hi"', '[5] link "Help"'),
   [HEAD, `URL: ${deck}?slide=2#slide=id.p2`, '[4] textbox "Title" value "Hi"', 'Gone: 1 text line']);
 
-// Gone elements: a count and their numbers. A header line with no new value is shown as gone; one with a new value isn't.
+// Gone elements: a count and their numbers. A header line with no new value is shown as gone by its name only: its old
+// value would read as still there (live, Kroger: "Gone: [332]–[334]" and "Panel on top … its elements: [332]–[334]").
+// One with a new value isn't gone.
 const panel = slides(`${deck}#slide=id.p1`, '[3] button "Bold"', '[4] textbox "Title" value ""', '"Click to add text"', '[5] link "Help"', '[6] button "Close"', '[7] button "OK"', '[8] button "Cancel"')
   .replace('Scroll: 0%', 'Scroll: 0%\nFocused: [7]\nPanel on top: "Share" ·its elements: [6]–[8]');
 report(panel, s1.replace('Scroll: 0%', 'Scroll: 10%'),
-  [HEAD, 'Scroll: 10%', 'Gone: 3 elements [6]–[8]; Focused: [7]; Panel on top: "Share" ·its elements: [6]–[8]']);
+  [HEAD, 'Scroll: 10%', 'Gone: 3 elements [6]–[8]; Focused; Panel on top']);
 
 // A new page (another path): the whole list, even with the same elements.
 const other = s1.replace(deck, 'https://docs.google.com/presentation/d/xyz/edit');

@@ -1,6 +1,6 @@
 // Checks WR1's keys: names and shortcuts become the right real key events, and the rules refuse or stop the risky
 // ones (paste, typing into fields or frames, save/print/open, ctrl+Enter). Run: npm test
-import { keyEvents, keyRefusal, keyStop, parseKey, scriptKey } from './keys.ts';
+import { browserKey, keyEvents, keyRefusal, keyStop, parseKey, scriptKey } from './keys.ts';
 
 const fail = (what: string): never => {
   throw new Error(what);
@@ -53,3 +53,8 @@ for (const s of ['ctrl+z', 'ctrl+d', 'shift+Enter', 'Enter', 's']) if (keyStop(p
 // or any other key, there's no script path: real only.
 for (const s of ['esc', 'Enter', 'Tab', 'Backspace', 'up', 'down', 'left', 'right']) if (!scriptKey(parseKey(s))) fail(`${s} should have a script fallback`);
 for (const s of ['shift+Tab', 'shift+Down', 'ctrl+End', 'Delete', 'Home', 'r']) if (scriptKey(parseKey(s))) fail(`${s} should be real only`);
+
+// Chrome's own zoom keys: still sent (a drawing app may zoom itself), but the reply says Chrome itself can't zoom from
+// them. Seen live: ctrl+= said "ok" and nothing zoomed. Others aren't zoom: ctrl+alt+= is the page's, = alone types.
+for (const s of ['ctrl+=', 'ctrl+shift+=', 'ctrl+-', 'ctrl+0', 'meta+=', 'meta+-', 'meta+0']) if (!browserKey(parseKey(s))?.includes('zoom')) fail(`${s} should say it's Chrome's zoom`);
+for (const s of ['=', '-', '0', 'ctrl+alt+=', 'shift+=', 'ctrl+z', 'ctrl+1']) if (browserKey(parseKey(s))) fail(`${s} is not a browser shortcut`);
