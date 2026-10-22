@@ -52,6 +52,8 @@ export function inGoal(value: string, goal: string): boolean {
 // Throws a stop-line (Allow once / I'll do it) if el takes personal data. Runs in the content script.
 export function checkPersonal(el: Element, what: string) {
   const labels = [name(el), el.getAttribute('name'), el.id].join(' ');
-  const kind = personalKind(el.getAttribute('autocomplete') ?? '', el instanceof HTMLInputElement ? el.type : '', labels, role(el) === 'searchbox');
+  // A search box, or any field in a search landmark: Kroger's "City, state, country" combobox sits in role=search.
+  const search = role(el) === 'searchbox' || el.closest('[role=search], search') !== null;
+  const kind = personalKind(el.getAttribute('autocomplete') ?? '', el instanceof HTMLInputElement ? el.type : '', labels, search);
   if (kind) throw new StopLine(`Stop-line: ${what} ${JSON.stringify(name(el))} (personal data: ${kind}). Needs your ok.`);
 }

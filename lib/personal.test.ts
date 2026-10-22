@@ -29,11 +29,14 @@ const cases: [string, string, string, boolean, string | null][] = [
   ['', 'text', 'Date of birth', false, 'birthday'],
   ['', 'text', 'Street address', false, 'address'],
   ['', 'text', 'ZIP / Postal code', false, 'address'],
+  ['', 'text', 'City', false, 'address'], // a checkout city box
+  ['address-level2', 'text', 'City', true, 'address'], // a search box that says it takes your city still asks
   ['', 'text', 'Company name', false, 'name'], // asks more than needed: the safe side
   // Not personal
   ['', 'text', 'Username', false, null],
   ['', 'search', 'Search by name', true, null],
   ['off', 'text', 'Search Wikipedia search', true, null],
+  ['', 'text', 'City, state, country  location', true, null], // Kroger's job-search location combobox (in role=search)
   ['', 'text', 'What needs to be done?', false, null], // TodoMVC
   ['', 'text', 'Where are you going?', false, null], // Booking.com
   ['', 'text', 'Hostname', false, null],
