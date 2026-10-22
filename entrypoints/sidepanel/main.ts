@@ -1135,6 +1135,15 @@ const askYou = (keep: string, stop: string) => async (why: string): Promise<bool
 };
 const bridgeAsks = { allow: askYou('Allow once', "I'll do it"), resume: askYou('Resume', 'Stop') };
 
+// 4.2 (captchaHold): true once you solved a CAPTCHA on url and pressed Resume; false if none asked. Stop ends the call.
+async function bridgeCaptcha(name: string, url: string): Promise<boolean> {
+  const held = await captchaHold(name, url, captchaAll, bridge?.solved ?? '');
+  if (!held) return false;
+  if (!(await bridgeAsks.resume(held.ask))) throw new Error('Stopped: the user pressed Stop at a CAPTCHA. Ask them what to do.');
+  if (bridge) bridge.solved = held.seen;
+  return true;
+}
+
 // F10: the saved tips for the site the agent's tab is on, with its first reply there this session (tipsOnce); useSite
 // marks the site used. Not a guard: unreadable tips mean a reply without them, as before F10.
 async function bridgeTips(): Promise<string> {
@@ -1321,10 +1330,7 @@ async function agentCommand(line: string, last: boolean): Promise<AgentReply> {
     await bridgeSite(site, now.url);
   }
   // 4.2 (captchaHold). After the Sites check, so a site just added is checked too. "Refused" keeps it out of repeat's history.
-  const held = await captchaHold(name, now.url, captchaAll, bridge?.solved ?? '');
-  if (held) {
-    if (!(await bridgeAsks.resume(held.ask))) throw new Error('Stopped: the user pressed Stop at a CAPTCHA. Ask them what to do.');
-    if (bridge) bridge.solved = held.seen;
+  if (await bridgeCaptcha(name, now.url)) {
     return { text: "Refused: a CAPTCHA was on the page; the user solved it and pressed Resume. Your command didn't run: read the page, then send it again if it's still needed.", stop: 'the user solved a CAPTCHA' };
   }
   if (name === 'repeat') return { text: await bridgeRepeat(args) };
@@ -1394,6 +1400,11 @@ async function agentCommand(line: string, last: boolean): Promise<AgentReply> {
   // In both returns below the read isn't sent, so bridge.page stays the last list the agent got.
   const after = await where(sites);
   if (!after.onPlan) return { text: `Done, but ${followed ? 'it opened a new tab' : 'the tab is now'} on ${after.site}, off the bridge's Sites, so its content is hidden. Use back, or send read to ask the user to add it.`, stop: "the tab left the bridge's Sites" };
+  // 4.2: a CAPTCHA this command brought (goto onto a Turnstile page) waits for you now, not at the next call. The read
+  // in output is of the page before you solved it, so it isn't sent.
+  if (await bridgeCaptcha('', after.url)) {
+    return { text: `${(output || 'ok').split('\n')[0]} — then a CAPTCHA showed; the user solved it and pressed Resume. Read the page to see it now.`, stop: 'the user solved a CAPTCHA' };
+  }
   // The read in output is of the old tab: the agent reads the new one next.
   if (followed) output = `${(output || 'ok').split('\n')[0]} — it opened a new tab, now the current one: ${after.url}. Send read to see it (text page 1 if it's a PDF).`;
   else if (bridge && agentRead !== null) bridge.page = agentRead;

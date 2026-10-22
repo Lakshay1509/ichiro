@@ -209,6 +209,7 @@ for (const name of ['click', 'read', 'look', 'type', 'key', 'pause', 'repeat']) 
 looked = 0;
 for (const name of ['goto', 'back']) if (await captchaHold(name, robo, onScreen('reCAPTCHA'), '')) fail(`${name} leaves the page, so it should go on`);
 if (looked) fail('goto and back should not even look for a CAPTCHA');
+if (!(await captchaHold('', robo, onScreen('Turnstile'), ''))?.ask.includes('(Turnstile)')) fail('after goto lands on a CAPTCHA, it should ask in that call');
 if (await captchaHold('click', robo, onScreen(''), '')) fail('no CAPTCHA: nothing waits');
 if (await captchaHold('click', robo, onScreen('reCAPTCHA'), `${robo} reCAPTCHA`)) fail('a solved CAPTCHA still on screen should not ask again');
 if ((await captchaHold('click', robo, onScreen('hCaptcha'), `${robo} reCAPTCHA`))?.seen !== `${robo} hCaptcha`) fail('another kind on the same page should ask');

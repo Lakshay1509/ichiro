@@ -154,8 +154,9 @@ export async function allowOnce(attempt: (allow: boolean) => Promise<string | vo
 
 // 4.2 for the bridge, as in a goal run: a CAPTCHA is yours. While one is shown, every command but goto and back (they
 // leave the page, so they don't look) waits until you solve it and press Resume; then it doesn't run, as the page
-// changed under it. shown: the kind on screen, '' none (captchaAll). solved: the seen of the one you last resumed from,
-// since a solved CAPTCHA often stays on screen. null: the command goes on.
+// changed under it. name '': after a command, so the page goto or back landed on is checked too. shown: the kind on
+// screen, '' none (captchaAll). solved: the seen of the one you last resumed from, since a solved CAPTCHA often stays on
+// screen. null: the command goes on.
 export async function captchaHold(name: string, url: string, shown: () => Promise<string>, solved: string): Promise<{ ask: string; seen: string } | null> {
   if (name === 'goto' || name === 'back') return null;
   const kind = await shown();
