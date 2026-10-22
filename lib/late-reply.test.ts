@@ -28,6 +28,7 @@ if (fast.note !== '' || text(fast.reply) !== 'ok') fail('a fast reply comes back
 // No reply in time: the call answers before the agent's limit, with no reply.
 const first = await call(['click 4']);
 if (first.reply || !/send read/.test(first.note)) fail(`a slow reply says to send read: ${first.note}`);
+if (!/Browser Agent icon/.test(first.note)) fail(`a slow reply says where a closed panel's ask is (BG6): ${first.note}`);
 
 // Still no reply: the next call waits on the old run and doesn't run its own commands.
 const second = await call(['read']);

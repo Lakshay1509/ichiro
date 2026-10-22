@@ -14,10 +14,24 @@ let onAskClosed: (() => void) | null = null; // a paused run waiting on the open
 // A command starts, yours or the agent's: an ask from before it is stale from now on.
 export const nextCommand = () => ++lastCommand;
 
+// BG6: the toolbar icon says an ask is waiting, so one isn't missed with the panel closed (clicking the icon opens the
+// panel). Only this fixed word, never page or agent text.
+// Source: https://developer.chrome.com/docs/extensions/reference/api/action#method-setBadgeText
+const badge = (text: '' | 'Ask') => void browser.action.setBadgeText({ text }).catch(console.error);
+
+// Worker start: no ask yet, so no badge (one left by a stopped worker has nothing behind it). The color is the log's
+// "Waiting for you" (style.css --warn).
+export function startBadge() {
+  badge('');
+  browser.action.setBadgeBackgroundColor({ color: '#8a4b00' }).catch(console.error);
+  browser.action.setBadgeTextColor({ color: '#ffffff' }).catch(console.error);
+}
+
 export function closeAsk(note: string) {
   if (!pendingAsk) return;
   swap(pendingAsk, { kind: 'line', text: note });
   pendingAsk = null;
+  badge('');
   onAskClosed?.();
   onAskClosed = null;
 }
@@ -26,6 +40,7 @@ export function closeAsk(note: string) {
 function openAsk(buttons: { label: string; onClick: () => void }[]) {
   const { id } = show({ kind: 'ask', buttons: buttons.map((b) => b.label) });
   pendingAsk = { id, buttons: buttons.map((b) => b.onClick) };
+  badge('Ask');
 }
 
 // A button pressed in a panel. A press for an ask that's closed or replaced does nothing (pressed).

@@ -5,7 +5,7 @@ import { sendToAllFrames, setOverlayOn } from '@/lib/frames';
 import { recall } from '@/lib/panel-memory';
 import { isFromPanel, isPanelSender, PANEL_PORT } from '@/lib/panel-port';
 import { pruneSites } from '@/lib/site-store';
-import { closeAsk, nextCommand, pressAsk } from './asks';
+import { closeAsk, nextCommand, pressAsk, startBadge } from './asks';
 import { bridge, endAgentTurn, runEnded, startBridge, stopBridge } from './bridge';
 import { commands, typed } from './commands';
 import { watchTabSwitches } from './input';
@@ -13,6 +13,7 @@ import { addPanel, alwaysOn, print, removePanel, showAlwaysOn } from './panels';
 
 export default defineBackground(() => {
   browser.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(console.error);
+  startBadge();
   watchTabSwitches();
   browser.runtime.onConnect.addListener(onConnect);
   browser.runtime.onStartup.addListener(chromeStarted);
