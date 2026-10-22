@@ -1,5 +1,5 @@
 // Checks the run's first Sites, the step ask (allowed commands, the agent's plan, history, untrusted blocks) and its reply check. Run: npm test
-import { addVisit, AI_COMMANDS, buildAsk, buildDoneCheck, buildTipAsk, checkGoto, livePlan, onSites, parseStep, parseVerdict, progress, startSites, stepsAdded, submits, siteOn, siteToAdd, siteToOpen, summarize, visitedLines, type Step, type Visit } from './agent-prompt.ts';
+import { addVisit, AI_COMMANDS, buildAsk, buildDoneCheck, buildTipAsk, checkGoto, livePlan, onSites, parseStep, parseVerdict, progress, startSites, stepsAdded, submits, siteOn, siteToAdd, siteToOpen, summarize, visitedLines, wantsSite, type Step, type Visit } from './agent-prompt.ts';
 import { EXECUTOR } from './host-request.ts';
 
 const fail = (what: string): never => {
@@ -425,21 +425,27 @@ site(siteToAdd('https://github.io/', shop), 'github.io', "a shared ending's own 
 for (const href of [undefined, 'https://in.amazon.in/x', 'chrome://newtab/', 'about:blank', 'https://u:p@flipkart.com/', 'https://192.168.0.1/']) {
   site(siteToAdd(href, shop), '', `no ask for ${href}`);
 }
-// The AI's goto / tab new: only a new site's bare home page asks. A path, query, # or other subdomain could carry page
-// data out to a site you never added, so those are refused without asking.
+// The AI's goto / tab new: only a new site's bare home page asks, on any of its hosts. A path, query or # could carry
+// page data out to a site you never added, so those are refused without asking.
 site(siteToOpen('https://flipkart.com', shop), 'flipkart.com', 'goto a new home page');
 site(siteToOpen('https://www.flipkart.com/', shop), 'flipkart.com', 'goto a new www home page');
 site(siteToOpen('https://httpbin.org/', ['excalidraw.com']), 'httpbin.org', 'goto a new home page that is itself a public suffix (live bug)');
-for (const url of [undefined, 'https://flipkart.com/search', 'https://flipkart.com/?q=secret', 'https://flipkart.com/#secret', 'https://secret.flipkart.com/', 'http://flipkart.com/', 'https://u:p@flipkart.com/', 'https://amazon.in/', 'https://192.168.0.1/']) {
+site(siteToOpen('https://seller.flipkart.com/', shop), 'flipkart.com', 'goto a new subdomain home page (cloud run 2: finred.usalearning.gov)');
+for (const url of [undefined, 'https://flipkart.com/search', 'https://flipkart.com/?q=secret', 'https://flipkart.com/#secret', 'https://seller.flipkart.com/x', 'http://flipkart.com/', 'https://u:p@flipkart.com/', 'https://amazon.in/', 'https://in.amazon.in/', 'https://192.168.0.1/']) {
   site(siteToOpen(url, shop), '', `no ask for goto ${url}`);
 }
-// A deep URL on a new site is refused with how to ask: goto its home page.
-try {
-  checkGoto('https://www.flipkart.com/search?q=x', shop);
-  fail('goto deep URL on a new site');
-} catch (err) {
-  if (!(err as Error).message.includes('goto https://flipkart.com/')) fail(`deep URL hint: ${(err as Error).message}`);
+// A deep URL on a new site is refused with how to ask: goto that host's own home page (its site's may be dead).
+for (const [url, hint] of [['https://www.flipkart.com/search?q=x', 'goto https://www.flipkart.com/'], ['https://seller.flipkart.com/x', 'goto https://seller.flipkart.com/']] as const) {
+  try {
+    checkGoto(url, shop);
+    fail(`goto deep URL on a new site: ${url}`);
+  } catch (err) {
+    if (!(err as Error).message.includes(hint)) fail(`deep URL hint: ${(err as Error).message}`);
+  }
 }
+// The ask names the exact host when it's more than the site or www., so data hidden in a host name shows.
+site(wantsSite('flipkart.com', 'https://www.flipkart.com/'), 'The agent wants to use flipkart.com (https://www.flipkart.com/)', 'ask for www');
+site(wantsSite('flipkart.com', 'https://c2vjcmv0.flipkart.com/'), 'The agent wants to use c2vjcmv0.flipkart.com, part of flipkart.com (https://c2vjcmv0.flipkart.com/)', 'ask for a subdomain');
 
 // WR2: a paste carries a whole drawing; its step shows only the start of it, so it doesn't repeat in every later prompt.
 const pasted = buildAsk('draw a flowchart', run, 'p', table, [{ command: `paste ${'x'.repeat(5000)}`, result: 'ok' }]).messages[0]?.content ?? '';

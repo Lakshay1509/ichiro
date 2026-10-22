@@ -169,7 +169,7 @@ export function checkGoto(input: string | undefined, sites: string[]): string {
   if (url.username || url.password) throw new Error('goto refused: no user:password@ part allowed in URLs');
   if (!onSites(url.href, sites)) {
     const site = siteOf(url.hostname);
-    const how = site ? ` To use ${site}, goto its home page (goto https://${site}/): the user is asked whether to add it.` : '';
+    const how = site ? ` To use ${site}, goto this host's home page (goto https://${url.hostname}/): the user is asked whether to add ${site}.` : '';
     throw new Error(`goto refused: ${url.hostname} is not one of the run's Sites (${sites.join(', ') || 'none yet'}).${how}`);
   }
   return url.href;
@@ -183,13 +183,21 @@ export function siteToAdd(href: string | undefined, sites: string[]): string {
   return siteOf(url.hostname);
 }
 
-// S2: the AI's goto / tab new to a new site asks you first, but only for its bare home page (https://site/ or www.):
-// a path, query, # or other subdomain could carry page data out to a site you never added. '' = no ask.
+// S2: the AI's goto / tab new to a new site asks you first, but only for a bare home page (https://host/): a path,
+// query or # could carry page data out to a site you never added. A host name can too, so the ask names it in full
+// (wantsSite). Any host: finred.usalearning.gov's site has no working home page of its own. '' = no ask.
 export function siteToOpen(input: string | undefined, sites: string[]): string {
   const url = URL.parse(input ?? '');
   if (!url || url.protocol !== 'https:' || url.pathname !== '/' || url.search || url.hash) return '';
-  const site = siteToAdd(url.href, sites);
-  return site && (url.hostname === site || url.hostname === `www.${site}`) ? site : '';
+  return siteToAdd(url.href, sites);
+}
+
+// S2's ask starts with the exact host when it's more than the site or www., so data hidden in a host name is in plain
+// sight: "The agent wants to use finred.usalearning.gov, part of usalearning.gov (https://finred.usalearning.gov/)".
+export function wantsSite(site: string, url: string): string {
+  const host = URL.parse(url)?.hostname ?? '';
+  const named = host && host !== site && host !== `www.${site}` ? `${host}, part of ${site}` : site;
+  return `The agent wants to use ${named} (${url.slice(0, 150)})`;
 }
 
 // N1: the Sites pages a run has been on, latest last, so a page already seen is reopened by its URL instead of

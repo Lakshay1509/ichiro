@@ -1,5 +1,5 @@
 // Side panel: say what you want in plain words (a goal), or drive by hand with /commands. Output appears above; errors in red.
-import { buildAsk, buildDoneCheck, buildTipAsk, checkGoto, livePlan, MAX_BAD_REPLIES, MAX_CHECKS, MAX_NOTES, oneLine, onSites, parseStep, parseVerdict, progress, startSites, STEP_BUDGET, stepsAdded, submits, addVisit, visitedLines, type Visit, savedNotes, siteOn, siteToAdd, siteToOpen, summarize, type Step } from '@/lib/agent-prompt';
+import { buildAsk, buildDoneCheck, buildTipAsk, checkGoto, livePlan, MAX_BAD_REPLIES, MAX_CHECKS, MAX_NOTES, oneLine, onSites, parseStep, parseVerdict, progress, startSites, STEP_BUDGET, stepsAdded, submits, addVisit, visitedLines, type Visit, savedNotes, siteOn, siteToAdd, siteToOpen, summarize, wantsSite, type Step } from '@/lib/agent-prompt';
 import { fileName, RunDownloads } from '@/lib/downloads';
 import { captchaAll, clickTextIn, focusedFrame, frameFor, textFrame, labelFor, nameFor, numberFor, numbersAll, pickInFrames, readAll, sendToAllFrames, setOverlayOn, textAll } from '@/lib/frames';
 import { allowOnce, batchProblem, batchReply, captchaHold, checkAgentTip, checkCommands, LOOK_HELP, lookShot, MAX_COMMAND, MAX_OUTPUT, MCP_COMMANDS, retryUnlisted, showsPage, TIP_HELP, tipsOnce, type BridgeImage, type BridgeReply } from '@/lib/bridge';
@@ -327,7 +327,7 @@ async function runSteps(goal: string, firstSites: string[], run: RunTabs, downlo
   pdfShown = null; // P2: each run's PDF pictures start at page 1
   // S2: asks you to add site for this run. true: added; false: no; null: the run was stopped meanwhile.
   const askSite = async (site: string, url: string): Promise<boolean | null> => {
-    const add = await askKeepGoing(`The agent wants to use ${site} (${url.slice(0, 150)}), which isn't on this run's Sites (${sites.join(', ') || 'none yet'}). Add it for this run? (${cost()})`, 'Add site', 'No');
+    const add = await askKeepGoing(`${wantsSite(site, url)}, which isn't on this run's Sites (${sites.join(', ') || 'none yet'}). Add ${site} for this run? (${cost()})`, 'Add site', 'No');
     if (id !== lastCommand) return null;
     if (add) sites.push(site);
     else refused.add(site);
@@ -1080,7 +1080,7 @@ async function bridgeSite(site: string, url: string): Promise<void> {
   const b = bridge;
   if (!b) throw new Error('The MCP bridge is off.');
   const id = lastCommand;
-  const add = !b.refused.has(site) && await askKeepGoing(`The agent wants to use ${site} (${url.slice(0, 150)}). Add it to the bridge's Sites (${b.sites.join(', ') || 'none yet'})?`, 'Add site', 'No');
+  const add = !b.refused.has(site) && await askKeepGoing(`${wantsSite(site, url)}. Add ${site} to the bridge's Sites (${b.sites.join(', ') || 'none yet'})?`, 'Add site', 'No');
   if (id !== lastCommand) throw new Error('Stopped: the user ran another command. Ask them what to do.');
   if (add) {
     b.sites.push(site);
