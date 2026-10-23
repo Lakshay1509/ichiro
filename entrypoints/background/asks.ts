@@ -29,9 +29,10 @@ export function startBadge() {
   browser.action.setBadgeTextColor({ color: '#ffffff' }).catch(console.error);
 }
 
+// note: what you chose, in place of the buttons. '': the buttons just go (a line right after already says it).
 export function closeAsk(note: string) {
   if (!pendingAsk) return;
-  swap(pendingAsk, { kind: 'line', text: note });
+  swap(pendingAsk, note ? { kind: 'line', text: note } : null);
   pendingAsk = null;
   badge('');
   askAgent(null);
@@ -63,7 +64,7 @@ export function answerAsk(a: BridgeAnswer) {
 // Asks you mid-command (4.1 pause, 4.3 stop-lines, a new site, a download): the keep button goes on; the other button,
 // or any command you start, resolves false (a command also bumps lastCommand, so the caller can tell "I'll do it" from
 // being stopped). Focus stays in the command box, so a reflex Enter can never press Allow.
-export function askKeepGoing(message: string, keepLabel = 'Keep going', stopLabel = 'Stop'): Promise<boolean> {
+export function askKeepGoing(message: string, keepLabel = 'Keep going', stopLabel = 'Stop', stopNote = stopLabel === 'Stop' ? 'Stopped.' : `${stopLabel}.`): Promise<boolean> {
   print(message, 'stop');
   return new Promise((resolve) => {
     onAskClosed = () => resolve(false);
@@ -76,7 +77,7 @@ export function askKeepGoing(message: string, keepLabel = 'Keep going', stopLabe
           closeAsk('Going on.');
         },
       },
-      { label: stopLabel, onClick: () => closeAsk(stopLabel === 'Stop' ? 'Stopped.' : `${stopLabel}.`) },
+      { label: stopLabel, onClick: () => closeAsk(stopNote) },
     ]);
   });
 }

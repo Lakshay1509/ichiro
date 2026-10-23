@@ -52,7 +52,8 @@ async function inRunTab<T>(tab: number | null, f: () => T | Promise<T>): Promise
 // D2's ask. The punycode hostname, like S2's.
 function askDownload(item: Browser.downloads.DownloadItem, more = ''): Promise<boolean> {
   const from = URL.parse(item.finalUrl)?.hostname || URL.parse(item.referrer)?.hostname || 'the page';
-  return askKeepGoing(`The agent started a download: "${fileName(item)}" from ${from}. Allow it?${more}`, 'Allow', 'No');
+  // No leaves no note: the "download refused" line right after says it.
+  return askKeepGoing(`The agent started a download: "${fileName(item)}" from ${from}. Allow it?${more}`, 'Allow', 'No', '');
 }
 
 // The agent's turn is over: downloads still paused stay paused, and you decide.
@@ -93,14 +94,17 @@ async function bridgeSite(site: string, url: string): Promise<void> {
   const b = bridge;
   if (!b) throw new Error('The MCP bridge is off.');
   const id = lastCommand;
-  const add = !b.refused.has(site) && await askKeepGoing(`${wantsSite(site, url)}. Add ${site} to the bridge's Sites (${b.sites.join(', ') || 'none yet'})?`, 'Add site', 'No');
+  // The ask names only the new site: the whole Sites list is noise in the panel and the agent app's dialog. No leaves
+  // no note: the "Refused" line right after says it.
+  const add = !b.refused.has(site) && await askKeepGoing(`${wantsSite(site, url)}. Add ${site} to the bridge's Sites?`, 'Add site', 'No', '');
   if (id !== lastCommand) throw new Error('Stopped: the user ran another command. Ask them what to do.');
   if (add) {
     b.sites.push(site);
     return save({ mcpSites: b.sites });
   }
   b.refused.add(site);
-  throw new Error(`Refused: the user said no to ${site}. Use the bridge's Sites (${b.sites.join(', ') || 'none yet'}) or ask them.`);
+  // The list after a blank line: the agent gets it, the panel shows it only behind a click (splitReply).
+  throw new Error(`Refused: the user said no to ${site}.\n\nUse the bridge's Sites (${b.sites.join(', ') || 'none yet'}) or ask them.`);
 }
 
 // Saves a switch for the next panel open (panel-memory.ts). A failed save only loses that, so it says so and goes on.

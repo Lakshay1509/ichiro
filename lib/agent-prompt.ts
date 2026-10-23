@@ -35,8 +35,9 @@ export function checkGoto(input: string | undefined, sites: string[]): string {
   if (url.username || url.password) throw new Error('goto refused: no user:password@ part allowed in URLs');
   if (!onSites(url.href, sites)) {
     const site = siteOf(url.hostname);
-    const how = site ? ` To use ${site}, goto this host's home page (goto https://${url.hostname}/): the user is asked whether to add ${site}.` : '';
-    throw new Error(`goto refused: ${url.hostname} is not one of the run's Sites (${sites.join(', ') || 'none yet'}).${how}`);
+    const how = site ? `To use ${site}, goto this host's home page (goto https://${url.hostname}/): the user is asked whether to add ${site}. ` : '';
+    // The rest after a blank line: the agent gets it, the panel shows it only behind a click (splitReply).
+    throw new Error(`goto refused: ${url.hostname} is not one of the run's Sites.\n\n${how}The run's Sites: ${sites.join(', ') || 'none yet'}.`);
   }
   return url.href;
 }

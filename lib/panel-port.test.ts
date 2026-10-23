@@ -26,6 +26,14 @@ apply(log, { type: 'show', item: line(6, 'after') });
 if (log.items.length !== 5 || log.open !== null) fail('close ends the open step');
 apply(log, { type: 'swap', id: 99, item: line(99, 'x') });
 if (log.items.some((i) => i.id === 99)) fail('swap of a gone item adds nothing');
+// An ask whose answer a later line says (Refused…) just goes: swap with null takes it away, inside a step too.
+apply(log, { type: 'show', item: { id: 7, kind: 'ask', buttons: ['Add site', 'No'] } });
+apply(log, { type: 'swap', id: 7, item: null });
+if (log.items.some((i) => i.id === 7) || log.items.length !== 5) fail('swap with null removes the ask');
+const inStep = log.items[1] as Step;
+inStep.items.push({ id: 8, kind: 'ask', buttons: ['Allow', 'No'] });
+apply(log, { type: 'swap', id: 8, item: null });
+if (inStep.items.some((i) => i.id === 8)) fail('swap with null removes an ask inside a step');
 apply(log, { type: 'clear' });
 if (log.items.length || log.open !== null) fail('clear');
 

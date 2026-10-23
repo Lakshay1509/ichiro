@@ -25,7 +25,7 @@ export type McpState = 'off' | 'starting' | 'on';
 // Background → panel: a change to the log (both sides apply it), the MCP word, or everything at once when a panel connects.
 export type LogOp =
   | { type: 'show'; item: Item } // at the bottom, inside the open step if any
-  | { type: 'swap'; id: number; item: Item } // an ask becomes what you chose; nothing if /clear took it away
+  | { type: 'swap'; id: number; item: Item | null } // an ask becomes what you chose, or goes (null); nothing if /clear took it away
   | { type: 'clear' }
   | { type: 'open'; step: Step } // an agent call's block: what shows until it closes goes inside
   | { type: 'close'; id: number; ended: 'Done' | 'Stopped' }
@@ -60,7 +60,8 @@ export function apply(log: Log, op: LogOp): void {
     for (const list of [log.items, ...log.items.flatMap((i) => (i.kind === 'step' ? [i.items] : []))]) {
       const i = list.findIndex((it) => it.id === op.id);
       if (i < 0) continue;
-      list[i] = op.item;
+      if (op.item) list[i] = op.item;
+      else list.splice(i, 1);
       return;
     }
   } else {

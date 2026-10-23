@@ -1,5 +1,6 @@
 // Checks the shared site rules (Sites, a new site's ask, goto's check) and history lines. Run: npm test
 import { checkGoto, onSites, siteOn, siteToAdd, siteToOpen, summarize, wantsSite } from './agent-prompt.ts';
+import { splitReply } from './readable-log.ts';
 
 const fail = (what: string): never => {
   throw new Error(what);
@@ -87,6 +88,9 @@ for (const [url, hint] of [['https://www.flipkart.com/search?q=x', 'goto https:/
     fail(`goto deep URL on a new site: ${url}`);
   } catch (err) {
     if (!(err as Error).message.includes(hint)) fail(`deep URL hint: ${(err as Error).message}`);
+    // The panel shows only the first paragraph (splitReply): no Sites list there. The agent still gets it.
+    const shown = splitReply((err as Error).message);
+    if (shown.text.includes('amazon.in') || !shown.more.includes('amazon.in')) fail(`Sites list only behind the click: ${(err as Error).message}`);
   }
 }
 // The ask names the exact host when it's more than the site or www., so data hidden in a host name shows.

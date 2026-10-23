@@ -60,9 +60,9 @@ export function show(item: New<Item>): Item {
   return full;
 }
 
-// Puts item where old is (an ask becomes what you chose). Nothing if /clear took old away.
-export function swap(old: { id: number }, item: New<Item>) {
-  change({ type: 'swap', id: old.id, item: { ...item, id: old.id } as Item });
+// Puts item where old is (an ask becomes what you chose), or with null takes old away. Nothing if /clear took old away.
+export function swap(old: { id: number }, item: New<Item> | null) {
+  change({ type: 'swap', id: old.id, item: item && ({ ...item, id: old.id } as Item) });
 }
 
 export function clearLog() {
