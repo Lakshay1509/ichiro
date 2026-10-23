@@ -69,6 +69,6 @@ All SVGs come from one script: run `python art/logo/build.py` and it rewrites `s
 ## 9. Open items
 
 - **Trademark search** not done. Run one (and a reverse image search) before going public.
-- **Extension not updated yet.** The manifest has no icons (Chrome shows its default letter) and still says "Browser Agent". `icons/` is ready to drop in.
+- **In the extension:** `public/` holds copies of `icons/icon-16 … icon-128.png` and `svg/ichiro-wordmark.svg`. Copy them again after you change the logo.
 - **16 px pupils** are about one pixel. Fine in Chrome's toolbar; check on a real low-DPI screen.
 - **White letters aren't thinned.** White on dark looks slightly bolder. Only matters for big signage.

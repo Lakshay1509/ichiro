@@ -52,10 +52,13 @@ body {
   scrollbar-color: rgba(0, 0, 0, 0.18) transparent;
 }
 
+/* MCP off, nothing yet: the Ichiro wordmark (art/logo/GUIDE.md) above the words, with clear space below it. */
 #out:empty::before {
   content: 'Type /mcp on to let a coding agent use this browser, or /help for the list.';
   margin: auto;
   max-width: 250px;
+  padding-top: 60px;
+  background: url(/ichiro-wordmark.svg) center top / 120px auto no-repeat;
   text-align: center;
   color: var(--ink-muted);
 }

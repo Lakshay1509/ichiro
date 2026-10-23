@@ -15,17 +15,22 @@ const throws = (f: () => unknown, what: string) => {
 const ID = 'abcdefghijklmnopabcdefghijklmnop';
 const ORIGIN = `chrome-extension://${ID}/`;
 
-// Paths: user-level everywhere; Windows registers under HKCU with a full reg.exe path.
-const win = hostPaths('win32', { SystemRoot: 'C:\\Windows', LOCALAPPDATA: 'C:\\Users\\me\\AppData\\Local' });
-if (win.launcher !== 'C:\\Users\\me\\AppData\\Local\\browser-agent\\host.bat') fail(`win launcher: ${win.launcher}`);
-if (win.manifest !== `C:\\Users\\me\\AppData\\Local\\browser-agent\\${HOST_NAME}.json`) fail(`win manifest: ${win.manifest}`);
-if (win.bridge !== 'C:\\Users\\me\\AppData\\Local\\browser-agent\\bridge.json') fail(`win bridge: ${win.bridge}`);
-if (win.reg?.exe !== 'C:\\Windows\\System32\\reg.exe' || win.reg.key !== `HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\${HOST_NAME}`) fail(`win reg: ${JSON.stringify(win.reg)}`);
+// Paths: user-level everywhere, host files in ~/.ichiro (never AppData); Windows registers each browser under HKCU only,
+// with a full reg.exe path; macOS/Linux put a manifest in each browser's own folder.
+const win = hostPaths('win32', { SystemRoot: 'C:\\Windows', USERPROFILE: 'C:\\Users\\me' });
+if (win.launcher !== 'C:\\Users\\me\\.ichiro\\host.bat') fail(`win launcher: ${win.launcher}`);
+if (win.manifests.join() !== `C:\\Users\\me\\.ichiro\\${HOST_NAME}.json`) fail(`win manifests: ${win.manifests}`);
+if (win.bridge !== 'C:\\Users\\me\\.ichiro\\bridge.json') fail(`win bridge: ${win.bridge}`);
+const keys = win.reg?.keys ?? [];
+for (const browser of ['Google\\Chrome', 'Microsoft\\Edge', 'BraveSoftware\\Brave-Browser']) if (!keys.includes(`HKCU\\Software\\${browser}\\NativeMessagingHosts\\${HOST_NAME}`)) fail(`win reg misses ${browser}`);
+if (win.reg?.exe !== 'C:\\Windows\\System32\\reg.exe' || keys.some((k) => !/^HKCU\\Software\\[^\\]+(\\[^\\]+)?\\NativeMessagingHosts\\/.test(k) || !k.endsWith(`\\${HOST_NAME}`))) fail(`win reg: ${JSON.stringify(win.reg)}`);
 const mac = hostPaths('darwin', { HOME: '/Users/me' });
-if (mac.manifest !== `/Users/me/Library/Application Support/Google/Chrome/NativeMessagingHosts/${HOST_NAME}.json` || mac.reg) fail(`mac: ${JSON.stringify(mac)}`);
+for (const browser of ['Google/Chrome', 'Microsoft Edge', 'BraveSoftware/Brave-Browser']) if (!mac.manifests.includes(`/Users/me/Library/Application Support/${browser}/NativeMessagingHosts/${HOST_NAME}.json`)) fail(`mac misses ${browser}`);
+if (mac.reg || mac.launcher !== '/Users/me/.ichiro/host.sh') fail(`mac: ${JSON.stringify(mac)}`);
 const linux = hostPaths('linux', { HOME: '/home/me' });
-if (linux.manifest !== `/home/me/.config/google-chrome/NativeMessagingHosts/${HOST_NAME}.json` || linux.launcher !== '/home/me/.browser-agent/host.sh' || linux.bridge !== '/home/me/.browser-agent/bridge.json') fail(`linux: ${JSON.stringify(linux)}`);
-throws(() => hostPaths('win32', { SystemRoot: 'C:\\Windows' }), 'win32 without LOCALAPPDATA');
+for (const browser of ['google-chrome', 'google-chrome-for-testing', 'microsoft-edge', 'chromium']) if (!linux.manifests.includes(`/home/me/.config/${browser}/NativeMessagingHosts/${HOST_NAME}.json`)) fail(`linux misses ${browser}`);
+if (linux.launcher !== '/home/me/.ichiro/host.sh' || linux.bridge !== '/home/me/.ichiro/bridge.json') fail(`linux: ${JSON.stringify(linux)}`);
+throws(() => hostPaths('win32', { SystemRoot: 'C:\\Windows' }), 'win32 without USERPROFILE');
 throws(() => hostPaths('linux', {}), 'linux without HOME');
 throws(() => hostPaths('freebsd', { HOME: '/home/me' }), 'unknown OS');
 
@@ -45,6 +50,6 @@ for (const p of ['C:\\100%\\node.exe', 'C:\\a"b\\node.exe', "/home/o'neil/node",
 throws(() => launcher('linux', 'not-an-id', '/usr/bin/node', '/x/host.ts'), 'launcher with bad ID');
 
 // Manifest: Chrome's fields, absolute launcher path, exactly one allowed origin.
-const m = JSON.parse(manifest('/home/me/.browser-agent/host.sh', ID));
-const want = { name: HOST_NAME, description: 'Browser Agent model helper', path: '/home/me/.browser-agent/host.sh', type: 'stdio', allowed_origins: [ORIGIN] };
+const m = JSON.parse(manifest('/home/me/.ichiro/host.sh', ID));
+const want = { name: HOST_NAME, description: 'Ichiro MCP bridge', path: '/home/me/.ichiro/host.sh', type: 'stdio', allowed_origins: [ORIGIN] };
 if (JSON.stringify(m) !== JSON.stringify(want)) fail(`manifest: ${JSON.stringify(m)}`);

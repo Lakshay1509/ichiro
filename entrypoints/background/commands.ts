@@ -86,7 +86,7 @@ async function readDownload(args: string[]): Promise<string> {
   if (kind === 'text' && (item.fileSize < 0 || item.fileSize > MAX_TEXT_FILE)) throw new Error(`${name} is too big to read (text files up to ${MAX_TEXT_FILE / 1e6} MB)`);
   // Only you can turn this on. Source: https://developer.chrome.com/docs/extensions/reference/api/extension#method-isAllowedFileSchemeAccess
   if (!(await browser.extension.isAllowedFileSchemeAccess())) {
-    throw new Error(`Can't read ${name}: Chrome's "Allow access to file URLs" is off for this extension. Ask the user to turn it on (chrome://extensions → Browser Agent → Details), then try again`);
+    throw new Error(`Can't read ${name}: Chrome's "Allow access to file URLs" is off for this extension. Ask the user to turn it on (chrome://extensions → Ichiro → Details), then try again`);
   }
   const url = fileUrl(item.filename);
   if (kind === 'pdf') return `Download ${name}:\n${pdfText(await readPdf(url), from)}`;

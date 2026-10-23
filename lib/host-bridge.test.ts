@@ -20,7 +20,7 @@ async function hostRun(meanwhile: (file: string) => void): Promise<string> {
   const dir = mkdtempSync(join(process.platform === 'win32' ? tmpdir() : '/tmp', 'ba-'));
   try {
     // Set on process.env itself (a copy loses Windows' case-blind SystemRoot); node --test runs each file in its own process.
-    Object.assign(process.env, { LOCALAPPDATA: dir, HOME: dir, BA_ORIGIN: ORIGIN });
+    Object.assign(process.env, { USERPROFILE: dir, HOME: dir, BA_ORIGIN: ORIGIN });
     const file = hostPaths(process.platform, process.env).bridge;
     const host = spawn(process.execPath, [HOST, ORIGIN], { stdio: ['pipe', 'pipe', 'inherit'] });
     const exited = new Promise((done) => host.on('exit', done));

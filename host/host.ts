@@ -47,7 +47,7 @@ function startBridge() {
   const token = randomBytes(32).toString('hex');
   const file = hostPaths(process.platform, process.env).bridge;
   // Windows pipes vanish with the process. A Unix socket is a file: removed on exit.
-  const pipe = process.platform === 'win32' ? `\\\\.\\pipe\\browser-agent-${randomUUID()}` : `${dirname(file)}/bridge-${randomUUID()}.sock`;
+  const pipe = process.platform === 'win32' ? `\\\\.\\pipe\\ichiro-${randomUUID()}` : `${dirname(file)}/bridge-${randomUUID()}.sock`;
   if (process.platform !== 'win32') process.on('exit', () => rmSync(pipe, { force: true }));
   const server = createServer((socket) => serve(socket, token));
   server.on('error', (e) => fail(`MCP bridge: ${e.message}`));

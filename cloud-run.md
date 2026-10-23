@@ -1,6 +1,6 @@
 # Cloud run: test the real extension over MCP
 
-For a Claude Code **cloud session**. Run tasks from `tasks-hard.md` in Chrome with the real extension, through the `browser-agent-cloud` MCP tool, and log what breaks.
+For a Claude Code **cloud session**. Run tasks from `tasks-hard.md` in Chrome with the real extension, through the `ichiro-cloud` MCP tool, and log what breaks.
 
 **Test only.** Don't change code, and don't start `harness/why-it-loops.md` work. Found a bug? Log it, don't fix it.
 
@@ -21,17 +21,17 @@ For a Claude Code **cloud session**. Run tasks from `tasks-hard.md` in Chrome wi
 ## Setup (once per VM)
 
 1. **Tools:** `node --version` must be 22.18+ (it runs `.ts` files directly). `apt-get install -y xvfb xdotool imagemagick unzip libnss3-tools`.
-2. **User:** `useradd -m tester`. Chrome won't keep its sandbox as root. Copy the repo: `cp -r . /home/tester/browser-agent && chown -R tester: /home/tester/browser-agent`.
-3. **Build:** run `npm ci` in `/home/tester/browser-agent` **as root** (as tester it fails with `SELF_SIGNED_CERT_IN_CHAIN`: the proxy's certificate is in /root). Then `chown -R tester: /home/tester/browser-agent` and, **as tester**, `npm run build` → `.output/chrome-mv3/`.
+2. **User:** `useradd -m tester`. Chrome won't keep its sandbox as root. Copy the repo: `cp -r . /home/tester/ichiro && chown -R tester: /home/tester/ichiro`.
+3. **Build:** run `npm ci` in `/home/tester/ichiro` **as root** (as tester it fails with `SELF_SIGNED_CERT_IN_CHAIN`: the proxy's certificate is in /root). Then `chown -R tester: /home/tester/ichiro` and, **as tester**, `npm run build` → `.output/chrome-mv3/`.
 4. **Chrome for Testing 153+:** normal Chrome dropped `--load-extension` in v137. Take the Stable `linux64` zip from https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json and unzip it to `/opt/cft`. Install the libraries it needs (`deb.deps` in the zip lists them, or follow the errors). On Ubuntu 24.04, `libasound2` is called `libasound2t64`.
    - **Sandbox error?** Ubuntu 24.04 limits user namespaces. Set up the zip's `chrome_sandbox` helper: owned by root, mode 4755, with `CHROME_DEVEL_SANDBOX` pointing to it. Still failing → stop and ask the developer. **No `--no-sandbox` without their OK.**
 5. **Screen:** `Xvfb :99 -screen 0 1400x900x24 &`. Screenshot with `DISPLAY=:99 import -window root /tmp/s.png`, then Read the PNG.
-6. **Chrome, as tester:** `DISPLAY=:99 /opt/cft/chrome-linux64/chrome --load-extension=/home/tester/browser-agent/.output/chrome-mv3 --proxy-server=http://127.0.0.1:<port from $HTTPS_PROXY> --no-first-run about:blank &`
+6. **Chrome, as tester:** `DISPLAY=:99 /opt/cft/chrome-linux64/chrome --load-extension=/home/tester/ichiro/.output/chrome-mv3 --proxy-server=http://127.0.0.1:<port from $HTTPS_PROXY> --no-first-run about:blank &`
    - Chrome must trust the proxy's CA too. As tester: `certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n proxy -i <the proxy CA file>` (it's under /root: copy it where tester can read it).
 7. **Extension ID:** in `/home/tester/.config/google-chrome-for-testing/Default/Preferences`, under `extensions.settings`, find the entry whose `path` is the `.output/chrome-mv3` folder.
-8. **Native host, as tester:** `npm run host:install -- <id>`. It writes normal Chrome's folder, so copy `~/.config/google-chrome/NativeMessagingHosts/com.browser_agent.host.json` into `~/.config/google-chrome-for-testing/NativeMessagingHosts/` (where Chrome for Testing looks).
-9. **Bridge file:** the MCP server runs as you (root), the host runs as tester. `ln -s /home/tester/.browser-agent "$HOME/.browser-agent"`.
-10. **Side panel:** take a screenshot, then use xdotool for a **real** click: the extensions (puzzle) icon → **Browser Agent**. Side panels need a real user gesture. Click the panel's input, type `/mcp on`, press Enter.
+8. **Native host, as tester:** `npm run host:install -- <id>`. It also writes Chrome for Testing's folder (`~/.config/google-chrome-for-testing/NativeMessagingHosts/`), so nothing to copy.
+9. **Bridge file:** the MCP server runs as you (root), the host runs as tester. `ln -s /home/tester/.ichiro "$HOME/.ichiro"`.
+10. **Side panel:** take a screenshot, then use xdotool for a **real** click: the extensions (puzzle) icon → **Ichiro**. Side panels need a real user gesture. Click the panel's input, type `/mcp on`, press Enter.
 11. **Check:** call the MCP tool with `help`. "Bridge is off" → check steps 8–10.
 
 **Container restarted?** The proxy port and CA change: redo steps 5, 6 and 10. The bridge remembers its Sites.

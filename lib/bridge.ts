@@ -164,7 +164,7 @@ export const formDialogs = (caps: { elicitation?: { form?: object; url?: object 
 // is picked for you, so a reflex Enter can never pick keep (like the panel keeping focus in the command box).
 export function askDialog(ask: BridgeAsk) {
   return {
-    message: `${ask.text}\n\nPick an answer and submit, or close this and answer in the Browser Agent side panel. If you already answered there, this does nothing.`,
+    message: `${ask.text}\n\nPick an answer and submit, or close this and answer in the Ichiro side panel. If you already answered there, this does nothing.`,
     requestedSchema: {
       type: 'object' as const,
       properties: {

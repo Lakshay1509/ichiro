@@ -3,10 +3,13 @@ import { defineConfig } from 'wxt';
 
 export default defineConfig({
   manifest: {
-    name: 'Browser Agent',
+    name: 'Ichiro',
+    description: "Your coding agent's hands and eyes in Chrome",
+    // Extension icons: WXT adds public/icon-16|32|48|128.png on its own (art/logo/icons). Source: https://wxt.dev/guide/essentials/config/manifest
     // Toolbar icon. Chrome needs this key so clicking the icon can open the side panel.
     // Source: https://developer.chrome.com/docs/extensions/reference/api/sidePanel
-    action: { default_title: 'Open Browser Agent' },
+    // default_icon set too, as Chrome's docs advise: https://developer.chrome.com/docs/extensions/reference/api/action
+    action: { default_title: 'Open Ichiro', default_icon: { 16: 'icon-16.png', 32: 'icon-32.png' } },
     // Source: https://developer.chrome.com/docs/extensions/reference/permissions-list
     // webNavigation: list a tab's frames (iframes). Source: https://developer.chrome.com/docs/extensions/reference/api/webNavigation
     // webRequest: see which requests a page still has running, so settle waits for slow connections.

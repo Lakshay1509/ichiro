@@ -7,7 +7,7 @@ import type { BridgeReply } from '../lib/bridge.ts';
 export const WAIT_MS = 50_000;
 
 // BG6: with always-on the panel may be closed; the toolbar icon then shows "Ask", and clicking it opens the ask.
-const WAITING = "No reply from the side panel after 50 s: it's likely asking the user (a stop-line, Add site, Resume) or still running. If the side panel is closed, ask the user to click the Browser Agent icon in Chrome's toolbar to answer. Nothing is lost: send read after they answer, and that call gets this reply first.";
+const WAITING = "No reply from the side panel after 50 s: it's likely asking the user (a stop-line, Add site, Resume) or still running. If the side panel is closed, ask the user to click the Ichiro icon in Chrome's toolbar to answer. Nothing is lost: send read after they answer, and that call gets this reply first.";
 const STILL = 'Not run: the side panel still hasn\'t replied to your earlier call (likely waiting for the user). Send read again after they answer.';
 const LATE = 'Not run: first, the reply to your earlier call, which came after that call stopped waiting. Read it, then send these commands again if you still need them.';
 

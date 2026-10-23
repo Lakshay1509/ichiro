@@ -12,14 +12,14 @@ import { hostPaths } from '../lib/host-install.ts';
 import { frame, isObject, readFrames } from '../lib/host-request.ts';
 import { lateReplies } from './late-reply.ts';
 
-const OFF = 'The browser bridge is off. Ask the user to open the Browser Agent side panel and type /mcp on.';
+const OFF = 'The browser bridge is off. Ask the user to open the Ichiro side panel and type /mcp on.';
 
 // This server reaches Chrome only through a local pipe, so its OS is the browser's. A Mac's shortcuts use Cmd (meta).
 const OS = ({ darwin: 'macOS', win32: 'Windows', linux: 'Linux' } as Record<string, string>)[process.platform] ?? process.platform;
 const MOD = process.platform === 'darwin' ? 'meta' : 'ctrl';
 
 const DESCRIPTION = [
-  "Drive the user's own Chrome through the Browser Agent extension. It has their logins, so do only what the user asked.",
+  "Drive the user's own Chrome through the Ichiro extension. It has their logins, so do only what the user asked.",
   'Send several commands in one call when you don\'t need to see the page in between (typing, keys, clicks on numbers you already have). Start with "help" to list the commands, then "read" to see the page: elements are numbered, and click, type and select take those numbers. An action returns only what changed: new elements with their numbers, changed states, or "nothing changed". Earlier numbers stay valid while you stay on the page; a page you leave and come back to (back, a link) has new numbers, so use the ones in its reply. Send read for the full list (e.g. after your context was compacted).',
   'read first, look only when the text misses something visual: look is read plus a screenshot with numbers drawn on, and costs image tokens.',
   `The browser runs on ${OS}: shortcuts use ${MOD}, e.g. key ${MOD}+a selects all, ${MOD}+z undoes.`,
@@ -94,7 +94,7 @@ const toShow = () => new Promise<void>((done) => {
 });
 
 serveStdio(() => {
-  const server = new McpServer({ name: 'browser-agent', version: '0.0.1' }, { capabilities: { tools: {} } });
+  const server = new McpServer({ name: 'ichiro', version: '0.0.1' }, { capabilities: { tools: {} } });
   server.registerTool(
     'browser',
     {

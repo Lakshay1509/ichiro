@@ -56,7 +56,7 @@
   - Until BG6, an ask with the panel closed waits unseen until you open the panel. That's safe (it still needs your click) but easy to miss, so don't use `/always-on on` for real runs before BG6.
   - Done when: a test for the saved setting in `lib/panel-memory.test.ts` (missing or bad value → off); typecheck + build pass; live: `/always-on on`, close the panel, the agent reads a page on a Site and gets the reply; restart Chrome, the agent's next call works without opening the panel, and reopening the panel shows always-on still on; `/always-on off`, close the panel, the bridge stops.
 - [x] **BG6 · asks wait with a badge.** An ask while no panel is open puts a badge on the toolbar icon (`action.setBadgeText`), a plain word like `Ask`. It clears when the ask closes. Clicking the icon opens the panel (already set: `openPanelOnActionClick`) with the ask in the log.
-  - The agent's wait note (`WAITING` in `host/late-reply.ts`) adds: if the side panel is closed, ask the user to click the Browser Agent icon.
+  - The agent's wait note (`WAITING` in `host/late-reply.ts`) adds: if the side panel is closed, ask the user to click the Ichiro icon.
   - Guard: the badge only says an ask is waiting, never page or agent text.
   - Done when: typecheck + build pass (plus a test if any badge logic lands in `lib/`); live: `/always-on on`, panel closed, the agent goes to a new site → badge; click the icon → Add site / No; Add site → the agent's next call gets the reply, and the badge is gone.
 - [x] **BG7 · answer an ask in the agent app or the panel (developer, 2026-10-22).** Today an agent's ask (Add site, Allow once, Resume, a download, a tip's Save, repeat's list) waits for a click in the side panel. Now it also opens a dialog in the agent app, and either place answers it. **Any agent app** that supports MCP elicitation gets the dialog (developer, 2026-10-23: not tied to Claude Code or any one agent).
@@ -69,7 +69,7 @@
   - Guard: an answer always comes from a person, in the panel or the app's dialog. **Never** a command or tool argument the agent sends, since a tricked agent would approve its own stop-lines.
   - Guard: an answer message has a strict shape (ask id + keep or stop). It counts only on the run's own token-checked connection, for the ask that is open right now. Anything else is dropped. Tested in `lib/`.
   - Guard: the dialog shows agent and page text (a tip, a pause reason) as quoted text, capped like the panel does.
-  - Note for you: agent apps can auto-answer dialogs (Claude Code's `Elicitation` hook: [hooks](https://code.claude.com/docs/en/hooks#elicitation)). Don't set one for browser-agent, or stop-lines would pass without you.
+  - Note for you: agent apps can auto-answer dialogs (Claude Code's `Elicitation` hook: [hooks](https://code.claude.com/docs/en/hooks#elicitation)). Don't set one for ichiro, or stop-lines would pass without you.
   - Checked before building (2026-10-23):
     - Per-call time limit while a dialog is open: in 2026-07-28 the call has already returned, so no limit runs. Older agent apps keep the call open; Claude Code doesn't move such a call to the background, and its default per-call limit is now hours. The 50 s wait starts again after the answer.
     - Does the dialog close when the server cancels it? It can't be cancelled: see First answer wins.
