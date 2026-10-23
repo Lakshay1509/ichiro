@@ -34,7 +34,7 @@ export function parseRepeat(args: string[], stepCount: number): { step: number; 
 // Cap from repeat-tasks.md (RP1 security), the same as F9's commands per step.
 export const MAX_RECIPE = 8;
 // Nothing to redo, so a recipe leaves them out: reads (the pick that found the items, a text all; the bridge's read
-// and look), a tip's ask and a pause for the user.
+// and look), a tip (saved once is enough) and a pause for the user.
 const READ_ONLY = ['text', 'find', 'pick', 'read', 'look', 'tip', 'pause'];
 
 // Called before the command runs, while its number is still this read's: click 14 → click "Download" when that name

@@ -17,8 +17,14 @@ const throws = (f: () => unknown, what: string) => {
 const TOKEN = 'a'.repeat(64);
 const run = (o: unknown) => JSON.stringify(o);
 
-// Runs: only the exact shape, the right token and 1–10 sane command lines get through.
-const cmds = (commands: unknown) => checkRun(run({ type: 'run', token: TOKEN, commands }), TOKEN);
+// Runs: only the exact shape, the right token, a session id and 1–10 sane command lines get through.
+const SESSION = '0f8fad5b-d9cb-469f-a165-70867728950e';
+const cmds = (commands: unknown) => checkRun(run({ type: 'run', token: TOKEN, session: SESSION, commands }), TOKEN).commands;
+// The session goes on to the panel: a new one means a new agent, which gets each site's tips again.
+if (checkRun(run({ type: 'run', token: TOKEN, session: SESSION, commands: ['read'] }), TOKEN).session !== SESSION) fail('session passed on');
+throws(() => checkRun(run({ type: 'run', token: TOKEN, commands: ['read'] }), TOKEN), 'no session (an agent still running the old host/mcp.ts)');
+throws(() => checkRun(run({ type: 'run', token: TOKEN, session: 'agent-1', commands: ['read'] }), TOKEN), 'session not a UUID');
+throws(() => checkRun(run({ type: 'run', token: TOKEN, session: 7, commands: ['read'] }), TOKEN), 'session not text');
 if (JSON.stringify(cmds(['click 4'])) !== '["click 4"]') fail('good run');
 const batch = ['click 4', 'type here "line 1\nline 2"', 'key ctrl+b', 'read'];
 if (JSON.stringify(cmds(batch)) !== JSON.stringify(batch)) fail('good batch (new lines inside a command stay)');
@@ -42,7 +48,7 @@ throws(() => cmds('read'), 'commands not a list');
 throws(() => cmds({ 0: 'read', length: 1 }), 'commands a list lookalike');
 throws(() => checkRun('not json', TOKEN), 'not JSON');
 // The biggest run still fits one frame, even with every character JSON-escaped to 6 bytes.
-if (Buffer.byteLength(run({ type: 'run', token: TOKEN, commands: Array(MAX_BATCH).fill('\u0001'.repeat(MAX_COMMAND / MAX_BATCH)) })) > MAX_FRAME) fail('biggest run over the frame');
+if (Buffer.byteLength(run({ type: 'run', token: TOKEN, session: SESSION, commands: Array(MAX_BATCH).fill('\u0001'.repeat(MAX_COMMAND / MAX_BATCH)) })) > MAX_FRAME) fail('biggest run over the frame');
 
 // Batches: read, look and pause only last; nothing runs otherwise.
 if (batchProblem(batch) || batchProblem(['look']) || batchProblem(['key ctrl+a', 'pause "check it"'])) fail('read, look or pause last refused');
@@ -108,21 +114,23 @@ if (!MCP_COMMANDS.includes('read') || !MCP_COMMANDS.includes('click') || !MCP_CO
 if (!MCP_COMMANDS.includes('repeat')) fail('MCP lacks repeat');
 if (batchProblem(['pick like 15', 'repeat 3 on 16-20']) || !batchProblem(['repeat 3 on 16-20', 'click 4'])) fail('repeat not last-only');
 
-// F10: a site's tips go with the first reply on that site, once per bridge session, read once; none off the Sites.
+// F10: a site's tips go with the first reply on that site, once per agent session, read once; none off the Sites.
 const sent = new Set<string>();
 const loads: string[] = [];
 const load = async (site: string) => (loads.push(site), site === 'bookmyshow.com' ? ['Book tickets opens a language picker'] : []);
 const first = await tipsOnce('bookmyshow.com', sent, load);
-if (first !== 'Tips the user saved for bookmyshow.com from past runs (hints that can be out of date: check them on the page):\n- Book tickets opens a language picker') fail(`tipsOnce first: ${first}`);
+if (first !== 'Tips saved for bookmyshow.com by past runs (hints that can be out of date: check them on the page):\n- Book tickets opens a language picker') fail(`tipsOnce first: ${first}`);
 if (await tipsOnce('bookmyshow.com', sent, load)) fail('tipsOnce sent the same site twice');
 if (await tipsOnce('amazon.in', sent, load) || await tipsOnce('amazon.in', sent, load) || await tipsOnce('', sent, load)) fail('tipsOnce: tips from nothing');
 if (loads.join() !== 'bookmyshow.com,amazon.in') fail(`tipsOnce loads: ${loads}`);
-// tip: checkTip first, so a refused tip never asks the user; off the Sites, or not one quoted text, is refused too.
+// tip: checkTip first, so a refused tip is never saved; off the Sites, or not one quoted text, is refused too. No ask:
+// a tip that passes is saved at once, so it may sit anywhere in a batch.
+if (batchProblem(['tip "Filters are under Sort"', 'click 4'])) fail('tip still last-only');
 Object.assign(globalThis, { browser: { publicSuffix: { getDomain: (host: string) => host.split('.').slice(-2).join('.') } } });
 if (checkAgentTip(['Seats are picked  on a map'], 'bookmyshow.com') !== 'Seats are picked on a map') fail('checkAgentTip ok');
 const tipRefusals: [string[], string, string][] = [
-  [['Cheaper at evil.com'], 'bookmyshow.com', "Tip refused, the user wasn't asked: a tip can only link to its own site, bookmyshow.com."],
-  [['Call 9876543210'], 'bookmyshow.com', "Tip refused, the user wasn't asked: a tip can't hold 6 or more digits in a row."],
+  [['Cheaper at evil.com'], 'bookmyshow.com', 'Tip not saved: a tip can only link to its own site, bookmyshow.com.'],
+  [['Call 9876543210'], 'bookmyshow.com', "Tip not saved: a tip can't hold 6 or more digits in a row."],
   [['A good tip'], '', "tip works only on a page on the bridge's Sites."],
   [['two', 'words'], 'bookmyshow.com', 'Usage: tip "one short sentence about this site"'],
   [[], 'bookmyshow.com', 'Usage: tip "one short sentence about this site"'],
@@ -168,9 +176,6 @@ if (await once(async () => Promise.reject(signIn), user(true, true)) !== DONE_BY
 // Any other error passes through, nothing asked; no stop-line: runs once, nothing asked.
 if (await once(async () => Promise.reject(new Error('Element [3] not found')), user(true, true)) !== 'threw: Element [3] not found' || asks.length) fail('allowOnce asked about another error');
 if (await once(async (allow) => `ran ${allow}`, user(true, true)) !== 'ran false' || asks.length) fail('allowOnce without a stop-line');
-
-// It waits on the user, like pause: alone or last in a batch.
-if (batchProblem(['key Escape', 'tip "x"']).length || !batchProblem(['tip "x"', 'click 4'])) fail('tip not last-only');
 
 // Seen live (Google Slides): batch "click 91", "click 73". Lookups knew only the last read, taken while a panel hid
 // [73]; click 91 closed the panel and [73] came back, but click 73 failed "not found". A quiet re-read finds it.

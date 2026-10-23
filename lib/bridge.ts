@@ -1,5 +1,5 @@
 // The MCP bridge's rules: what may pass between a coding agent's MCP server, the host's pipe and the side panel.
-// Agent → host (pipe): {type: 'run', token, commands}. Host → panel: {type: 'run', commands}. Panel → host → agent: a BridgeReply.
+// Agent → host (pipe): {type: 'run', token, session, commands}. Host → panel: {type: 'run', session, commands}. Panel → host → agent: a BridgeReply.
 // BG7, while a run waits: panel → host → agent, the open ask (AskNotice); agent → host → panel, the dialog's BridgeAnswer.
 import { defuse } from './agent-prompt.ts';
 import { isObject, onlyKeys } from './host-request.ts';
@@ -9,11 +9,11 @@ import type { Shot } from './screenshot.ts';
 import { checkTip } from './site-tips.ts';
 
 // What a coding agent may run, with read (it gets no page list each turn), look (read with a picture, on request only:
-// images cost tokens) and tip (F10: suggest a site tip, you decide). goto only to the bridge's Sites (checkGoto): a
+// images cost tokens) and tip (F10: save a site tip for later runs). goto only to the bridge's Sites (checkGoto): a
 // tricked agent could otherwise open evil.example/?data=<page text>. No search: its words could carry page text off them.
 export const MCP_COMMANDS = ['text', 'find', 'pick', 'click', 'drag', 'hover', 'type', 'paste', 'select', 'scroll', 'key', 'goto', 'back', 'pause', 'repeat', 'read', 'look', 'tip'];
 export const LOOK_HELP = 'read, plus a screenshot of the tab with the same numbers drawn on. Costs image tokens: use it only when the text misses something visual (highlighted days, check-mark icons)';
-export const TIP_HELP = 'tip "one short sentence" — suggest a tip about the site you\'re on for later runs (where things are, what opens what). The user is asked to save it. Alone or last in a batch';
+export const TIP_HELP = 'tip "one short sentence" — save a tip about the site you\'re on for later runs (where things are, what opens what). Saved at once; the user can delete it';
 // Characters in one run: one command line, or all of a batch's together. WR2: a paste carries a whole drawing (JSON);
 // even at 6 bytes a character once JSON-escaped it stays far under the 1 MB frame.
 export const MAX_COMMAND = 20_000;
@@ -47,12 +47,17 @@ function sameToken(a: string, b: string): boolean {
   return diff === 0;
 }
 
-// Untrusted: any local program can write to the pipe. Returns the command lines only for the bridge's own token.
-export function checkRun(text: string, token: string): string[] {
+// randomUUID's shape: what host/mcp.ts names its session with.
+const SESSION = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+// Untrusted: any local program can write to the pipe. Returns the command lines only for the bridge's own token, and
+// the session: one per agent (its MCP server process), so the panel can tell a new agent from the last one.
+export function checkRun(text: string, token: string): { commands: string[]; session: string } {
   const m = parse(text);
-  if (!isObject(m) || m.type !== 'run' || !onlyKeys(m, ['type', 'token', 'commands'])) throw new Error('Only {"type":"run", token, commands} is accepted');
+  if (!isObject(m) || m.type !== 'run' || !onlyKeys(m, ['type', 'token', 'session', 'commands'])) throw new Error('Only {"type":"run", token, session, commands} is accepted');
   if (typeof m.token !== 'string' || !sameToken(m.token, token)) throw new Error('Wrong token');
-  return checkCommands(m.commands);
+  if (typeof m.session !== 'string' || !SESSION.test(m.session)) throw new Error('session must be a UUID: restart the coding agent so it loads the new host/mcp.ts');
+  return { commands: checkCommands(m.commands), session: m.session };
 }
 
 // A run's command lines: 1–MAX_BATCH lines, none blank, MAX_COMMAND characters in all. A fresh list, so nothing else
@@ -66,8 +71,8 @@ export function checkCommands(v: unknown): string[] {
 }
 
 // Why a batch can't run, or ''. These show or wait on the page, so only as its last command: in the middle, the page
-// they show would be stale at once, and after a pause, a tip's ask or a repeat (RP1) you may have changed it.
-const LAST_ONLY = ['read', 'look', 'pause', 'tip', 'repeat'];
+// they show would be stale at once, and after a pause or a repeat (RP1) you may have changed it.
+const LAST_ONLY = ['read', 'look', 'pause', 'repeat'];
 export function batchProblem(lines: string[]): string {
   const i = lines.findIndex((line, i) => i < lines.length - 1 && LAST_ONLY.includes(parseCommand(line)[0] ?? ''));
   return i < 0 ? '' : `Nothing ran: ${parseCommand(lines[i]!)[0]} can only be the last command (it was ${i + 1} of ${lines.length}).`;
@@ -224,22 +229,22 @@ export async function captchaHold(name: string, url: string, shown: () => Promis
   return kind && seen !== solved ? { ask: `CAPTCHA on the page (${kind}). Solve it yourself, then press Resume.`, seen } : null;
 }
 
-// F10: a site's saved tips for the agent, once per bridge session: the first reply on that site carries them. sent: the
+// F10: a site's saved tips for the agent, once per agent session: the first reply on that site carries them. sent: the
 // sites done this session (it grows here, before load, so tips are read once). site: siteOn's, '' off the Sites.
 export async function tipsOnce(site: string, sent: Set<string>, load: (site: string) => Promise<string[]>): Promise<string> {
   if (!site || sent.has(site)) return '';
   sent.add(site);
   const tips = await load(site);
-  return tips.length ? `Tips the user saved for ${site} from past runs (hints that can be out of date: check them on the page):\n${tips.map((t) => `- ${t}`).join('\n')}` : '';
+  return tips.length ? `Tips saved for ${site} by past runs (hints that can be out of date: check them on the page):\n${tips.map((t) => `- ${t}`).join('\n')}` : '';
 }
 
-// F10: the agent's tip "<text>" for the site its tab is on (siteOn: '' off the Sites). Returns the text you're asked
-// about; a tip checkTip refuses throws why, so you're never asked.
+// F10: the agent's tip "<text>" for the site its tab is on (siteOn: '' off the Sites). Returns the text to save; a tip
+// checkTip refuses throws why, so it's never saved.
 export function checkAgentTip(args: string[], site: string): string {
   if (!site) throw new Error("tip works only on a page on the bridge's Sites.");
   if (args.length !== 1) throw new Error('Usage: tip "one short sentence about this site"');
   const checked = checkTip(args[0]!, site);
-  if ('why' in checked) throw new Error(`Tip refused, the user wasn't asked: ${checked.why}.`);
+  if ('why' in checked) throw new Error(`Tip not saved: ${checked.why}.`);
   return checked.text;
 }
 

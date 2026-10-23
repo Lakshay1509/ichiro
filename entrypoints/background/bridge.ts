@@ -87,7 +87,8 @@ export type BridgeStep = { ran?: string[]; downloadsAt?: number };
 // tips the agent already got this session (F10, tipsOnce).
 // steps (RP1): one per call, with what worked, for repeat <step>; each reply starts with its number.
 // solved: the CAPTCHA you last resumed from (captchaHold), so a solved one still on screen doesn't ask again.
-export let bridge: { port: Port; sites: string[]; refused: Set<string>; page: string | null; tipped: Set<string>; steps: BridgeStep[]; solved: string } | null = null;
+// session: the agent whose runs these are (host/mcp.ts). page and tipped are what that agent got, so they reset with it.
+export let bridge: { port: Port; sites: string[]; refused: Set<string>; page: string | null; tipped: Set<string>; steps: BridgeStep[]; solved: string; session: string } | null = null;
 
 // S2 for the bridge: a site off its Sites asks you first. No: refused and not asked again while the bridge is on.
 async function bridgeSite(site: string, url: string): Promise<void> {
@@ -113,7 +114,7 @@ export const save = (change: Partial<Remembered>) => remember(change).catch((err
 // Connects to the local helper (host/mcp.ts) with these Sites. Used by mcp on and by the panel turning it back on.
 export function startBridge(sites: string[]): string {
   const port = browser.runtime.connectNative(HOST_NAME);
-  bridge = { port, sites, refused: new Set(), page: null, tipped: new Set(), steps: [], solved: '' };
+  bridge = { port, sites, refused: new Set(), page: null, tipped: new Set(), steps: [], solved: '', session: '' };
   showMcp('starting');
   port.onMessage.addListener((m) => void onBridge(port, m));
   // Chrome's reason (not installed, host crashed) is in lastError. Never reconnects here: a crashing host would loop.
@@ -150,11 +151,15 @@ export function askAgent(ask: BridgeAsk | null) {
   if (running) bridge?.port.postMessage({ type: 'ask', ask: ask && { ...ask, text: ask.text.slice(0, MAX_ASK) } } satisfies AskNotice);
 }
 
-async function onBridge(port: Port, m: { type?: string; commands?: unknown; error?: unknown }) {
+async function onBridge(port: Port, m: { type?: string; commands?: unknown; error?: unknown; session?: unknown }) {
   if (m.type === 'ready') return showMcp('on');
   if (m.type === 'error') return print(`MCP bridge: ${String(m.error)}`, 'error');
   if (isAnswer(m)) return answerAsk(m); // BG7: your answer in the agent app's dialog (the host checked where it came from)
   if (m.type !== 'run') return;
+  // A new agent never saw the last one's replies: the whole page and each site's saved tips go to it again. The bridge
+  // outlives agents (it lives in the worker, and with always-on all day), so without this only the first agent got tips.
+  const session = typeof m.session === 'string' ? m.session : '';
+  if (bridge && bridge.session !== session) Object.assign(bridge, { session, page: null, tipped: new Set<string>() });
   running = true;
   let reply: BridgeReply;
   // RP1: the call's step number goes first, so the agent can send repeat <step>; none when nothing was recorded.
@@ -214,18 +219,14 @@ async function bridgeTips(): Promise<string> {
   }
 }
 
-// F10: the agent's tip "<text>": checkAgentTip first (a refused tip never asks you), then Save / No. Only your Save
-// keeps it; the reply tells the agent which.
+// F10: the agent's tip "<text>": checked (checkAgentTip: on its own site, no links away, emails or long numbers), then
+// saved at once, no ask. The log shows it, and /tips shows and deletes them.
 async function agentTip(args: string[], site: string): Promise<AgentReply> {
   const text = checkAgentTip(args, site);
-  const id = lastCommand;
-  const save = await askKeepGoing(`The agent suggests a tip for ${site}: "${text}"`, 'Save', 'No');
-  if (id !== lastCommand) throw new Error('Stopped: the user ran another command. Ask them what to do.');
-  if (!save) return { text: 'Not saved: the user said no.' };
   const saved = await saveTip(site, text, Date.now());
   if ('why' in saved) throw new Error(`Not saved: ${saved.why}.`);
-  print(`Saved for ${site} (${saved.tips.length} of ${MAX_TIPS} tips).`);
-  return { text: `Saved: the user kept your tip for ${site}.` };
+  print(`   saved for ${site} (${saved.tips.length} of ${MAX_TIPS} tips). /tips to see or delete them`);
+  return { text: `Saved your tip for ${site}.` };
 }
 
 // MCP option 2 (harness/mcp-context.md): a run's commands in order, each through agentRun with all of its own checks

@@ -45,7 +45,7 @@ export async function deleteTip(site: string, text: string): Promise<void> {
 
 export const deleteSite = (site: string) => browser.storage.local.remove(key(site));
 
-// Saves one tip for site, only ever after your click: checked and capped by addTip, the site marked used. Chrome
+// Saves one tip for site (the agent's tip, no ask): checked and capped by addTip, the site marked used. Chrome
 // checks the quota before writing and this is one set() of one key, so a refused save leaves nothing half-written.
 export async function saveTip(site: string, raw: string, now: number): Promise<{ tips: Tip[] } | { why: string }> {
   await pruneSites(now);

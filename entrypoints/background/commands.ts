@@ -262,10 +262,10 @@ export const commands: Record<string, Command> = {
     run: () => {},
   },
   tips: {
-    help: 'tips — the tips you saved for each site, with Delete buttons. The agent reads a site\'s tips only while it works there',
+    help: 'tips — the tips saved for each site, with Delete buttons. The MCP agent saves them as it learns a site, and reads a site\'s tips only while it works there',
     run: async () => {
       const sites = await listSites();
-      if (!sites.length) return 'No saved tips yet. The MCP agent can suggest one with tip; you choose Save or No.';
+      if (!sites.length) return 'No saved tips yet. The MCP agent saves one with tip when it learns how a site works.';
       for (const { site, tips } of sites) show({ kind: 'tips', site, tips: tips.map((t) => t.text) });
       return `${sites.length} site(s) with saved tips.`;
     },

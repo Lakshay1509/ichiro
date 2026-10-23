@@ -80,9 +80,9 @@ function serve(socket: Socket, token: string) {
         continue;
       }
       ran = true;
-      let commands: string[];
+      let run: ReturnType<typeof checkRun>;
       try {
-        commands = checkRun(m, token);
+        run = checkRun(m, token);
       } catch (e) {
         console.error('MCP bridge refused a pipe message:', (e as Error).message);
         return reply({ type: 'error', error: (e as Error).message });
@@ -96,7 +96,7 @@ function serve(socket: Socket, token: string) {
             done();
           },
         };
-        send({ type: 'run', commands });
+        send({ type: 'run', ...run });
       }));
     }
   });
