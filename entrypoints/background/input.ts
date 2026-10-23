@@ -77,6 +77,10 @@ export async function realPoints(points: Point[], clicks: 1 | 2, modifiers: numb
 
 const NO_REAL_KEYBOARD = "No real keyboard on this page (the debugging bar was cancelled, or Chrome won't attach here): this needs it";
 
+// A Mac (keyEvents adds its Cmd editing commands): asked once, on the first key; the OS can't change while Chrome runs.
+// Source: https://developer.chrome.com/docs/extensions/reference/api/runtime#method-getPlatformInfo
+let mac: Promise<boolean> | undefined;
+
 // WR1: a key or shortcut with the real keyboard, after the checks on what has focus, in the frame focus is in (WR2): a
 // same-site frame checks its own field; another site's frame gets the top page's frame rules. Pages like Google Slides
 // ignore script keys, so F's keys (Enter, Escape, Tab, Backspace, arrows) go real too, and fall back to F's script
@@ -86,7 +90,8 @@ export async function realKey(input: string, allow: boolean): Promise<string> {
   const tabId = await targetTabId();
   const frame = (await focusedFrame()) ?? 0;
   const where = await sendToTab({ type: 'aimKey', key: input, allow }, frame);
-  if (where !== null && (await sendKeys(tabId, keyEvents(k)))) return `ok — pressed ${k.name} on ${where}`;
+  mac ??= browser.runtime.getPlatformInfo().then((p) => p.os === 'mac');
+  if (where !== null && (await sendKeys(tabId, keyEvents(k, await mac)))) return `ok — pressed ${k.name} on ${where}`;
   if (!scriptKey(k)) throw new Error(NO_REAL_KEYBOARD);
   return sendToTab({ type: 'key', key: k.key, allow }, frame);
 }

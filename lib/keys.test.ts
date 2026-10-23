@@ -33,6 +33,12 @@ if (!parseKey('Space').printable || parseKey('Tab').printable || parseKey('Delet
 const ev = keyEvents(z).map((e) => `${e.type} ${e.key} ${e.modifiers}${e.text ? ` "${e.text}"` : ''}`);
 const want = ['rawKeyDown Control 2', 'rawKeyDown Shift 10', 'rawKeyDown Z 10', 'keyUp Z 10', 'keyUp Shift 2', 'keyUp Control 0'];
 if (JSON.stringify(ev) !== JSON.stringify(want)) fail(`ctrl+shift+z events: ${JSON.stringify(ev)}`);
+// Mac: a Cmd shortcut's key down carries its editing command (macOS runs them, not Chrome); ctrl ones and other OSes none.
+const commandsOn = (s: string, mac: boolean) => keyEvents(parseKey(s), mac).filter((e) => e.commands).map((e) => `${e.type} ${e.key} ${e.commands}`).join();
+for (const [s, want] of [['cmd+a', 'rawKeyDown a selectAll'], ['meta+z', 'rawKeyDown z undo'], ['meta+shift+z', 'rawKeyDown Z redo'], ['ctrl+a', ''], ['ctrl+z', ''], ['meta+b', ''], ['a', '']] as const) {
+  if (commandsOn(s, true) !== want) fail(`${s} on a Mac: ${commandsOn(s, true)}`);
+}
+if (commandsOn('meta+a', false) || commandsOn('meta+z', false)) fail('editing commands only on a Mac');
 const typed = keyEvents(parseKey('r'));
 if (typed.length !== 2 || typed[0]!.type !== 'keyDown' || typed[0]!.text !== 'r' || typed[0]!.unmodifiedText !== 'r') fail(`r events: ${JSON.stringify(typed)}`);
 

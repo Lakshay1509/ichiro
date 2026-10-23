@@ -82,11 +82,16 @@ export function parseKey(input: string): KeyPress {
   return { key: k.key, code: k.code, keyCode: k.keyCode, text: shortcut ? '' : k.text, modifiers, printable: k.printable && !shortcut, name };
 }
 
-export type KeyEvent = { type: 'rawKeyDown' | 'keyDown' | 'keyUp'; modifiers: number; key: string; code: string; windowsVirtualKeyCode: number; text?: string; unmodifiedText?: string };
+export type KeyEvent = { type: 'rawKeyDown' | 'keyDown' | 'keyUp'; modifiers: number; key: string; code: string; windowsVirtualKeyCode: number; text?: string; unmodifiedText?: string; commands?: string[] };
+
+// Mac only: macOS, not Chrome, turns Cmd shortcuts into editing, so a sent meta+a alone does nothing in a text box.
+// The key down carries the command a real Mac sends with it (the protocol's experimental commands field), as Playwright does.
+// Sources: Input.pdl's dispatchKeyEvent commands (above); https://github.com/microsoft/playwright/blob/main/packages/playwright-core/src/server/macEditingCommands.ts
+const MAC_COMMANDS: Record<string, string> = { 'meta+a': 'selectAll', 'meta+z': 'undo', 'shift+meta+z': 'redo' };
 
 // What a person's fingers do: each modifier down, the key down and up, the modifiers up. keyDown with text also types
 // it (keypress, input); rawKeyDown is the key alone.
-export function keyEvents(k: KeyPress): KeyEvent[] {
+export function keyEvents(k: KeyPress, mac = false): KeyEvent[] {
   const held = ORDER.filter((m) => k.modifiers & MODIFIERS[m]);
   const events: KeyEvent[] = [];
   let mods = 0;
@@ -96,7 +101,9 @@ export function keyEvents(k: KeyPress): KeyEvent[] {
     events.push({ type: 'rawKeyDown', modifiers: mods, key, code, windowsVirtualKeyCode: keyCode });
   }
   const main = { modifiers: k.modifiers, key: k.key, code: k.code, windowsVirtualKeyCode: k.keyCode };
-  events.push(k.text ? { type: 'keyDown', ...main, text: k.text, unmodifiedText: k.text } : { type: 'rawKeyDown', ...main });
+  const command = mac ? own(MAC_COMMANDS, k.name) : undefined;
+  const down: KeyEvent = k.text ? { type: 'keyDown', ...main, text: k.text, unmodifiedText: k.text } : { type: 'rawKeyDown', ...main };
+  events.push(command ? { ...down, commands: [command] } : down);
   events.push({ type: 'keyUp', ...main });
   for (const m of held.reverse()) {
     mods &= ~MODIFIERS[m];
