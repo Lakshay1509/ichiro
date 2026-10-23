@@ -16,7 +16,7 @@ import { failed, recordLine } from '@/lib/repeat';
 import { saveTip, useSite } from '@/lib/site-store';
 import { MAX_TIPS } from '@/lib/site-tips';
 import { isCheckoutUrl } from '@/lib/stop-lines';
-import { answerAsk, askKeepGoing, askResume, closeAsk, lastCommand, nextCommand } from './asks';
+import { answerAsk, askKeepGoing, askOrAuto, askResume, closeAsk, lastCommand, nextCommand } from './asks';
 import { commands, runLine } from './commands';
 import { screenshot, tabSwitches } from './input';
 import { closeStep, openStep, print, show, showMcp } from './panels';
@@ -53,7 +53,7 @@ async function inRunTab<T>(tab: number | null, f: () => T | Promise<T>): Promise
 function askDownload(item: Browser.downloads.DownloadItem, more = ''): Promise<boolean> {
   const from = URL.parse(item.finalUrl)?.hostname || URL.parse(item.referrer)?.hostname || 'the page';
   // No leaves no note: the "download refused" line right after says it.
-  return askKeepGoing(`The agent started a download: "${fileName(item)}" from ${from}. Allow it?${more}`, 'Allow', 'No', '');
+  return askOrAuto(`The agent started a download: "${fileName(item)}" from ${from}. Allow it?${more}`, 'Allow', 'No', '');
 }
 
 // The agent's turn is over: downloads still paused stay paused, and you decide.
@@ -96,7 +96,7 @@ async function bridgeSite(site: string, url: string): Promise<void> {
   const id = lastCommand;
   // The ask names only the new site: the whole Sites list is noise in the panel and the agent app's dialog. No leaves
   // no note: the "Refused" line right after says it.
-  const add = !b.refused.has(site) && await askKeepGoing(`${wantsSite(site, url)}. Add ${site} to the bridge's Sites?`, 'Add site', 'No', '');
+  const add = !b.refused.has(site) && await askOrAuto(`${wantsSite(site, url)}. Add ${site} to the bridge's Sites?`, 'Add site', 'No', '');
   if (id !== lastCommand) throw new Error('Stopped: the user ran another command. Ask them what to do.');
   if (add) {
     b.sites.push(site);
@@ -179,15 +179,15 @@ async function onBridge(port: Port, m: { type?: string; commands?: unknown; erro
   if (bridge?.port === port) port.postMessage(reply); // a port you closed meanwhile can't send
 }
 
-// 4.2–4.3 for the bridge (allowOnce): a stop-line asks Allow once / I'll do it, and a step you take
-// over waits for your Resume. A command you start meanwhile closes the ask and stops this one.
-const askYou = (keep: string, stop: string) => async (why: string): Promise<boolean> => {
+// 4.2–4.3 for the bridge (allowOnce): a stop-line asks Allow once / I'll do it (auto mode allows it), and a step you
+// take over waits for your Resume (never auto). A command you start meanwhile closes the ask and stops this one.
+const askYou = (keep: string, stop: string, ask: typeof askOrAuto) => async (why: string): Promise<boolean> => {
   const id = lastCommand;
-  const yes = await askKeepGoing(why, keep, stop);
+  const yes = await ask(why, keep, stop);
   if (id !== lastCommand) throw new Error('Stopped: the user ran another command. Ask them what to do.');
   return yes;
 };
-const bridgeAsks = { allow: askYou('Allow once', "I'll do it"), resume: askYou('Resume', 'Stop') };
+const bridgeAsks = { allow: askYou('Allow once', "I'll do it", askOrAuto), resume: askYou('Resume', 'Stop', askKeepGoing) };
 
 // 4.2 (captchaHold): true once you solved a CAPTCHA on url and pressed Resume; false if none asked. Stop ends the call.
 async function bridgeCaptcha(name: string, url: string): Promise<boolean> {

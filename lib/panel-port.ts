@@ -30,11 +30,11 @@ export type LogOp =
   | { type: 'open'; step: Step } // an agent call's block: what shows until it closes goes inside
   | { type: 'close'; id: number; ended: 'Done' | 'Stopped' }
   | { type: 'leave' }; // your own commands show outside the agent's block
-// alwaysOn (BG5): the bridge stays on when the last panel closes.
+// alwaysOn (BG5): the bridge stays on when the last panel closes. auto: yes/no asks answer themselves (/auto on).
 export type ToPanel =
   | LogOp
-  | { type: 'mcp'; state: McpState; alwaysOn: boolean }
-  | { type: 'hello'; log: Log; mcp: McpState; alwaysOn: boolean; commands: Record<string, { help: string }> };
+  | { type: 'mcp'; state: McpState; alwaysOn: boolean; auto: boolean }
+  | { type: 'hello'; log: Log; mcp: McpState; alwaysOn: boolean; auto: boolean; commands: Record<string, { help: string }> };
 
 // Panel → background: a line you typed, a button you pressed, or the keep-alive ping.
 export type FromPanel = { type: 'line'; text: string } | { type: 'press'; id: number; button: number } | { type: 'ping' };

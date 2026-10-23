@@ -13,6 +13,13 @@
       <input aria-label="A /command" placeholder="/command · /help for the list" autocomplete="off" spellcheck="false" autofocus role="combobox" aria-controls="slash" aria-autocomplete="list" aria-expanded="false" />
       <!-- MCP on or off (main.ts showMcp), the command box's bottom row. Icons: Lucide plug / unplug, ISC licence, https://lucide.dev -->
       <div id="mcp" role="status" data-state="off">
+        <!-- /auto on, at the row's left: hover or focus opens its words. Icon: Lucide hand, ISC licence, https://lucide.dev -->
+        <span class="mcp-auto" tabindex="0" hidden>
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2" /><path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2" /><path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8" /><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" />
+          </svg>
+          <span class="mcp-auto-label">Auto approval on</span>
+        </span>
         <svg class="plug" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 22v-5" /><path d="M15 8V2" /><path d="M17 8a1 1 0 0 1 1 1v4a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1z" /><path d="M9 8V2" />
         </svg>
@@ -21,8 +28,7 @@
         </svg>
         <span class="mcp-name">MCP</span>
         <span class="mcp-state">off</span>
-        <span class="mcp-always" title="MCP stays on when you close the side panel. /always-on off to change" hidden>· always-on</span>
-      </div>
+        <span class="mcp-always" title="MCP stays on when you close the side panel. /always-on off to change" hidden>· always-on</span>      </div>
     </form>
     <script type="module" src="./main.ts"></script>
   </body>

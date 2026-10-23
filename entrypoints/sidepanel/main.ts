@@ -10,12 +10,13 @@ const form = document.querySelector('form')!;
 const input = form.querySelector('input')!;
 
 // The command box's bottom row ("MCP" + this word). starting: the local helper is connecting; on: it said ready.
-// alwaysOn (BG5): "· always-on" shows while closing the panel leaves MCP on.
+// alwaysOn (BG5): "· always-on" shows while closing the panel leaves MCP on. auto: the hand at the left while asks answer themselves.
 const mcpStatus = document.querySelector<HTMLElement>('#mcp')!;
-function showMcp(state: McpState, alwaysOn: boolean) {
+function showMcp(state: McpState, alwaysOn: boolean, auto: boolean) {
   mcpStatus.dataset.state = state;
   mcpStatus.querySelector('.mcp-state')!.textContent = state;
   mcpStatus.querySelector<HTMLElement>('.mcp-always')!.hidden = !alwaysOn;
+  mcpStatus.querySelector<HTMLElement>('.mcp-auto')!.hidden = !auto;
 }
 
 // The / menu reads this as you type; hello fills it with the background's commands.
@@ -30,9 +31,9 @@ const post = (msg: FromPanel) => port.postMessage(msg);
 port.onMessage.addListener((msg: ToPanel) => {
   if (msg.type === 'hello') {
     Object.assign(commands, msg.commands);
-    showMcp(msg.mcp, msg.alwaysOn);
+    showMcp(msg.mcp, msg.alwaysOn, msg.auto);
     load(msg.log, post);
-  } else if (msg.type === 'mcp') showMcp(msg.state, msg.alwaysOn);
+  } else if (msg.type === 'mcp') showMcp(msg.state, msg.alwaysOn, msg.auto);
   else change(msg);
 });
 

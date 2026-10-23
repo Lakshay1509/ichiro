@@ -4,7 +4,7 @@ import { StopLine } from '@/lib/messages';
 import { pressed } from '@/lib/panel-port';
 import { detachAll } from '@/lib/real-input';
 import { askAgent } from './bridge';
-import { print, show, swap } from './panels';
+import { autoMode, print, show, swap } from './panels';
 
 // The open choice: a stop-line's Allow once / I'll do it, or a run's pause. Valid only until another command starts:
 // a new read renumbers elements, and an old Allow must never land on a different element.
@@ -82,6 +82,14 @@ export function askKeepGoing(message: string, keepLabel = 'Keep going', stopLabe
   });
 }
 
+// /auto on: a yes/no ask (stop-line, new site, download, repeat) presses its keep button itself; the log still
+// shows it. Resume asks never come here: a pause, a CAPTCHA or a password field needs your hands, not a yes.
+export function askOrAuto(message: string, keepLabel: string, stopLabel: string, stopNote?: string): Promise<boolean> {
+  if (!autoMode) return askKeepGoing(message, keepLabel, stopLabel, stopNote);
+  print(`${message} Auto mode: ${keepLabel}.`, 'stop');
+  return Promise.resolve(true);
+}
+
 // 4.1 pause "reason": hands the page to you. The agent wrote the reason after reading the page, so it's shown quoted,
 // one line, capped, like its other words.
 export function askResume(args: string[]): Promise<boolean> {
@@ -99,6 +107,11 @@ export async function runAndPrint(run: Run, allow = false) {
     if (result) print(result);
   } catch (err) {
     if (!(err instanceof StopLine)) return print(err instanceof Error ? err.message : String(err), 'error');
+    // /auto on: Allow once without asking. Awaited, so the finally below detaches only after the allowed run.
+    if (autoMode && !allow) {
+      print(`${err.message} Auto mode: allowed.`, 'stop');
+      return await runAndPrint(run, true);
+    }
     askAllow(err, run, id);
   } finally {
     await detachAll(); // I1: the debugger is attached only while a command or run goes

@@ -248,7 +248,12 @@ input:focus-visible { outline: none; } /* the card's blue border shows focus, no
 #mcp { display: flex; justify-content: flex-end; align-items: center; gap: 6px; padding: 0 14px 12px; color: var(--ink-muted); font-size: 12.5px; line-height: 16px; }
 #mcp svg { width: 14px; height: 14px; flex: none; }
 .mcp-name { color: var(--ink-2); font-weight: 500; }
-#mcp[data-state='on'] svg { color: var(--blue-ink); }
+#mcp[data-state='on'] .plug { color: var(--blue-ink); }
+/* /auto on: a hand at the row's left, tinted like the waiting status mark. Hover or keyboard focus opens its words. */
+.mcp-auto { display: inline-flex; align-items: center; margin-right: auto; padding: 2px 4px; border-radius: 9999px; color: var(--warn); background: var(--warn-soft); font-size: 12px; font-weight: 600; cursor: default; }
+.mcp-auto[hidden] { display: none; }
+.mcp-auto-label { max-width: 0; overflow: hidden; white-space: nowrap; opacity: 0; }
+.mcp-auto:is(:hover, :focus-visible) .mcp-auto-label { max-width: 10em; padding: 0 4px 0 5px; opacity: 1; }
 #mcp[data-state='off'] .plug, #mcp:not([data-state='off']) .unplug { display: none; }
 
 /* Motion: only what says something (a new line arrives, a section opens). */
@@ -256,5 +261,6 @@ input:focus-visible { outline: none; } /* the card's blue border shows focus, no
 @media (prefers-reduced-motion: no-preference) {
   #out > *, .step > * { animation: arrive 0.18s ease-out; }
   summary::before { transition: transform 0.15s; }
+  .mcp-auto-label { transition: max-width 0.2s ease-out, padding 0.2s ease-out, opacity 0.15s; }
 }
 @keyframes arrive { from { opacity: 0; transform: translateY(3px); } }

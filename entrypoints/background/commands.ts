@@ -20,7 +20,7 @@ import { listSites } from '@/lib/site-store';
 import { askResume, closeAsk, nextCommand, runAndPrint } from './asks';
 import { agentDownloads, agentPage, bridge, endAgentTurn, forAgent, runEnded, save, skipRead, startBridge, stopBridge } from './bridge';
 import { checkText, realKey, realMouse, realPoints, typeHere, typingFrame } from './input';
-import { clearLog, leaveStep, print, show, showAlwaysOn } from './panels';
+import { clearLog, leaveStep, print, show, showAlwaysOn, showAuto } from './panels';
 
 // allow: run past a stop-line. Only the Allow once button passes true, never a typed command.
 // line: the whole command line as typed, for commands that take the rest of it as is (paste, type here).
@@ -301,6 +301,17 @@ export const commands: Record<string, Command> = {
       return on === 'on'
         ? 'Always-on: MCP stays on when you close the side panel, and comes back on when Chrome starts.'
         : 'Always-on off: closing the side panel stops MCP.';
+    },
+  },
+  // Not in MCP_COMMANDS: only you can turn your asks off. Never saved, so it can't stay on by accident.
+  auto: {
+    help: 'auto on|off — on: stop-lines, new sites, downloads and repeats go ahead without asking you (off by default, not remembered). CAPTCHAs, password and card fields, and pause still wait for you',
+    run: ([on]) => {
+      if (on !== 'on' && on !== 'off') throw new Error('Usage: auto on|off');
+      showAuto(on === 'on');
+      return on === 'on'
+        ? 'Auto mode on: stop-lines, new sites, downloads and repeats go ahead without asking you. The log still shows each one.'
+        : 'Auto mode off: those ask you again.';
     },
   },
   overlay: {

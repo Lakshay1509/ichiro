@@ -3,7 +3,7 @@ import { oneLine } from '@/lib/agent-prompt';
 import { captchaAll, frameFor, labelFor, nameFor, numberFor, readAll } from '@/lib/frames';
 import { downloadsSince, failed, filesLine, forItem, item1On, itemMiss, itemTarget, notAlikeError, parseRepeat, recipeFrom, repeatAsk, repeatDone, stoppedAt } from '@/lib/repeat';
 import { sendToTab } from '@/lib/send-to-tab';
-import { askKeepGoing, lastCommand } from './asks';
+import { askOrAuto, lastCommand } from './asks';
 import type { BridgeStep } from './bridge';
 import { print } from './panels';
 
@@ -34,7 +34,7 @@ export async function runRepeat(args: string[], r: RepeatRun): Promise<string | 
   const names = items.map(named);
   const targets = items.map((n) => itemTarget(n, labelFor));
   const perItem = downloadsSince(r.steps, step, r.count());
-  if (!(await askKeepGoing(repeatAsk(step, r.steps.length, r.site, names, perItem), 'Repeat', 'No'))) {
+  if (!(await askOrAuto(repeatAsk(step, r.steps.length, r.site, names, perItem), 'Repeat', 'No'))) {
     return id !== lastCommand ? null : 'Refused: the user said no to this repeat. Do the items one by one, or pause to ask the user.';
   }
   const allNews: string[] = []; // every item's download lines, named in the result (filesLine)
