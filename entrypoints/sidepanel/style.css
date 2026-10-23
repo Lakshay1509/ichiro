@@ -62,17 +62,17 @@ body {
   text-align: center;
   color: var(--ink-muted);
 }
-/* MCP on, nothing yet: a Newton's cradle loop (art/cradle/build.mjs) above the words. 2x pixels shown at 200 × 122. */
+/* MCP on, nothing yet: the Ichiro symbol blinking and looking around (art/blink/build.mjs) above the words. Its SVG is 104 × 100. */
 body:has(#mcp:not([data-state='off'])) #out:empty::before {
   content: "When a coding agent uses the browser, its steps show here.";
   box-sizing: border-box;
   width: 280px;
   max-width: 100%;
-  padding: 138px 15px 0;
-  background: url(/cradle.gif) center top / 200px 122px no-repeat;
+  padding: 116px 15px 0;
+  background: url(/blink.svg) center top / 104px 100px no-repeat;
 }
 @media (prefers-reduced-motion: reduce) {
-  body:has(#mcp:not([data-state='off'])) #out:empty::before { background-image: url(/cradle.png); }
+  body:has(#mcp:not([data-state='off'])) #out:empty::before { background-image: url(/blink-still.svg); }
 }
 
 .error { color: var(--danger); font-weight: 500; }
