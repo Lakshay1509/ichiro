@@ -1,5 +1,5 @@
 // Checks the MCP bridge's rules: the strict run check with its token, batches, the panel's reply check, the untrusted block, and BG7's ask and answer checks. Run: npm test
-import { allowOnce, askDialog, batchProblem, batchReply, captchaHold, checkAgentTip, checkAnswer, checkReply, checkRun, dialogAnswer, formDialogs, isAnswer, isBridgeStart, lookShot, MAX_ASK, MAX_BATCH, MAX_COMMAND, MAX_IMAGE, MAX_OUTPUT, MCP_COMMANDS, retryUnlisted, showsPage, tipsOnce, untrusted } from './bridge.ts';
+import { allowOnce, askDialog, batchProblem, batchReply, captchaHold, checkAgentTip, checkAnswer, checkReply, checkRun, dialogAnswer, formDialogs, isAnswer, isBridgeStart, lookShot, MAX_ASK, MAX_BATCH, MAX_COMMAND, MAX_IMAGE, MAX_OUTPUT, MCP_COMMANDS, picksTab, retryUnlisted, showsPage, tipsOnce, untrusted } from './bridge.ts';
 import { MAX_FRAME } from './host-request.ts';
 import { HandOver, StopLine } from './messages.ts';
 
@@ -57,6 +57,10 @@ for (const [line, want] of [['look', true], [' read ', true], ['click 4', false]
   if (showsPage(line) !== want) fail(`showsPage(${JSON.stringify(line)}) should be ${want}`);
 }
 if (!batchProblem(['key Tab', 'look', 'key Tab']) || !batchProblem(['pause', 'click 4'])) fail('look or pause in the middle allowed');
+
+// OT1: only reading or leaving a page picks the agent's tab; anything that acts on it (find scrolls) waits for a read.
+for (const name of ['read', 'look', 'text', 'goto']) if (!picksTab(name)) fail(`${name} should pick the agent's tab`);
+for (const name of ['find', 'click', 'type', 'key', 'scroll', 'back', 'repeat', 'tip', 'pause', 'help', '']) if (picksTab(name)) fail(`${name} should not pick the agent's tab`);
 
 // The batch's reply: numbered replies, why it stopped, what didn't run (one short line each), then the page once.
 const all = batchReply(['click 4', 'key ctrl+b'], ['ok — real click', 'ok — pressed ctrl+b\n\nPage: nothing changed since your last page list.']);

@@ -1,5 +1,5 @@
 // Checks safeUrl (only http(s) URLs pass) and arrived (goto's honest result). Run: npm test
-import { arrived, back, follow, loaded, pinTab, safeUrl } from './navigation.ts';
+import { arrived, back, follow, loaded, pinTab, safeUrl, targetTabId } from './navigation.ts';
 
 const allowed = ['https://en.wikipedia.org/wiki/Alan_Turing', 'http://localhost:3000/'];
 const blocked = ['javascript:alert(1)', 'JavaScript:alert(1)', 'data:text/html,hi', 'file:///C:/x.html', 'chrome://settings', 'wikipedia.org', ''];
@@ -41,7 +41,7 @@ Object.assign(globalThis, {
   browser: {
     tabs: {
       query: async () => [tabs.get(active)],
-      get: async (id: number) => tabs.get(id) ?? Promise.reject(new Error(`No tab with id: ${id}.`)),
+      get: async (id: number) => (tabs.has(id) ? { ...tabs.get(id), active: id === active } : Promise.reject(new Error(`No tab with id: ${id}.`))),
       update: async (id: number) => void activated.push(id),
       goBack: async (id: number) => {
         if (!tabs.has(id)) throw new Error(`No tab with id: ${id}.`);
@@ -63,9 +63,13 @@ setTimeout(() => tabs.set(4, { id: 4, windowId: 1, status: 'complete' }), 50);
 const start = Date.now();
 if (!(await loaded(4)) || Date.now() - start < 50) throw new Error('loaded: should wait for the pending page');
 
-// follow: same window → made active; another window or closed → not followed, nothing activated.
+// follow: same window → followed, made active only if the tab it came from was (OT1); another window or closed → not
+// followed, nothing activated.
+active = 1;
 if (!(await follow(2, 1)) || activated.join() !== '2') throw new Error('follow: same window');
 if ((await follow(3, 1)) || (await follow(7, 1)) || activated.length !== 1) throw new Error('follow: other window or closed tab');
+active = 2;
+if (!(await follow(4, 1)) || activated.length !== 1) throw new Error('follow: from a tab behind yours, it stays behind');
 
 // back: Chrome's own go back; with no earlier page, the tab that opened it (never Chrome's wrong "next page" words).
 if ((await back()) !== 'ok — went back') throw new Error('back: with history');
@@ -73,10 +77,15 @@ history = false;
 if ((await back()) !== 'ok — this tab had no earlier page, so went to the tab that opened it' || activated.at(-1) !== 1) throw new Error('back: to the opener');
 active = 3;
 await rejects(back(), 'in another window');
-pinTab(2); // a command pinned to its tab (a repeat's recipe) stays on it
-await rejects(back(), 'send back on its own to go there');
-pinTab(1);
+// A pinned tab never goes to Chrome's opener (OT1: that's the front tab, maybe yours), e.g. a repeat's recipe.
+pinTab(2);
 await rejects(back(), "Can't go back: this tab has no earlier page.");
 pinTab(7); // any other error stays Chrome's
 await rejects(back(), 'No tab with id: 7.');
+pinTab(2, 9); // the tab it came from is gone
+await rejects(back(), 'closed or in another window');
+// OT1: the agent's tab goes back to the tab it came from: the pin moves there, and it stays behind your tab.
+pinTab(2, 1);
+const before = activated.length;
+if ((await back()).includes('went to the tab that opened it') !== true || (await targetTabId()) !== 1 || activated.length !== before) throw new Error('back: the agent tab moves to where it came from, behind');
 pinTab(null);

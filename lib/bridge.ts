@@ -81,6 +81,10 @@ export function batchProblem(lines: string[]): string {
 // read and look only show the page, so a batch's stop (a new page loaded) still runs them next: goto + look works.
 export const showsPage = (line: string) => ['read', 'look'].includes(parseCommand(line)[0] ?? '');
 
+// OT1: with no tab of its own yet, an agent command takes the front tab only if it just reads it or leaves it. Any other
+// (find scrolls) would act on a page the agent never saw.
+export const picksTab = (name: string) => ['read', 'look', 'text', 'goto'].includes(name);
+
 // A batch's reply: each command's reply in order, numbered; why it stopped early and what didn't run; then the page
 // once. When all ran, the last reply already carries the page.
 export function batchReply(lines: string[], replies: string[], why = '', page = ''): string {

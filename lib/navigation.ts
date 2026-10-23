@@ -17,8 +17,12 @@ export function safeUrl(input: string): string {
 // The tab an agent command works in (#16). While set, every command goes to this tab by its id, never to whatever tab
 // you're looking at, so the agent can't wander into your tabs. The panel clears it when you type a command.
 let pinned: number | null = null;
-export const pinTab = (id: number | null) => {
+// OT1: where back takes a pinned tab with no earlier page (#15): the tab the agent followed it from. null: nowhere (a
+// repeat's recipe stays in its tab). Never Chrome's openerTabId for a pin: that's the front tab, maybe yours.
+let backTo: number | null = null;
+export const pinTab = (id: number | null, to: number | null = null) => {
   pinned = id;
+  backTo = to;
 };
 
 // The tab commands go to: the agent command's pinned tab, else the active tab of this window (hand commands).
@@ -75,11 +79,12 @@ export async function loaded(id: number): Promise<boolean> {
   }
 }
 
-// Makes tab id the active one, where hand and MCP commands go, if it's in the same window as tab from.
+// Moves on to tab id, if it's in the same window as tab from. In front only if from was (OT1: the agent's tab can be
+// behind yours). active is "in its window": https://developer.chrome.com/docs/extensions/reference/api/tabs#type-Tab
 async function bringForward(id: number, from: number): Promise<boolean> {
   const [tab, was] = [await tabOf(id), await tabOf(from)];
   if (!tab || tab.windowId !== was?.windowId) return false;
-  await browser.tabs.update(id, { active: true });
+  if (was.active) await browser.tabs.update(id, { active: true });
   return true;
 }
 
@@ -98,12 +103,12 @@ export async function back(): Promise<string> {
     // Chrome's words when there's no earlier page: "Cannot find a next page in history."
     if (!/page in history/i.test(String(err))) throw err;
   }
-  // #15: a tab a link opened has no earlier page: the page it came from is in the tab that opened it.
-  const opener = (await tabOf(id))?.openerTabId;
+  // #15: a tab a link opened has no earlier page: the page it came from is in the tab that opened it. For a pinned
+  // tab, only where backTo says (OT1).
+  const opener = pinned === null ? (await tabOf(id))?.openerTabId : (backTo ?? undefined);
   const none = "Can't go back: this tab has no earlier page";
   if (opener === undefined) throw new Error(`${none}.`);
-  // A command pinned to its tab (a repeat's recipe) stays there, so it never jumps to the opener midway.
-  if (pinned !== null) throw new Error(`${none}. Another tab opened it: send back on its own to go there.`);
-  if (!(await bringForward(opener, id))) throw new Error(`${none}, and the tab that opened it is in another window.`);
+  if (!(await bringForward(opener, id))) throw new Error(`${none}, and the tab that opened it is closed or in another window.`);
+  if (pinned !== null) pinned = opener; // OT1: the agent's tab is now the one it came from
   return 'ok — this tab had no earlier page, so went to the tab that opened it';
 }
