@@ -303,6 +303,25 @@ export const commands: Record<string, Command> = {
         : 'Always-on off: closing the side panel stops MCP.';
     },
   },
+  // Not in MCP_COMMANDS: only you see or change what the agent may use. Delete buttons send "sites remove <site>". The
+  // live list changes too, not just the saved one, so a removed site asks again from the agent's next command.
+  sites: {
+    help: "sites [remove <site>] — the bridge's Sites (trusted: the agent works on them without asking you), with Delete buttons",
+    run: async ([verb, site, ...rest]) => {
+      const sites = bridge?.sites ?? (await recall()).mcpSites;
+      if (verb === undefined) {
+        if (!sites.length) return "No trusted sites yet. /mcp on adds this tab's site; any other site asks you first.";
+        show({ kind: 'sites', sites: [...sites] }); // a copy: the live list grows when you add a site
+        return;
+      }
+      if (verb !== 'remove' || !site || rest.length) throw new Error('Usage: sites | sites remove <site>');
+      if (!sites.includes(site)) return `${site} isn't on the trusted sites.`;
+      const left = sites.filter((s) => s !== site);
+      if (bridge) bridge.sites = left;
+      await save({ mcpSites: left });
+      return `Removed ${site}. The agent has to ask you before using it again.`;
+    },
+  },
   // Not in MCP_COMMANDS: only you can turn your asks off. Never saved, so it can't stay on by accident.
   auto: {
     help: 'auto on|off — on: stop-lines, new sites, downloads and repeats go ahead without asking you (off by default, not remembered). CAPTCHAs, password and card fields, and pause still wait for you',

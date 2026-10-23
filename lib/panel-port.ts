@@ -17,6 +17,7 @@ export type Item =
   | { id: number; kind: 'line'; text: string; className?: string; more?: string } // more: behind a click (RL4)
   | { id: number; kind: 'ask'; buttons: string[] }
   | { id: number; kind: 'tips'; site: string; tips: string[] }
+  | { id: number; kind: 'sites'; sites: string[] } // /sites: the bridge's Sites, each with a Delete button
   | Step;
 
 export type Log = { items: Item[]; open: number | null }; // open: the step new items go into

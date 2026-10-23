@@ -1,4 +1,4 @@
-// Side panel log: Preact draws the background's log (lines, asks, agent calls, tip lists) above the command box.
+// Side panel log: Preact draws the background's log (lines, asks, agent calls, tip and site lists) above the command box.
 import { render } from 'preact';
 import { useState } from 'preact/hooks';
 import { apply, type FromPanel, type Item, type Log, type LogOp } from '@/lib/panel-port';
@@ -85,7 +85,44 @@ function Entry({ item }: { item: Item }) {
       </div>
     );
   }
+  if (item.kind === 'sites') return <Sites sites={item.sites} />;
   return <Tips site={item.site} tips={item.tips} />;
+}
+
+// /sites: the bridge's Sites with Delete buttons, in the tips box. A Delete sends /sites remove <site>, as if you typed
+// it: the background changes the live list and the saved one, and its reply line says how it went.
+function Sites({ sites }: { sites: string[] }) {
+  const [gone, setGone] = useState<string[]>([]);
+  return (
+    <div class="tips">
+      <div class="tips-head">
+        <span>
+          <span class="tips-site">Trusted sites</span> · the agent works on these without asking you
+        </span>
+      </div>
+      <ul>
+        {sites.map((s) =>
+          gone.includes(s) ? (
+            <li class="gone">Removed: {s}</li>
+          ) : (
+            <li>
+              <span>{s}</span>
+              <button
+                type="button"
+                class="small danger"
+                onClick={() => {
+                  send({ type: 'line', text: `/sites remove ${s}` });
+                  setGone((g) => [...g, s]);
+                }}
+              >
+                Delete
+              </button>
+            </li>
+          ),
+        )}
+      </ul>
+    </div>
+  );
 }
 
 // /tips: one site's saved tips with Delete buttons. Once a delete worked, its line says what went. Tips go by their
