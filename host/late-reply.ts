@@ -11,25 +11,35 @@ const WAITING = "No reply from the side panel after 50 s: it's likely asking the
 const STILL = 'Not run: the side panel still hasn\'t replied to your earlier call (likely waiting for the user). Send read again after they answer.';
 const LATE = 'Not run: first, the reply to your earlier call, which came after that call stopped waiting. Read it, then send these commands again if you still need them.';
 
-// The reply, or null after ms. The race keeps a handler on p, so a later rejection isn't unhandled.
-function within<T>(p: Promise<T>, ms: number): Promise<T | null> {
+const GONE = "Not run again: this call's reply already went to another call.";
+
+// The reply, or null after ms or once until settles. The race keeps a handler on p, so a later rejection isn't unhandled.
+function within<T>(p: Promise<T>, ms: number, until?: Promise<void>): Promise<T | null> {
   let timer: ReturnType<typeof setTimeout> | undefined;
-  return Promise.race([p, new Promise<null>((done) => { timer = setTimeout(done, ms, null); })]).finally(() => clearTimeout(timer));
+  const stop = [new Promise<null>((done) => { timer = setTimeout(done, ms, null); }), ...(until ? [until.then(() => null)] : [])];
+  return Promise.race([p, ...stop]).finally(() => clearTimeout(timer));
 }
 
 // Wraps run. While an earlier run's reply is owed, new commands don't run: the user's answer may have changed the
 // page, so the agent must see that reply first. note: ours (trusted); reply: the panel's, '' note when it's the call's own.
+// BG7: until stops the wait early (an ask to show in a dialog); the reply stays owed. resumed: the same call again,
+// after that dialog, so it keeps that call's late or not, and never runs its commands a second time.
 export function lateReplies(run: (commands: string[]) => Promise<BridgeReply>, wait = WAIT_MS) {
   let owed: Promise<BridgeReply> | null = null; // a run whose call already returned without its reply
-  return async (commands: string[]): Promise<{ note: string; reply?: BridgeReply }> => {
-    const late = owed !== null;
+  let owedLate = false; // whether the call that returned without it was itself late
+  return async (commands: string[], { resumed = false, until }: { resumed?: boolean; until?: Promise<void> } = {}): Promise<{ note: string; reply?: BridgeReply }> => {
+    if (resumed && !owed) return { note: GONE };
+    const late = resumed ? owedLate : owed !== null;
     const mine = owed ?? run(commands);
     owed = mine;
-    const reply = await within(mine, wait).catch((e: Error) => {
+    const reply = await within(mine, wait, until).catch((e: Error) => {
       if (owed === mine) owed = null;
       throw late ? new Error(`${LATE}\n${e.message}`) : e;
     });
-    if (!reply) return { note: late ? STILL : WAITING };
+    if (!reply) {
+      owedLate = late;
+      return { note: late ? STILL : WAITING };
+    }
     if (owed === mine) owed = null;
     return { note: late ? LATE : '', reply };
   };

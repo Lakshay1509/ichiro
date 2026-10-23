@@ -1,6 +1,6 @@
 // BG4: the MCP bridge (/mcp on) and the coding agent's commands, each run like a typed one with the agent's guards.
 import { checkGoto, onSites, siteOn, siteToAdd, siteToOpen, wantsSite } from '@/lib/agent-prompt';
-import { allowOnce, batchProblem, batchReply, captchaHold, checkAgentTip, checkCommands, LOOK_HELP, lookShot, MAX_OUTPUT, MCP_COMMANDS, retryUnlisted, showsPage, TIP_HELP, tipsOnce, type BridgeImage, type BridgeReply } from '@/lib/bridge';
+import { allowOnce, batchProblem, batchReply, captchaHold, checkAgentTip, checkCommands, isAnswer, LOOK_HELP, lookShot, MAX_ASK, MAX_OUTPUT, MCP_COMMANDS, retryUnlisted, showsPage, TIP_HELP, tipsOnce, type AskNotice, type BridgeAsk, type BridgeImage, type BridgeReply } from '@/lib/bridge';
 import { fileName, RunDownloads } from '@/lib/downloads';
 import { captchaAll, labelFor, nameFor, readAll } from '@/lib/frames';
 import { HOST_NAME } from '@/lib/host-install';
@@ -16,7 +16,7 @@ import { failed, recordLine } from '@/lib/repeat';
 import { saveTip, useSite } from '@/lib/site-store';
 import { MAX_TIPS } from '@/lib/site-tips';
 import { isCheckoutUrl } from '@/lib/stop-lines';
-import { askKeepGoing, askResume, closeAsk, lastCommand, nextCommand } from './asks';
+import { answerAsk, askKeepGoing, askResume, closeAsk, lastCommand, nextCommand } from './asks';
 import { commands, runLine } from './commands';
 import { screenshot, tabSwitches } from './input';
 import { closeStep, openStep, print, show, showMcp } from './panels';
@@ -137,10 +137,21 @@ export function stopBridge(): boolean {
   return true;
 }
 
+// BG7: true while the agent's call waits on a run here. Its asks then go to the agent app too (askAgent).
+let running = false;
+
+// BG7: the open ask (null: it closed), sent on to the agent's call, whose agent app shows it as a dialog you can answer
+// (host/mcp.ts). Capped: it quotes page and agent text.
+export function askAgent(ask: BridgeAsk | null) {
+  if (running) bridge?.port.postMessage({ type: 'ask', ask: ask && { ...ask, text: ask.text.slice(0, MAX_ASK) } } satisfies AskNotice);
+}
+
 async function onBridge(port: Port, m: { type?: string; commands?: unknown; error?: unknown }) {
   if (m.type === 'ready') return showMcp('on');
   if (m.type === 'error') return print(`MCP bridge: ${String(m.error)}`, 'error');
+  if (isAnswer(m)) return answerAsk(m); // BG7: your answer in the agent app's dialog (the host checked where it came from)
   if (m.type !== 'run') return;
+  running = true;
   let reply: BridgeReply;
   // RP1: the call's step number goes first, so the agent can send repeat <step>; none when nothing was recorded.
   const before = bridge?.steps.length ?? 0;
@@ -159,6 +170,7 @@ async function onBridge(port: Port, m: { type?: string; commands?: unknown; erro
     reply = { type: 'error', error: (numbered() + message).slice(0, MAX_OUTPUT) };
     show({ kind: 'line', className: 'error', ...splitReply(message) }); // RL4: the block already says Step N
   }
+  running = false;
   if (block) closeStep(block, reply.type === 'error' ? 'Stopped' : 'Done');
   if (bridge?.port === port) port.postMessage(reply); // a port you closed meanwhile can't send
 }

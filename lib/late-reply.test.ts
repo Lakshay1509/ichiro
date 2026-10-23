@@ -60,4 +60,28 @@ const after = call(['read']);
 answer({ type: 'output', text: 'page 2' });
 if (text((await after).reply) !== 'page 2' || ran.length !== 4) fail('runs again after a late error');
 
+// BG7: an ask to show in a dialog stops the wait early. The reply stays owed, and nothing new runs.
+let ask = () => {};
+const asked = call(['goto https://new.example/'], { until: new Promise<void>((done) => (ask = done)) });
+ask();
+const early = await asked;
+if (early.reply || ran.length !== 5) fail('an ask ends the wait early, with no reply');
+// The same call again after the dialog (resumed): it gets its own reply, with no note, and runs nothing again.
+const resumed = call(['goto https://new.example/'], { resumed: true });
+answer({ type: 'output', text: 'Step 3. page' });
+const own2 = await resumed;
+if (own2.note !== '' || text(own2.reply) !== 'Step 3. page' || ran.length !== 5) fail(`resumed call gets its own reply: ${own2.note}`);
+// A resumed call with nothing owed (its reply went to another call) never runs its commands a second time.
+const gone = await call(['click 4'], { resumed: true });
+if (gone.reply || !/Not run again/.test(gone.note) || ran.length !== 5) fail(`resumed with nothing owed: ${gone.note}`);
+
+// A late call (an earlier reply owed) that shows a dialog stays late when resumed: the reply isn't for its commands.
+await call(['click 5']);
+const lateAsk = call(['read'], { until: Promise.resolve() });
+if ((await lateAsk).reply) fail('a late call stops early for an ask too');
+const lateResumed = call(['read'], { resumed: true });
+answer({ type: 'output', text: 'clicked' });
+const lr = await lateResumed;
+if (text(lr.reply) !== 'clicked' || !/Not run/.test(lr.note) || ran.length !== 6) fail(`a resumed late call keeps its note: ${lr.note}`);
+
 console.log('late-reply: all checks passed');

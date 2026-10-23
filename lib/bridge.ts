@@ -1,5 +1,6 @@
 // The MCP bridge's rules: what may pass between a coding agent's MCP server, the host's pipe and the side panel.
 // Agent → host (pipe): {type: 'run', token, commands}. Host → panel: {type: 'run', commands}. Panel → host → agent: a BridgeReply.
+// BG7, while a run waits: panel → host → agent, the open ask (AskNotice); agent → host → panel, the dialog's BridgeAnswer.
 import { defuse } from './agent-prompt.ts';
 import { isObject, onlyKeys } from './host-request.ts';
 import { HandOver, StopLine } from './messages.ts';
@@ -112,14 +113,70 @@ function checkImage(v: unknown): BridgeImage {
   return { data: v.data, mimeType: v.mimeType as BridgeImage['mimeType'] };
 }
 
-// The panel's answer to a run, as the host passes it on.
-export function checkReply(text: string): BridgeReply {
+// BG7: an ask the side panel shows while the agent's call waits, sent on to the agent app as a dialog too (host/mcp.ts).
+// keep, stop: its two buttons' labels. Its text quotes page and agent text, so it's capped.
+export const MAX_ASK = 2000;
+const MAX_LABEL = 40;
+export type BridgeAsk = { id: number; text: string; keep: string; stop: string };
+export type AskNotice = { type: 'ask'; ask: BridgeAsk | null }; // null: the ask closed
+// The user's answer in the agent app's dialog: keep (true) or stop, for the ask with this id.
+export type BridgeAnswer = { type: 'answer'; id: number; keep: boolean };
+
+const isId = (v: unknown): v is number => Number.isSafeInteger(v) && (v as number) >= 0;
+const isLabel = (v: unknown): v is string => typeof v === 'string' && v.length > 0 && v.length <= MAX_LABEL;
+
+function checkAsk(v: unknown): BridgeAsk {
+  if (!isObject(v) || !onlyKeys(v, ['id', 'text', 'keep', 'stop']) || !isId(v.id) || typeof v.text !== 'string' || v.text.length > MAX_ASK || !isLabel(v.keep) || !isLabel(v.stop)) throw new Error('Not a bridge ask');
+  return { id: v.id, text: v.text, keep: v.keep, stop: v.stop };
+}
+
+// The panel's answer to a run, or (BG7) the ask it shows meanwhile, as the host passes them on.
+export function checkReply(text: string): BridgeReply | AskNotice {
   const m = parse(text);
+  if (isObject(m) && m.type === 'ask' && onlyKeys(m, ['type', 'ask'])) return { type: 'ask', ask: m.ask === null ? null : checkAsk(m.ask) };
   if (isObject(m) && m.type === 'output' && onlyKeys(m, ['type', 'text', 'image']) && typeof m.text === 'string') {
     return m.image === undefined ? { type: 'output', text: m.text } : { type: 'output', text: m.text, image: checkImage(m.image) };
   }
   if (isObject(m) && m.type === 'error' && onlyKeys(m, ['type', 'error']) && typeof m.error === 'string') return { type: 'error', error: m.error };
   throw new Error('Not a bridge reply');
+}
+
+// BG7: an answer's exact shape (the ask's id, keep or stop), checked by the host and again by the background. Where it
+// may come from (the run's own connection, the ask open right now) is checked there.
+export const isAnswer = (m: unknown): m is BridgeAnswer => isObject(m) && m.type === 'answer' && onlyKeys(m, ['type', 'id', 'keep']) && isId(m.id) && typeof m.keep === 'boolean';
+
+export function checkAnswer(text: string): BridgeAnswer {
+  const m = parse(text);
+  if (!isAnswer(m)) throw new Error('Only {"type":"answer", id, keep} is accepted');
+  return { type: 'answer', id: m.id, keep: m.keep };
+}
+
+// BG7: whether the agent app can show a form dialog (MCP elicitation). An empty elicitation {} means form.
+// Source: https://modelcontextprotocol.io/specification/2026-07-28/client/elicitation#capabilities
+export const formDialogs = (caps: { elicitation?: { form?: object; url?: object } } | undefined): boolean => !!caps?.elicitation && (!!caps.elicitation.form || !caps.elicitation.url);
+
+// BG7: the dialog for a panel ask: its text, then its two buttons as one required choice. Stop comes first and nothing
+// is picked for you, so a reflex Enter can never pick keep (like the panel keeping focus in the command box).
+export function askDialog(ask: BridgeAsk) {
+  return {
+    message: `${ask.text}\n\nPick an answer and submit, or close this and answer in the Browser Agent side panel. If you already answered there, this does nothing.`,
+    requestedSchema: {
+      type: 'object' as const,
+      properties: {
+        choice: { type: 'string' as const, title: 'Your answer', oneOf: [{ const: 'stop', title: ask.stop }, { const: 'keep', title: ask.keep }] },
+      },
+      required: ['choice'],
+    },
+  };
+}
+
+// BG7: what the user picked in that dialog (the SDK's inputResponse view): true keep, false stop, null nothing. Only a
+// submitted pick counts. A decline, a close or an empty answer leave the panel's ask open: an agent app that can't show
+// the dialog answers by itself (Claude Code in print mode, as the Claude desktop app runs it, declines at once).
+export function dialogAnswer(view: { kind: string; action?: string; content?: Record<string, unknown> }): boolean | null {
+  if (view.kind !== 'elicit' || view.action !== 'accept') return null;
+  const choice = view.content?.choice;
+  return choice === 'keep' ? true : choice === 'stop' ? false : null;
 }
 
 // look's picture for the bridge: the line saying what was sent (or why nothing was), and the image when it fits.

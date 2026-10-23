@@ -1,5 +1,5 @@
-// Checks the MCP bridge's rules: the strict run check with its token, batches, the panel's reply check, and the untrusted block. Run: npm test
-import { allowOnce, batchProblem, batchReply, captchaHold, checkAgentTip, checkReply, checkRun, isBridgeStart, lookShot, MAX_BATCH, MAX_COMMAND, MAX_IMAGE, MAX_OUTPUT, MCP_COMMANDS, retryUnlisted, showsPage, tipsOnce, untrusted } from './bridge.ts';
+// Checks the MCP bridge's rules: the strict run check with its token, batches, the panel's reply check, the untrusted block, and BG7's ask and answer checks. Run: npm test
+import { allowOnce, askDialog, batchProblem, batchReply, captchaHold, checkAgentTip, checkAnswer, checkReply, checkRun, dialogAnswer, formDialogs, isAnswer, isBridgeStart, lookShot, MAX_ASK, MAX_BATCH, MAX_COMMAND, MAX_IMAGE, MAX_OUTPUT, MCP_COMMANDS, retryUnlisted, showsPage, tipsOnce, untrusted } from './bridge.ts';
 import { MAX_FRAME } from './host-request.ts';
 import { HandOver, StopLine } from './messages.ts';
 
@@ -217,3 +217,49 @@ if (await captchaHold('click', robo, onScreen(''), '')) fail('no CAPTCHA: nothin
 if (await captchaHold('click', robo, onScreen('reCAPTCHA'), `${robo} reCAPTCHA`)) fail('a solved CAPTCHA still on screen should not ask again');
 if ((await captchaHold('click', robo, onScreen('hCaptcha'), `${robo} reCAPTCHA`))?.seen !== `${robo} hCaptcha`) fail('another kind on the same page should ask');
 if (!(await captchaHold('click', `${robo}?step=2`, onScreen('reCAPTCHA'), `${robo} reCAPTCHA`))) fail('a CAPTCHA on another page should ask');
+
+// BG7: the panel's open ask, as the host sends it on to the agent app. Exact shape, capped text, short labels.
+const ask = { id: 7, text: "Add example.com to the bridge's Sites?", keep: 'Add site', stop: 'No' };
+if (JSON.stringify(checkReply(run({ type: 'ask', ask }))) !== JSON.stringify({ type: 'ask', ask })) fail('an ask passes as is');
+if (checkReply(run({ type: 'ask', ask: null })).type !== 'ask') fail('a closed ask (null) passes');
+throws(() => checkReply(run({ type: 'ask', ask, more: 1 })), 'ask notice extra field');
+throws(() => checkReply(run({ type: 'ask', ask: { ...ask, more: 1 } })), 'ask extra field');
+throws(() => checkReply(run({ type: 'ask', ask: { ...ask, id: -1 } })), 'ask id below 0');
+throws(() => checkReply(run({ type: 'ask', ask: { ...ask, id: 1.5 } })), 'ask id not whole');
+throws(() => checkReply(run({ type: 'ask', ask: { ...ask, text: 'x'.repeat(MAX_ASK + 1) } })), 'ask text over the cap');
+throws(() => checkReply(run({ type: 'ask', ask: { ...ask, keep: '' } })), 'ask keep label empty');
+throws(() => checkReply(run({ type: 'ask', ask: { ...ask, stop: 'x'.repeat(41) } })), 'ask stop label too long');
+throws(() => checkReply(run({ type: 'ask' })), 'ask notice without its ask');
+
+// BG7: an answer from the dialog: the ask's id and keep or stop, nothing else. Never a token, commands or text.
+if (JSON.stringify(checkAnswer(run({ type: 'answer', id: 7, keep: true }))) !== '{"type":"answer","id":7,"keep":true}') fail('a keep answer passes');
+if (checkAnswer(run({ type: 'answer', id: 0, keep: false })).keep !== false) fail('a stop answer passes');
+throws(() => checkAnswer(run({ type: 'answer', id: 7, keep: 'yes' })), 'answer keep not true or false');
+throws(() => checkAnswer(run({ type: 'answer', id: 7, keep: 1 })), 'answer keep a number');
+throws(() => checkAnswer(run({ type: 'answer', id: '7', keep: true })), 'answer id as text');
+throws(() => checkAnswer(run({ type: 'answer', id: -2, keep: true })), 'answer id below 0');
+throws(() => checkAnswer(run({ type: 'answer', keep: true })), 'answer without id');
+throws(() => checkAnswer(run({ type: 'answer', id: 7, keep: true, token: TOKEN })), 'answer extra field');
+throws(() => checkAnswer(run({ type: 'run', token: TOKEN, commands: ['read'] })), 'a run is not an answer');
+throws(() => checkAnswer('[1]'), 'answer not an object');
+if (isAnswer({ type: 'run', commands: ['read'] }) || isAnswer(null) || !isAnswer({ type: 'answer', id: 3, keep: false })) fail("isAnswer, the background's check");
+
+// BG7: the dialog shows the ask's text and its two labels; stop is first and nothing is picked, so a reflex Enter can't keep.
+const dialog = askDialog(ask);
+if (!dialog.message.startsWith(ask.text) || !/side panel/.test(dialog.message)) fail(`dialog message: ${dialog.message}`);
+const choice = dialog.requestedSchema.properties.choice;
+if ('default' in choice || choice.oneOf[0]!.const !== 'stop' || choice.oneOf[0]!.title !== 'No' || choice.oneOf[1]!.title !== 'Add site') fail('dialog choices');
+if (dialog.requestedSchema.required[0] !== 'choice') fail('the choice is required');
+// What the user picked there: each choice reads back as its button. Only a submitted pick counts.
+const accept = (c: unknown) => dialogAnswer({ kind: 'elicit', action: 'accept', content: { choice: c } });
+if (accept(choice.oneOf[1]!.const) !== true || accept(choice.oneOf[0]!.const) !== false) fail('accept with a choice');
+if (accept('yes') !== null || accept(true) !== null || dialogAnswer({ kind: 'elicit', action: 'accept' }) !== null) fail('accept without a real choice does nothing');
+// Live bug (2026-10-23): the Claude desktop app runs Claude Code in print mode, which declines a dialog at once, with
+// nobody asked. A decline must not answer No for the user: it leaves the panel's ask open, like a close.
+if (dialogAnswer({ kind: 'elicit', action: 'decline' }) !== null) fail('decline leaves the panel ask open');
+if (dialogAnswer({ kind: 'elicit', action: 'cancel' }) !== null) fail('cancel leaves the panel ask open');
+if (dialogAnswer({ kind: 'missing' }) !== null || dialogAnswer({ kind: 'sampling' }) !== null) fail('no dialog answer');
+
+// BG7: which agent apps get a dialog: form elicitation, or an empty elicitation (form, by the spec). URL-only or none: panel only.
+if (!formDialogs({ elicitation: {} }) || !formDialogs({ elicitation: { form: {} } }) || !formDialogs({ elicitation: { form: {}, url: {} } })) fail('form dialogs');
+if (formDialogs({ elicitation: { url: {} } }) || formDialogs({}) || formDialogs(undefined)) fail('no form dialogs');

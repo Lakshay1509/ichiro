@@ -1,7 +1,9 @@
 // BG4: the one open ask (Allow once, Keep going, a new site, a download…) and the command count that makes old asks stale.
+import type { BridgeAnswer } from '@/lib/bridge';
 import { StopLine } from '@/lib/messages';
 import { pressed } from '@/lib/panel-port';
 import { detachAll } from '@/lib/real-input';
+import { askAgent } from './bridge';
 import { print, show, swap } from './panels';
 
 // The open choice: a stop-line's Allow once / I'll do it, or a run's pause. Valid only until another command starts:
@@ -32,19 +34,31 @@ export function closeAsk(note: string) {
   swap(pendingAsk, { kind: 'line', text: note });
   pendingAsk = null;
   badge('');
+  askAgent(null);
   onAskClosed?.();
   onAskClosed = null;
 }
 
-// Shows the buttons in every open panel. Only a press of one (pressAsk) runs its handler, never a typed line or agent text.
-function openAsk(buttons: { label: string; onClick: () => void }[]) {
+// Shows the keep and stop buttons in every open panel (and, BG7, the agent app's dialog). Only a press of one
+// (pressAsk) or your answer in that dialog (answerAsk) runs its handler, never a typed line or agent text.
+function openAsk(text: string, buttons: [{ label: string; onClick: () => void }, { label: string; onClick: () => void }]) {
   const { id } = show({ kind: 'ask', buttons: buttons.map((b) => b.label) });
   pendingAsk = { id, buttons: buttons.map((b) => b.onClick) };
   badge('Ask');
+  askAgent({ id, text, keep: buttons[0].label, stop: buttons[1].label });
 }
 
 // A button pressed in a panel. A press for an ask that's closed or replaced does nothing (pressed).
 export const pressAsk = (press: { id: number; button: number }) => pressed(pendingAsk, press)?.();
+
+// BG7: your answer in the agent app's dialog presses keep or stop, like a press here. One for an ask that's closed or
+// replaced does nothing (pressed), so the first answer wins.
+export function answerAsk(a: BridgeAnswer) {
+  const press = pressed(pendingAsk, { id: a.id, button: a.keep ? 0 : 1 });
+  if (!press) return;
+  press();
+  print('Answered in the agent app.');
+}
 
 // Asks you mid-command (4.1 pause, 4.3 stop-lines, a new site, a download): the keep button goes on; the other button,
 // or any command you start, resolves false (a command also bumps lastCommand, so the caller can tell "I'll do it" from
@@ -53,7 +67,7 @@ export function askKeepGoing(message: string, keepLabel = 'Keep going', stopLabe
   print(message, 'stop');
   return new Promise((resolve) => {
     onAskClosed = () => resolve(false);
-    openAsk([
+    openAsk(message, [
       {
         label: keepLabel,
         // A promise settles once: Keep going's true wins over the false that closeAsk sends right after.
@@ -95,7 +109,7 @@ function askAllow(err: StopLine, run: Run, id: number) {
   print(err.message, 'stop');
   if (id !== lastCommand) return print('Another command ran meanwhile. Run this one again to choose.', 'error');
   // Focus stays in the command box, so a reflex Enter can never press Allow.
-  openAsk([
+  openAsk(err.message, [
     {
       label: 'Allow once',
       onClick: () => {

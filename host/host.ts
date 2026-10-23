@@ -4,7 +4,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, type Socket } from 'node:net';
 import { dirname } from 'node:path';
-import { checkReply, checkRun, isBridgeStart, type BridgeReply } from '../lib/bridge.ts';
+import { checkAnswer, checkReply, checkRun, isBridgeStart, type AskNotice, type BridgeAnswer, type BridgeReply } from '../lib/bridge.ts';
 import { hostPaths } from '../lib/host-install.ts';
 import { frame, readFrames } from '../lib/host-request.ts';
 
@@ -38,7 +38,8 @@ const isStart = (text: string) => {
 
 // --- The MCP bridge (/mcp on). The pipe's name is random and written, with a fresh token, to a file only you can
 // read; host/mcp.ts reads it to connect. Each connection carries one run (1–10 command lines); runs reach the panel one at a time.
-let waiting: ((reply: BridgeReply) => void) | null = null; // the agent waiting on the panel's reply
+// BG7: while its run is the current one, a connection also gets the panel's open ask and may send your dialog's answer.
+let waiting: { socket: Socket; done: (reply: BridgeReply) => void } | null = null; // the run the panel is working on
 let line: Promise<unknown> = Promise.resolve();
 
 function startBridge() {
@@ -63,6 +64,7 @@ function startBridge() {
 
 function serve(socket: Socket, token: string) {
   let buf: Buffer = Buffer.alloc(0);
+  let ran = false; // one run per connection; after it, only that run's answers (BG7)
   const reply = (r: BridgeReply) => socket.end(frame(r));
   socket.on('error', () => {}); // the agent left; its reply is dropped
   socket.on('data', (chunk: Buffer) => {
@@ -72,35 +74,57 @@ function serve(socket: Socket, token: string) {
     } catch (e) {
       return reply({ type: 'error', error: (e as Error).message });
     }
-    if (messages[0] === undefined) return;
-    socket.removeAllListeners('data'); // one run per connection
-    let commands: string[];
-    try {
-      commands = checkRun(messages[0], token);
-    } catch (e) {
-      console.error('MCP bridge refused a pipe message:', (e as Error).message);
-      return reply({ type: 'error', error: (e as Error).message });
+    for (const m of messages) {
+      if (ran) {
+        answered(socket, m);
+        continue;
+      }
+      ran = true;
+      let commands: string[];
+      try {
+        commands = checkRun(m, token);
+      } catch (e) {
+        console.error('MCP bridge refused a pipe message:', (e as Error).message);
+        return reply({ type: 'error', error: (e as Error).message });
+      }
+      line = line.then(() => new Promise<void>((done) => {
+        waiting = {
+          socket,
+          done: (r) => {
+            waiting = null;
+            reply(r);
+            done();
+          },
+        };
+        send({ type: 'run', commands });
+      }));
     }
-    line = line.then(() => new Promise<void>((done) => {
-      waiting = (r) => {
-        waiting = null;
-        reply(r);
-        done();
-      };
-      send({ type: 'run', commands });
-    }));
   });
 }
 
+// BG7: your answer in the agent app's dialog. It counts only from the run the panel is working on now, on that run's
+// own connection (which passed the token check); the panel then checks it's for the ask open right now.
+function answered(socket: Socket, text: string) {
+  let a: BridgeAnswer;
+  try {
+    a = checkAnswer(text);
+  } catch (e) {
+    return console.error('MCP bridge refused a pipe message:', (e as Error).message);
+  }
+  if (waiting?.socket !== socket) return console.error("MCP bridge: dropped an answer from a run that isn't the current one");
+  send(a);
+}
+
 function panelReply(text: string) {
-  let r: BridgeReply;
+  let r: BridgeReply | AskNotice;
   try {
     r = checkReply(text);
   } catch (e) {
     return fail(`MCP bridge: ${(e as Error).message}`);
   }
   if (!waiting) return console.error('MCP bridge: dropped a reply nobody asked for');
-  waiting(r);
+  if (r.type === 'ask') return void waiting.socket.write(frame(r)); // BG7: the run's agent app shows it too
+  waiting.done(r);
 }
 
 let buf: Buffer = Buffer.alloc(0);
