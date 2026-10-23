@@ -18,7 +18,7 @@ import { sendToTab } from '@/lib/send-to-tab';
 import { settleAfter } from '@/lib/settle';
 import { listSites } from '@/lib/site-store';
 import { askResume, closeAsk, nextCommand, runAndPrint } from './asks';
-import { agentDownloads, agentPage, bridge, endAgentTurn, forAgent, runEnded, save, skipRead, startBridge, stopBridge } from './bridge';
+import { agentDownloads, agentPage, bridge, endAgentTurn, forAgent, runEnded, running, save, skipRead, startBridge, stopBridge } from './bridge';
 import { checkText, realKey, realMouse, realPoints, typeHere, typingFrame } from './input';
 import { clearLog, leaveStep, print, show, showAlwaysOn, showAuto } from './panels';
 
@@ -271,7 +271,7 @@ export const commands: Record<string, Command> = {
     },
   },
   mcp: {
-    help: "mcp on [sites…] | off — let a coding agent (Claude Code, Codex…) drive this browser. Any other site than its Sites asks you first. mcp on adds this tab's site to the saved Sites; mcp on <sites> sets exactly those. On/off and Sites are remembered when you close the panel. Its commands show here; stop-lines ask you first (Allow once, or do it yourself and press Resume)",
+    help: "mcp on [sites…] | off — let a coding agent (Claude Code, Codex…) drive this browser. Any other site than its Sites asks you first. mcp on adds this tab's site to the saved Sites; mcp on <sites> sets exactly those. With the extension in two browsers, the agent drives the one that ran mcp on last. On/off and Sites are remembered when you close the panel. Its commands show here; stop-lines ask you first (Allow once, or do it yourself and press Resume)",
     run: async ([on, ...named]) => {
       if (on === 'off') {
         await save({ mcpOn: false }); // also after a crash, so the next panel open doesn't turn it back on
@@ -284,10 +284,13 @@ export const commands: Record<string, Command> = {
         : [...new Set([...(await recall()).mcpSites, siteToAdd((await browser.tabs.get(await targetTabId())).url, [])])].filter(Boolean);
       if (sites.some((s) => !s)) throw new Error('Usage: mcp on [amazon.in wikipedia.org…] (site names)');
       await save({ mcpOn: true, mcpSites: sites });
-      if (bridge) {
+      // A call is running here, so this browser is the one being driven, and a restart would drop it: Sites only.
+      if (bridge && running) {
         bridge.sites = sites;
         return `MCP bridge Sites: ${sites.join(', ') || 'none yet'}.`;
       }
+      // Otherwise restart, so the agent comes back here if another browser's /mcp on took it (one bridge file, last wins).
+      stopBridge();
       return startBridge(sites);
     },
   },

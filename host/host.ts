@@ -1,7 +1,7 @@
 // The native messaging host: Chrome starts it for the side panel's /mcp on; it bridges a coding agent's commands from
 // a local pipe to the panel. stdout belongs to Chrome's message channel, so logs go to stderr only, and never the token.
 import { randomBytes, randomUUID } from 'node:crypto';
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, type Socket } from 'node:net';
 import { dirname } from 'node:path';
 import { checkAnswer, checkReply, checkRun, isBridgeStart, type AskNotice, type BridgeAnswer, type BridgeReply } from '../lib/bridge.ts';
@@ -58,6 +58,16 @@ function startBridge() {
     } catch (e) {
       return fail(`MCP bridge: can't write ${file}: ${(e as Error).message}`);
     }
+    // Two browsers share one file and the last /mcp on wins. On exit, delete it only if it still names our pipe, so the
+    // agent hears "off" instead of dialling a dead pipe. Chrome closes stdin and waits 2 s before killing us, so this runs.
+    // Source: https://textslashplain.com/2023/03/16/improving-native-message-host-reliability-on-windows/
+    process.on('exit', () => {
+      try {
+        if (JSON.parse(readFileSync(file, 'utf8')).pipe === pipe) rmSync(file);
+      } catch {
+        // gone already, or rewritten mid-way: not ours to delete
+      }
+    });
     send({ type: 'ready' });
   });
 }

@@ -143,7 +143,7 @@ export function stopBridge(): boolean {
 }
 
 // BG7: true while the agent's call waits on a run here. Its asks then go to the agent app too (askAgent).
-let running = false;
+export let running = false;
 
 // BG7: the open ask (null: it closed), sent on to the agent's call, whose agent app shows it as a dialog you can answer
 // (host/mcp.ts). Capped: it quotes page and agent text.
