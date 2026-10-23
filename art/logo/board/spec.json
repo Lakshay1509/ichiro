@@ -1,0 +1,42 @@
+{
+  "brand": "Ichiro",
+  "tagline": "Your coding agent's hands and eyes in Chrome",
+  "brief": "A Chrome extension that lets a coding agent (Claude Code, Codex) read any web page and act on it. It has no AI of its own: the agent is the mind. Named after Ichiro Kato, whose WABOT-1 (1973) had hands that gripped and eyes that measured distance.",
+  "adjectives": ["calm", "precise", "trustworthy", "human"],
+  "criteria": "Success: reads at 16 px in the Chrome toolbar, works in one colour, stays clear of sparkles, robot heads and cursor arrows, and fits the side panel's calm off-white and one blue.",
+  "industry": "software",
+  "mockups": ["readme", "terminal", "favicon-tab", "app-icon", "website", "social"],
+  "nav": ["Docs", "MCP setup", "GitHub"],
+  "brand_color": "#0075de",
+  "greyscale": false,
+  "final": true,
+  "round": 2,
+  "designer": "Claude",
+  "concepts": [
+    {
+      "name": "Two eyes in the name",
+      "symbol": "../svg/ichiro-symbol.svg",
+      "lockup": "../svg/ichiro-wordmark.svg",
+      "stacked": "../svg/ichiro-stacked.svg",
+      "avatar": "../svg/ichiro-icon.svg",
+      "symbol_on_tile": "../svg/ichiro-symbol-white.svg",
+      "lockup_on_tile": "../svg/ichiro-wordmark-white.svg",
+      "symbol_on_dark": "../svg/ichiro-symbol-white.svg",
+      "lockup_on_dark": "../svg/ichiro-wordmark-white.svg",
+      "stacked_on_dark": "../svg/ichiro-stacked-white.svg",
+      "idea": "The dots on the two i's in the name are eyes, like WABOT-1's two cameras.",
+      "rationale": [
+        "The idea comes from the name itself, so nobody else can own it",
+        "Eyes say what Ichiro does (it looks at pages) without a robot head or a sparkle",
+        "One blue, only in the pupils: the panel's calm black-and-blue system",
+        "On dark backgrounds the eyes are redrawn, so the whites stay white"
+      ]
+    }
+  ],
+  "recommendation": "Use the wordmark as the main logo, the blue tile for every icon, and the plain symbol for one-colour print.",
+  "next_steps": [
+    "Swap the extension's toolbar icons for icons/icon-16 … icon-128",
+    "Put the wordmark in the side panel header",
+    "Run a trademark search before going public"
+  ]
+}
