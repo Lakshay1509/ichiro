@@ -36,7 +36,7 @@ The agent starts `host/mcp.ts` as a stdio MCP server. Chrome starts `host/host.t
 
 The agent drives your real browser, with your logins, so Ichiro puts you in the loop:
 
-- **Sites.** The agent works freely only on sites you have allowed. A new site asks you first, and deep links to a new site are refused.
+- **Sites.** The agent works freely only on sites you have allowed. A new site asks you first, and deep links to a new site are refused. It can read another site's embedded frame on a page you allowed, but clicking, typing or selecting inside it asks you to add that site first.
 - **Stop-lines.** Actions that pay, book, send, check out or enter personal data pause and ask you.
 - **Hand-over.** Sign-in, password and card fields, and CAPTCHAs are always left to you. Do the step yourself and press Resume.
 - **Downloads.** Each download waits for your yes.

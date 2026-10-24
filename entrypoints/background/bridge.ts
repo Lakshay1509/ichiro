@@ -1,8 +1,8 @@
 // BG4: the MCP bridge (/mcp on) and the coding agent's commands, each run like a typed one with the agent's guards.
-import { checkGoto, onSites, siteOn, siteToAdd, siteToOpen, wantsSite } from '@/lib/agent-prompt';
+import { checkGoto, frameSiteToAsk, onSites, siteOn, siteToAdd, siteToOpen, wantsSite } from '@/lib/agent-prompt';
 import { allowOnce, batchProblem, batchReply, captchaHold, checkAgentTip, checkCommands, isAnswer, LOOK_HELP, lookShot, MAX_ASK, MAX_OUTPUT, MCP_COMMANDS, picksTab, retryUnlisted, showsPage, TIP_HELP, tipsOnce, type AskNotice, type BridgeAsk, type BridgeImage, type BridgeReply } from '@/lib/bridge/bridge';
 import { fileName, RunDownloads } from '@/lib/files/downloads';
-import { captchaAll, labelFor, nameFor, readAll } from '@/lib/page/frames';
+import { captchaAll, frameFor, labelFor, nameFor, readAll } from '@/lib/page/frames';
 import { bridgeOff, HOST_NAME } from '@/lib/bridge/host-install';
 import { HandOver, StopLine } from '@/lib/messages';
 import { follow, openBehind, pinTab, targetTabId } from '@/lib/tabs/navigation';
@@ -11,14 +11,14 @@ import { remember, type Remembered } from '@/lib/memory/panel-memory';
 import type { Step } from '@/lib/panel/panel-port';
 import { parseCommand } from '@/lib/parse-command';
 import { saidLine, splitReply, stepTitle } from '@/lib/panel/readable-log';
-import { detachAll } from '@/lib/actions/real-input';
+import { detachAll, parsePoint } from '@/lib/actions/real-input';
 import { failed, recordLine } from '@/lib/memory/repeat';
 import { saveTip, useSite } from '@/lib/memory/site-store';
 import { MAX_TIPS } from '@/lib/memory/site-tips';
 import { isCheckoutUrl, stopLineAsk } from '@/lib/safety/stop-lines';
 import { groupTab, ungroupAll } from '@/lib/tabs/tab-group';
 import { answerAsk, askKeepGoing, askOrAuto, askResume, closeAsk, lastCommand, nextCommand } from './asks';
-import { commands, runLine } from './commands';
+import { commands, runLine, target } from './commands';
 import { screenshot } from './input';
 import { closeStep, openStep, print, show, showMcp } from './panels';
 import { runRepeat } from './repeat';
@@ -109,6 +109,21 @@ async function bridgeSite(site: string, url: string): Promise<void> {
   b.refused.add(site);
   // The list after a blank line: the agent gets it, the panel shows it only behind a click (splitReply).
   throw new Error(`Refused: the user said no to ${site}.\n\nUse the bridge's Sites (${b.sites.join(', ') || 'none yet'}) or ask them.`);
+}
+
+// S2 in frames (audit 2026-10-24, lead 1): a click, type or select inside another site's frame asks you to add that
+// site first, like a tab on a new site. Reading an embed stays free; acting in one could send page data to a site you
+// never added. x,y clicks and type here already refuse frames. Runs before each try, so a re-read can't skip it.
+async function frameSites(name: string, nArg: string | undefined): Promise<void> {
+  const b = bridge;
+  if (!b || !['click', 'type', 'select'].includes(name) || nArg === 'here' || parsePoint(nArg ?? '')) return;
+  const frameId = frameFor(target(nArg, `${name} <number|"label">`));
+  if (frameId === 0) return;
+  const all = (await browser.webNavigation.getAllFrames({ tabId: await targetTabId() })) ?? [];
+  const byId = new Map(all.map((f) => [f.frameId, f]));
+  const urls: string[] = []; // this frame's URL, then each one's above it
+  for (let f = byId.get(frameId); f && f.frameId !== 0; f = byId.get(f.parentFrameId)) urls.push(f.url);
+  for (let ask = frameSiteToAsk(urls, b.sites); ask; ask = frameSiteToAsk(urls, b.sites)) await bridgeSite(ask.site, ask.url);
 }
 
 // Saves a switch for the next panel open (panel-memory.ts). A failed save only loses that, so it says so and goes on.
@@ -496,7 +511,10 @@ async function agentCommand(line: string, last: boolean): Promise<AgentReply> {
         // Downloads that start during an Allow once command are part of what you allowed.
         if (agentDownloads) agentDownloads.allowing = allow;
         try {
-          return await retryUnlisted(async () => runLine(commands[name]!, line, allow), () => readAll(false));
+          return await retryUnlisted(async () => {
+            await frameSites(name, args[0]);
+            return runLine(commands[name]!, line, allow);
+          }, () => readAll(false));
         } finally {
           if (agentDownloads) agentDownloads.allowing = false;
         }

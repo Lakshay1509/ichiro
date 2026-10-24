@@ -50,6 +50,20 @@ export function siteToAdd(href: string | undefined, sites: string[]): string {
   return siteOf(url.hostname);
 }
 
+// S2 in frames (audit 2026-10-24, lead 1): before a click, type or select inside a frame. urls: that frame's URL, then
+// each frame's above it, up to the top page. about:blank, srcdoc and data: frames take a parent's site, so only web
+// URLs count (a blob:'s own). The first site off the Sites to ask you to add, or null. Throws when one can't be added.
+export function frameSiteToAsk(urls: string[], sites: string[]): { site: string; url: string } | null {
+  for (const href of urls) {
+    const url = URL.parse(href.startsWith('blob:') ? href.slice(5) : href);
+    if (!url || (url.protocol !== 'https:' && url.protocol !== 'http:') || onSites(url.href, sites)) continue;
+    const site = siteToAdd(url.href, sites);
+    if (!site) throw new Error(`Blocked: that element is in a frame from ${url.hostname}, which isn't a web page you can use.`);
+    return { site, url: url.href };
+  }
+  return null;
+}
+
 // S2: the agent's goto to a new site asks you first, but only for a bare home page (https://host/): a path,
 // query or # could carry page data out to a site you never added. A host name can too, so the ask names it in full
 // (wantsSite). Any host: finred.usalearning.gov's site has no working home page of its own. '' = no ask.

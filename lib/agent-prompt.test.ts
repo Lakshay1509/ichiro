@@ -1,5 +1,5 @@
 // Checks the shared site rules (Sites, a new site's ask, goto's check) and history lines. Run: npm test
-import { checkGoto, onSites, siteOn, siteToAdd, siteToOpen, summarize, wantsSite } from './agent-prompt.ts';
+import { checkGoto, frameSiteToAsk, onSites, siteOn, siteToAdd, siteToOpen, summarize, wantsSite } from './agent-prompt.ts';
 import { splitReply } from './panel/readable-log.ts';
 
 const fail = (what: string): never => {
@@ -96,3 +96,14 @@ for (const [url, hint] of [['https://www.flipkart.com/search?q=x', 'goto https:/
 // The ask names the exact host when it's more than the site or www., so data hidden in a host name shows.
 site(wantsSite('flipkart.com', 'https://www.flipkart.com/'), 'The agent wants to open flipkart.com:\nhttps://www.flipkart.com/', 'ask for www');
 site(wantsSite('flipkart.com', 'https://c2vjcmv0.flipkart.com/'), 'The agent wants to open c2vjcmv0.flipkart.com, part of flipkart.com:\nhttps://c2vjcmv0.flipkart.com/', 'ask for a subdomain');
+
+// Lead 1 (audit 2026-10-24): click, type or select inside a frame asks to add that frame's site, like a tab on a new
+// site. The frame and every frame above it count (nearest first), so a blank frame inside an ad's frame is the ad's.
+const shopOnly = ['shop.com'];
+const frameAsk = (urls: string[]) => frameSiteToAsk(urls, shopOnly)?.site ?? null;
+if (frameAsk(['https://ads.evil.example/slot']) !== 'evil.example') fail('a frame on a new site asks for it');
+if (frameAsk(['https://pay.shop.com/card']) !== null) fail('a frame on the Sites asks nothing');
+if (frameAsk(['about:blank', 'https://ads.evil.example/']) !== 'evil.example') fail('a blank frame inside an ad counts as the ad');
+if (frameAsk(['about:srcdoc']) !== null) fail('a srcdoc frame of the top page asks nothing');
+if (frameAsk(['blob:https://evil.example/1f2e']) !== 'evil.example') fail("a blob frame is its creator's site");
+throws(() => frameSiteToAsk(['http://192.168.0.1/'], shopOnly), 'a frame on an IP address (no site to add)');

@@ -44,7 +44,7 @@ export function runLine(command: Command, line: string, allow: boolean) {
 }
 
 // The element a command targets: a number (4) or a label from the last read ("Search"). Never guesses between two.
-function target(arg: string | undefined, usage: string): number {
+export function target(arg: string | undefined, usage: string): number {
   if (!arg) throw new Error(`Usage: ${usage}`);
   // Plain digits are a number. Quoted labels, even all digits ("19"), were already looked up by parseCommand.
   if (!/^\d+$/.test(arg)) return numberFor(arg);
