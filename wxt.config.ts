@@ -25,7 +25,9 @@ export default defineConfig({
     // Source: https://developer.chrome.com/docs/extensions/reference/api/debugger
     // offscreen: the hidden page that reads PDFs with pdf.js (BG2, lib/offscreen.ts). No install warning.
     // Source: https://developer.chrome.com/docs/extensions/reference/api/offscreen
-    permissions: ['sidePanel', 'tabs', 'scripting', 'storage', 'webNavigation', 'webRequest', 'nativeMessaging', 'publicSuffix', 'downloads', 'debugger', 'offscreen'],
+    // tabGroups: name and color the agent's tab group "Ichiro" (OT2, lib/tab-group.ts). Install warning: "View and
+    // manage your tab groups". Source: https://developer.chrome.com/docs/extensions/reference/api/tabGroups
+    permissions: ['sidePanel', 'tabs', 'scripting', 'storage', 'webNavigation', 'webRequest', 'nativeMessaging', 'publicSuffix', 'downloads', 'debugger', 'offscreen', 'tabGroups'],
     // chrome.publicSuffix arrived in Chrome 153; older Chrome can't install the extension.
     // Source: https://developer.chrome.com/docs/extensions/reference/manifest/minimum-chrome-version
     minimum_chrome_version: '153',

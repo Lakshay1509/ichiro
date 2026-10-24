@@ -16,6 +16,7 @@ import { failed, recordLine } from '@/lib/repeat';
 import { saveTip, useSite } from '@/lib/site-store';
 import { MAX_TIPS } from '@/lib/site-tips';
 import { isCheckoutUrl } from '@/lib/stop-lines';
+import { groupTab, ungroupAll } from '@/lib/tab-group';
 import { answerAsk, askKeepGoing, askOrAuto, askResume, closeAsk, lastCommand, nextCommand } from './asks';
 import { commands, runLine } from './commands';
 import { screenshot } from './input';
@@ -113,10 +114,17 @@ async function bridgeSite(site: string, url: string): Promise<void> {
 // Saves a switch for the next panel open (panel-memory.ts). A failed save only loses that, so it says so and goes on.
 export const save = (change: Partial<Remembered>) => remember(change).catch((err: Error) => print(`Couldn't save settings: ${err.message}`, 'error'));
 
+// OT2: changes to the Ichiro tab group, one at a time in order, so an ungroup can't take out a tab grouped after it.
+// The group is only a sign: a failed change says so, and nothing else stops.
+let grouping = Promise.resolve();
+function sign(change: () => Promise<void>) {
+  grouping = grouping.then(change).catch((err: unknown) => print(`   Couldn't change the Ichiro tab group: ${err instanceof Error ? err.message : String(err)}`, 'error'));
+}
 // Connects to the local helper (host/mcp.ts) with these Sites. Used by mcp on and by the panel turning it back on.
 export function startBridge(sites: string[]): string {
   const port = browser.runtime.connectNative(HOST_NAME);
   bridge = { port, sites, refused: new Set(), page: null, tipped: new Set(), steps: [], solved: '', session: '', tab: null, came: new Map() };
+  sign(ungroupAll); // OT2: a group left from before (the worker restarted) has no agent tab now
   showMcp('starting');
   port.onMessage.addListener((m) => void onBridge(port, m));
   // Chrome's reason (not installed, host crashed) is in lastError. Never reconnects here: a crashing host would loop.
@@ -126,6 +134,7 @@ export function startBridge(sites: string[]): string {
   port.onDisconnect.addListener(() => {
     if (bridge?.port !== port) return; // you turned it off
     bridge = null;
+    sign(ungroupAll);
     showMcp('off');
     endAgentTurn();
     print(`MCP bridge off: ${browser.runtime.lastError?.message ?? 'the local helper stopped'}`, 'error');
@@ -137,6 +146,7 @@ export function startBridge(sites: string[]): string {
 // Disconnects the local helper (mcp off, or the last panel closing). Saves nothing: mcp off saves mcpOn false itself,
 // and a closing panel leaves it on, so the next panel open turns it back on. false: it was already off.
 export function stopBridge(): boolean {
+  sign(ungroupAll); // OT2: also when already off, so mcp off clears a group left from before the worker restarted
   if (!bridge) return false;
   bridge.port.disconnect();
   bridge = null;
@@ -161,7 +171,10 @@ async function onBridge(port: Port, m: { type?: string; commands?: unknown; erro
   // A new agent never saw the last one's replies: the whole page and each site's saved tips go to it again. The bridge
   // outlives agents (it lives in the worker, and with always-on all day), so without this only the first agent got tips.
   const session = typeof m.session === 'string' ? m.session : '';
-  if (bridge && bridge.session !== session) Object.assign(bridge, { session, page: null, tipped: new Set<string>(), tab: null, came: new Map<number, number>() });
+  if (bridge && bridge.session !== session) {
+    Object.assign(bridge, { session, page: null, tipped: new Set<string>(), tab: null, came: new Map<number, number>() });
+    sign(ungroupAll);
+  }
   running = true;
   let reply: BridgeReply;
   // RP1: the call's step number goes first, so the agent can send repeat <step>; none when nothing was recorded.
@@ -388,14 +401,17 @@ async function agentTab(name: string): Promise<number> {
   }
   if (await browser.tabs.get(b.tab).then(() => true, () => false)) return b.tab;
   b.tab = null;
+  sign(ungroupAll); // OT2: tabs it worked in before stay open, out of the group
   throw new Error('Your tab was closed. Send read to work in the tab in front, or goto.');
 }
 
-// OT1: makes tab id the agent's. The log says so when it changes; the title is page text, so it's capped.
-async function keepTab(id: number) {
+// OT1: makes tab id the agent's. The log says so when it changes; the title is page text, so it's capped. OT2: it joins
+// the Ichiro group; followed: the agent's page opened it, so it leaves your group if Chrome put it there.
+async function keepTab(id: number, followed: boolean) {
   const b = bridge;
   if (!b || b.tab === id) return;
   b.tab = id;
+  sign(() => groupTab(id, followed));
   const { site, title } = await where(b.sites, id);
   print(`   The agent works in: ${title ? `${title.slice(0, 80)} (${site})` : site}`);
 }
@@ -491,7 +507,7 @@ async function agentCommand(line: string, last: boolean): Promise<AgentReply> {
     bridge?.came.set(opened, from);
     followed = true;
   }
-  await keepTab(await targetTabId()); // OT1: a tab it picked, followed or went back to is the agent's now
+  await keepTab(await targetTabId(), followed); // OT1: a tab it picked, followed or went back to is the agent's now
   // A click can land off the Sites (here or in the new tab): that page's text stays here, like a redirect's.
   // In both returns below the read isn't sent, so bridge.page stays the last list the agent got.
   const after = await where(sites);
