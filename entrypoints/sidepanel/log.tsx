@@ -42,6 +42,16 @@ new ResizeObserver(() => {
 const STATUS_CLASS: Record<ReturnType<typeof stepStatus>, string> = { Running: 'running', Done: 'done', Stopped: 'stopped', 'Waiting for you': 'waiting' };
 
 function Entry({ item }: { item: Item }) {
+  // An ask's words: its first line is the headline (always ours, asks.ts writes it), the rest the detail.
+  if (item.kind === 'line' && item.className === 'stop') {
+    const [head, ...detail] = item.text.split('\n');
+    return (
+      <div class="stop">
+        <div class="stop-head">{head}</div>
+        {detail.length > 0 && <div>{detail.join('\n')}</div>}
+      </div>
+    );
+  }
   if (item.kind === 'line') {
     return (
       <>

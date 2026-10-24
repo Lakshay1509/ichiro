@@ -59,12 +59,12 @@ export function siteToOpen(input: string | undefined, sites: string[]): string {
   return siteToAdd(url.href, sites);
 }
 
-// S2's ask starts with the exact host when it's more than the site or www., so data hidden in a host name is in plain
-// sight: "The agent wants to use finred.usalearning.gov, part of usalearning.gov (https://finred.usalearning.gov/)".
+// S2's ask names the exact host when it's more than the site or www., so data hidden in a host name is in plain
+// sight: "The agent wants to open finred.usalearning.gov, part of usalearning.gov:", then the URL on its own line.
 export function wantsSite(site: string, url: string): string {
   const host = URL.parse(url)?.hostname ?? '';
   const named = host && host !== site && host !== `www.${site}` ? `${host}, part of ${site}` : site;
-  return `The agent wants to use ${named} (${url.slice(0, 150)})`;
+  return `The agent wants to open ${named}:\n${url.slice(0, 150)}`;
 }
 
 // A page could print our closing tag to escape an untrusted block, so tag lookalikes inside one are defused.

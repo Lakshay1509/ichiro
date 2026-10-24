@@ -2,6 +2,7 @@
 import type { BridgeAnswer } from '@/lib/bridge';
 import { StopLine } from '@/lib/messages';
 import { pressed } from '@/lib/panel-port';
+import { stopLineAsk } from '@/lib/stop-lines';
 import { detachAll } from '@/lib/real-input';
 import { askAgent } from './bridge';
 import { autoMode, print, show, swap } from './panels';
@@ -29,10 +30,11 @@ export function startBadge() {
   browser.action.setBadgeTextColor({ color: '#ffffff' }).catch(console.error);
 }
 
-// note: what you chose, in place of the buttons. '': the buttons just go (a line right after already says it).
+// note: what you chose, in place of the buttons ('answer': the panel shows it at the ask card's foot). '': the buttons
+// just go (a line right after already says it).
 export function closeAsk(note: string) {
   if (!pendingAsk) return;
-  swap(pendingAsk, note ? { kind: 'line', text: note } : null);
+  swap(pendingAsk, note ? { kind: 'line', text: note, className: 'answer' } : null);
   pendingAsk = null;
   badge('');
   askAgent(null);
@@ -64,7 +66,8 @@ export function answerAsk(a: BridgeAnswer) {
 // Asks you mid-command (4.1 pause, 4.3 stop-lines, a new site, a download): the keep button goes on; the other button,
 // or any command you start, resolves false (a command also bumps lastCommand, so the caller can tell "I'll do it" from
 // being stopped). Focus stays in the command box, so a reflex Enter can never press Allow.
-export function askKeepGoing(message: string, keepLabel = 'Keep going', stopLabel = 'Stop', stopNote = stopLabel === 'Stop' ? 'Stopped.' : `${stopLabel}.`): Promise<boolean> {
+// message: its first line is the ask's headline, ours and never page text (the panel shows it bold); the rest is detail.
+export function askKeepGoing(message: string, keepLabel = 'Keep going', stopLabel = 'Stop', stopNote = stopLabel === 'Stop' ? 'Stopped.' : `You chose ${stopLabel}.`): Promise<boolean> {
   print(message, 'stop');
   return new Promise((resolve) => {
     onAskClosed = () => resolve(false);
@@ -74,7 +77,7 @@ export function askKeepGoing(message: string, keepLabel = 'Keep going', stopLabe
         // A promise settles once: Keep going's true wins over the false that closeAsk sends right after.
         onClick: () => {
           resolve(true);
-          closeAsk('Going on.');
+          closeAsk(`You chose ${keepLabel}.`);
         },
       },
       { label: stopLabel, onClick: () => closeAsk(stopNote) },
@@ -86,15 +89,15 @@ export function askKeepGoing(message: string, keepLabel = 'Keep going', stopLabe
 // shows it. Resume asks never come here: a pause, a CAPTCHA or a password field needs your hands, not a yes.
 export function askOrAuto(message: string, keepLabel: string, stopLabel: string, stopNote?: string): Promise<boolean> {
   if (!autoMode) return askKeepGoing(message, keepLabel, stopLabel, stopNote);
-  print(`${message} Auto mode: ${keepLabel}.`, 'stop');
+  print(`${message}\nAuto mode chose ${keepLabel}.`, 'stop');
   return Promise.resolve(true);
 }
 
 // 4.1 pause "reason": hands the page to you. The agent wrote the reason after reading the page, so it's shown quoted,
-// one line, capped, like its other words. where: which tab, for the agent's pause (OT3).
+// one line, capped, like its other words. where: which tab, for the agent's pause (OT3): " in the agent's tab (…)".
 export function askResume(args: string[], where = ''): Promise<boolean> {
   const why = args.join(' ').replace(/\s+/g, ' ').trim().slice(0, 200) || '(no reason given)';
-  return askKeepGoing(`${where}Paused: "${why}". Do what's needed on the page, then Resume.`, 'Resume');
+  return askKeepGoing(`Paused${where}\nThe agent says: "${why}"\nDo what's needed on the page, then press Resume.`, 'Resume');
 }
 
 type Run = (allow: boolean) => string | void | Promise<string | void>;
@@ -109,7 +112,7 @@ export async function runAndPrint(run: Run, allow = false) {
     if (!(err instanceof StopLine)) return print(err instanceof Error ? err.message : String(err), 'error');
     // /auto on: Allow once without asking. Awaited, so the finally below detaches only after the allowed run.
     if (autoMode && !allow) {
-      print(`${err.message} Auto mode: allowed.`, 'stop');
+      print(`${stopLineAsk(err.message)}\nAuto mode chose Allow once.`, 'stop');
       return await runAndPrint(run, true);
     }
     askAllow(err, run, id);
@@ -120,10 +123,11 @@ export async function runAndPrint(run: Run, allow = false) {
 
 // Shows a stop-line with Allow once / I'll do it. id: the command that hit it; stale if another one started since.
 function askAllow(err: StopLine, run: Run, id: number) {
-  print(err.message, 'stop');
+  const message = stopLineAsk(err.message);
+  print(message, 'stop');
   if (id !== lastCommand) return print('Another command ran meanwhile. Run this one again to choose.', 'error');
   // Focus stays in the command box, so a reflex Enter can never press Allow.
-  openAsk(err.message, [
+  openAsk(message, [
     {
       label: 'Allow once',
       onClick: () => {

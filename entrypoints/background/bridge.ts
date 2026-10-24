@@ -15,7 +15,7 @@ import { detachAll } from '@/lib/real-input';
 import { failed, recordLine } from '@/lib/repeat';
 import { saveTip, useSite } from '@/lib/site-store';
 import { MAX_TIPS } from '@/lib/site-tips';
-import { isCheckoutUrl } from '@/lib/stop-lines';
+import { isCheckoutUrl, stopLineAsk } from '@/lib/stop-lines';
 import { groupTab, ungroupAll } from '@/lib/tab-group';
 import { answerAsk, askKeepGoing, askOrAuto, askResume, closeAsk, lastCommand, nextCommand } from './asks';
 import { commands, runLine } from './commands';
@@ -54,13 +54,13 @@ async function inRunTab<T>(tab: number | null, f: () => T | Promise<T>): Promise
 function askDownload(item: Browser.downloads.DownloadItem, more = ''): Promise<boolean> {
   const from = URL.parse(item.finalUrl)?.hostname || URL.parse(item.referrer)?.hostname || 'the page';
   // No leaves no note: the "download refused" line right after says it.
-  return askOrAuto(`The agent started a download: "${fileName(item)}" from ${from}. Allow it?${more}`, 'Allow', 'No', '');
+  return askOrAuto(`Allow this download?\n"${fileName(item)}" from ${from}.${more}`, 'Allow', 'No', '');
 }
 
 // The agent's turn is over: downloads still paused stay paused, and you decide.
 function unwatch(downloads: RunDownloads) {
   browser.downloads.onCreated.removeListener(downloads.onCreated);
-  if (downloads.paused) print(`${downloads.paused} download(s) the agent started are paused, waiting for your ok: resume or cancel them in chrome://downloads.`, 'stop');
+  if (downloads.paused) print(`Downloads waiting for you\n${downloads.paused} download(s) the agent started are paused: resume or cancel them in chrome://downloads.`, 'stop');
 }
 
 // F9: true while a step's earlier commands run. A read renumbers the page's elements, so it waits for the last one:
@@ -100,7 +100,7 @@ async function bridgeSite(site: string, url: string): Promise<void> {
   const id = lastCommand;
   // The ask names only the new site: the whole Sites list is noise in the panel and the agent app's dialog. No leaves
   // no note: the "Refused" line right after says it.
-  const add = !b.refused.has(site) && await askOrAuto(`${wantsSite(site, url)}. Add ${site} to the bridge's Sites?`, 'Add site', 'No', '');
+  const add = !b.refused.has(site) && await askOrAuto(`Let the agent use ${site}?\n${wantsSite(site, url)}`, 'Add site', 'No', '');
   if (id !== lastCommand) throw new Error('Stopped: the user ran another command. Ask them what to do.');
   if (add) {
     b.sites.push(site);
@@ -201,18 +201,18 @@ async function onBridge(port: Port, m: { type?: string; commands?: unknown; erro
 
 // 4.2–4.3 for the bridge (allowOnce): a stop-line asks Allow once / I'll do it (auto mode allows it), and a step you
 // take over waits for your Resume (never auto). A command you start meanwhile closes the ask and stops this one.
-const askYou = (keep: string, stop: string, ask: typeof askOrAuto) => async (why: string): Promise<boolean> => {
+const askYou = (ask: (why: string) => Promise<boolean>) => async (why: string): Promise<boolean> => {
   const id = lastCommand;
-  const yes = await ask(why, keep, stop);
+  const yes = await ask(why);
   if (id !== lastCommand) throw new Error('Stopped: the user ran another command. Ask them what to do.');
   return yes;
 };
 // OT3: an ask that needs your hands in the agent's tab names it: you may be working in another tab. The site is the
 // hostname, not page text.
-const inAgentTab = async () => `In the agent's tab (${(await where(bridge?.sites ?? [])).site}): `;
+const inAgentTab = async () => ` in the agent's tab (${(await where(bridge?.sites ?? [])).site})`;
 const bridgeAsks = {
-  allow: askYou('Allow once', "I'll do it", askOrAuto),
-  resume: askYou('Resume', 'Stop', async (why, keep, stop) => askKeepGoing(`${await inAgentTab()}${why}`, keep, stop)),
+  allow: askYou((why) => askOrAuto(stopLineAsk(why), 'Allow once', "I'll do it")),
+  resume: askYou(async (why) => askKeepGoing(`Your turn${await inAgentTab()}\n${why}`, 'Resume', 'Stop')),
 };
 
 // 4.2 (captchaHold): true once you solved a CAPTCHA on url and pressed Resume; false if none asked. Stop ends the call.

@@ -109,3 +109,7 @@ export function checkStopLine(what: string, els: Element[]) {
   const reason = stopReason(els);
   if (reason) throw new StopLine(`Stop-line: ${what} (${reason}). Needs your ok.`);
 }
+
+// A stop-line as the panel's ask: a headline, then what it would do and why. "Stop-line:" and "Needs your ok." (in the
+// message for the agent) only repeat the headline.
+export const stopLineAsk = (message: string) => `This step needs your OK\n${message.replace(/^Stop-line: /, '').replace(/ Needs your ok\.$/, '')}`;

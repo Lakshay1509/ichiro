@@ -33,7 +33,7 @@ body {
   flex-direction: column;
   background: var(--canvas);
   color: var(--ink-2);
-  font: 13px/1.5 var(--sans);
+  font: 14px/1.5 var(--sans);
   font-feature-settings: 'cv11'; /* Inter's single-storey a: calmer at small sizes */
 }
 
@@ -46,7 +46,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: var(--gap);
-  white-space: pre-wrap;
+  white-space: pre-line; /* keeps line breaks; drops the old log's leading spaces ("   The agent works in") */
   overflow-wrap: anywhere;
   scrollbar-width: thin;
   scrollbar-color: rgba(0, 0, 0, 0.18) transparent;
@@ -80,42 +80,52 @@ body:has(#mcp:not([data-state='off'])) #out:empty::before {
 /* Your own commands, as typed. Not a chat bubble: the panel takes /commands, not messages. */
 .mine { color: var(--ink); font: 12px/1.5 var(--mono); }
 
-/* Needs you: a stop-line or a pause. Its buttons (.ask, right after) join it into one card. */
+/* An ask (stop-line, new site, download, your turn): a bold headline, then the detail in plain dark text. While it's
+   open, its buttons (.ask, right after) join it into one warm card. Once answered it goes calm, your choice (.answer)
+   at its foot, so only the open ask stands out. */
 .stop {
-  padding: 10px 12px;
-  border: 1px solid var(--warn-line);
-  border-radius: 8px;
-  background: var(--warn-soft);
-  color: var(--warn);
-  font-weight: 500;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  background: var(--canvas);
+  color: var(--ink-2);
 }
-.stop:has(+ .ask) { border-bottom: 0; border-radius: 8px 8px 0 0; padding-bottom: 2px; }
-.stop + .ask {
+.stop-head { color: var(--ink); font-size: 15px; font-weight: 600; line-height: 1.4; }
+.stop:has(+ .ask) { border-color: var(--warn-line); background: var(--warn-soft); }
+.stop:has(+ .ask, + .answer) { border-bottom: 0; border-radius: 10px 10px 0 0; padding-bottom: 4px; }
+.stop + :is(.ask, .answer) {
   margin-top: calc(-1 * var(--gap));
-  padding: 8px 12px 12px;
-  border: 1px solid var(--warn-line);
+  padding: 8px 14px 14px;
+  border: 1px solid var(--hairline);
   border-top: 0;
-  border-radius: 0 0 8px 8px;
-  background: var(--warn-soft);
+  border-radius: 0 0 10px 10px;
+  background: var(--canvas);
 }
+.stop + .ask { border-color: var(--warn-line); background: var(--warn-soft); }
+.stop + .answer { padding-top: 6px; color: var(--ink-muted); font-size: 13px; }
 
-/* Both choices look the same on purpose: the panel never nudges you toward Allow. */
-.ask { display: flex; flex-wrap: wrap; gap: 8px; }
+/* Both choices look the same on purpose: the panel never nudges you toward Allow. Wide and tall, so easy to hit. */
+.ask { display: flex; gap: 8px; }
+.ask button { flex: 1; height: 36px; font-size: 13.5px; }
 
 /* One agent call */
 
 .step, .tips {
+  --gap: 6px; /* an ask's joined card inside measures its overlap by this */
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 10px 12px 8px;
+  gap: var(--gap);
+  padding: 12px 14px 10px;
   border: 1px solid var(--hairline);
   border-radius: 12px;
   background: var(--surface);
-  color: var(--ink-muted);
+  color: var(--ink-2);
 }
 
-.step-head { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; }
+.step-head { display: flex; align-items: center; gap: 8px; }
 .step-title { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
 
 /* One status mark: the word on a tint of its colour. */
@@ -125,8 +135,8 @@ body:has(#mcp:not([data-state='off'])) #out:empty::before {
 .status.stopped { color: var(--danger); background: var(--danger-soft); }
 .status.done { color: var(--ink-muted); background: rgba(55, 53, 47, 0.06); }
 
-/* The agent's commands, named; the plain lines under each are its results. */
-.cmd { margin-top: 4px; color: var(--ink); font: 12px/1.5 var(--mono); }
+/* The agent's commands, named, each on a light chip; the plain lines under each are its results. */
+.cmd { margin-top: 2px; padding: 4px 8px; border-radius: 6px; background: var(--canvas); color: var(--ink); font: 12.5px/1.5 var(--mono); }
 
 /* Show / hide: the agent's full reply and the commands as sent */
 
@@ -163,6 +173,7 @@ summary:hover { color: var(--ink); background: var(--hover); }
   background: var(--canvas);
   color: var(--ink-2);
   font: 12px/1.5 var(--mono);
+  white-space: pre-wrap; /* the page as the agent got it, its indents kept */
   scrollbar-width: thin;
 }
 

@@ -94,5 +94,5 @@ for (const [url, hint] of [['https://www.flipkart.com/search?q=x', 'goto https:/
   }
 }
 // The ask names the exact host when it's more than the site or www., so data hidden in a host name shows.
-site(wantsSite('flipkart.com', 'https://www.flipkart.com/'), 'The agent wants to use flipkart.com (https://www.flipkart.com/)', 'ask for www');
-site(wantsSite('flipkart.com', 'https://c2vjcmv0.flipkart.com/'), 'The agent wants to use c2vjcmv0.flipkart.com, part of flipkart.com (https://c2vjcmv0.flipkart.com/)', 'ask for a subdomain');
+site(wantsSite('flipkart.com', 'https://www.flipkart.com/'), 'The agent wants to open flipkart.com:\nhttps://www.flipkart.com/', 'ask for www');
+site(wantsSite('flipkart.com', 'https://c2vjcmv0.flipkart.com/'), 'The agent wants to open c2vjcmv0.flipkart.com, part of flipkart.com:\nhttps://c2vjcmv0.flipkart.com/', 'ask for a subdomain');

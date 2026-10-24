@@ -34,7 +34,7 @@ export async function runRepeat(args: string[], r: RepeatRun): Promise<string | 
   const names = items.map(named);
   const targets = items.map((n) => itemTarget(n, labelFor));
   const perItem = downloadsSince(r.steps, step, r.count());
-  if (!(await askOrAuto(repeatAsk(step, r.steps.length, r.site, names, perItem), 'Repeat', 'No'))) {
+  if (!(await askOrAuto(`Repeat on more items?\n${repeatAsk(step, r.steps.length, r.site, names, perItem)}`, 'Repeat', 'No'))) {
     return id !== lastCommand ? null : 'Refused: the user said no to this repeat. Do the items one by one, or pause to ask the user.';
   }
   const allNews: string[] = []; // every item's download lines, named in the result (filesLine)

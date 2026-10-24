@@ -1,6 +1,6 @@
 // Checks stopWord (risky button labels), isCheckoutUrl (pages where any click can move money) and the cookie exception
 // (privacyLabel, riskyWord, inCookieBox: a cookie box's least-consent button isn't a stop-line). Run: npm test
-import { inCookieBox, isCheckoutUrl, privacyLabel, riskyWord, stopWord } from './stop-lines.ts';
+import { inCookieBox, isCheckoutUrl, privacyLabel, riskyWord, stopLineAsk, stopWord } from './stop-lines.ts';
 
 const matches: [string, string][] = [
   ['Pay now', 'pay'],
@@ -125,3 +125,8 @@ const cookieCases: [Box, boolean, string][] = [
 for (const [b, want, what] of cookieCases) {
   if (inBox(b) !== want) throw new Error(`inCookieBox, ${what}: want ${want}`);
 }
+
+// The panel's ask: our headline on the first line (never page text), the stop-line's own words under it.
+const asked = stopLineAsk('Stop-line: click "Place order" (word "pay" on the box around it). Needs your ok.');
+if (asked !== 'This step needs your OK\nclick "Place order" (word "pay" on the box around it).') throw new Error(`stopLineAsk: ${asked}`);
+if (!stopLineAsk('Stop-line: goto https://shop.example/checkout (checkout page)').endsWith('\ngoto https://shop.example/checkout (checkout page)')) throw new Error('stopLineAsk, goto');
