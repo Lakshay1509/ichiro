@@ -91,10 +91,10 @@ export function askOrAuto(message: string, keepLabel: string, stopLabel: string,
 }
 
 // 4.1 pause "reason": hands the page to you. The agent wrote the reason after reading the page, so it's shown quoted,
-// one line, capped, like its other words.
-export function askResume(args: string[]): Promise<boolean> {
+// one line, capped, like its other words. where: which tab, for the agent's pause (OT3).
+export function askResume(args: string[], where = ''): Promise<boolean> {
   const why = args.join(' ').replace(/\s+/g, ' ').trim().slice(0, 200) || '(no reason given)';
-  return askKeepGoing(`Paused: "${why}". Do what's needed on the page, then Resume.`, 'Resume');
+  return askKeepGoing(`${where}Paused: "${why}". Do what's needed on the page, then Resume.`, 'Resume');
 }
 
 type Run = (allow: boolean) => string | void | Promise<string | void>;

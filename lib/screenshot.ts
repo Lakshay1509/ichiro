@@ -8,7 +8,8 @@ const MAX_WIDTH = 1280;
 // Heavy JPEG compression makes small text hard to read (vision docs); checked by eye in the live run.
 const JPEG_QUALITY = 0.85;
 
-export const OFF_SCREEN = "the run's tab isn't on screen. Ask the user to keep it the front tab in a Chrome window that isn't minimized, or read the page as text";
+// OT3: the agent's tab is often behind yours now, and Chrome doesn't draw hidden tabs. Its own window keeps it drawn.
+export const OFF_SCREEN = "the agent's tab isn't on screen (the user is in another tab, or its window is minimized or covered). Use the page as text, or ask the user to show that tab: in its own window, side by side, it stays on screen";
 
 export interface Shot {
   data: string; // base64 JPEG

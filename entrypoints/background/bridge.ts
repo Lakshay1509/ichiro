@@ -207,7 +207,13 @@ const askYou = (keep: string, stop: string, ask: typeof askOrAuto) => async (why
   if (id !== lastCommand) throw new Error('Stopped: the user ran another command. Ask them what to do.');
   return yes;
 };
-const bridgeAsks = { allow: askYou('Allow once', "I'll do it", askOrAuto), resume: askYou('Resume', 'Stop', askKeepGoing) };
+// OT3: an ask that needs your hands in the agent's tab names it: you may be working in another tab. The site is the
+// hostname, not page text.
+const inAgentTab = async () => `In the agent's tab (${(await where(bridge?.sites ?? [])).site}): `;
+const bridgeAsks = {
+  allow: askYou('Allow once', "I'll do it", askOrAuto),
+  resume: askYou('Resume', 'Stop', async (why, keep, stop) => askKeepGoing(`${await inAgentTab()}${why}`, keep, stop)),
+};
 
 // 4.2 (captchaHold): true once you solved a CAPTCHA on url and pressed Resume; false if none asked. Stop ends the call.
 async function bridgeCaptcha(name: string, url: string): Promise<boolean> {
@@ -442,7 +448,7 @@ async function agentCommand(line: string, last: boolean): Promise<AgentReply> {
   }
   if (name === 'repeat') return { text: await bridgeRepeat(args) };
   if (name === 'pause') {
-    if (await askResume(args)) return { text: 'The user pressed Resume. Report what the page shows now, not what you expect.' };
+    if (await askResume(args, await inAgentTab())) return { text: 'The user pressed Resume. Report what the page shows now, not what you expect.' };
     throw new Error('The user pressed Stop. Stop and ask them what to do.');
   }
   const docBefore = await topDocument(from);
