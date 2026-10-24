@@ -1,5 +1,5 @@
 // Checks safeUrl (only http(s) URLs pass) and arrived (goto's honest result). Run: npm test
-import { arrived, back, follow, loaded, pinTab, safeUrl, targetTabId } from './navigation.ts';
+import { arrived, back, follow, loaded, openBehind, pinTab, safeUrl, targetTabId } from './navigation.ts';
 
 const allowed = ['https://en.wikipedia.org/wiki/Alan_Turing', 'http://localhost:3000/'];
 const blocked = ['javascript:alert(1)', 'JavaScript:alert(1)', 'data:text/html,hi', 'file:///C:/x.html', 'chrome://settings', 'wikipedia.org', ''];
@@ -28,13 +28,14 @@ throws(() => arrived(want, old, old, want), 'still loading');
 
 // #8, #14, #15: following a tab a link opened, and back from a tab with no earlier page. Stand-in for chrome.tabs:
 // tab 2 (active) was opened by tab 1, same window; tab 3 is in another window.
-type FakeTab = { id: number; windowId: number; status: string; pendingUrl?: string; openerTabId?: number };
+type FakeTab = { id: number; windowId: number; status: string; pendingUrl?: string; openerTabId?: number; index?: number };
 const tabs = new Map<number, FakeTab>([
   [1, { id: 1, windowId: 1, status: 'complete' }],
-  [2, { id: 2, windowId: 1, status: 'complete', openerTabId: 1 }],
+  [2, { id: 2, windowId: 1, status: 'complete', openerTabId: 1, index: 4 }],
   [3, { id: 3, windowId: 9, status: 'complete', openerTabId: 1 }],
 ]);
 const activated: number[] = [];
+const created: object[] = [];
 let history = true; // the active tab has an earlier page
 let active = 2;
 Object.assign(globalThis, {
@@ -43,6 +44,11 @@ Object.assign(globalThis, {
       query: async () => [tabs.get(active)],
       get: async (id: number) => (tabs.has(id) ? { ...tabs.get(id), active: id === active } : Promise.reject(new Error(`No tab with id: ${id}.`))),
       update: async (id: number) => void activated.push(id),
+      create: async (props: { windowId: number }) => {
+        created.push(props);
+        tabs.set(10, { id: 10, windowId: props.windowId, status: 'complete' });
+        return { id: 10 };
+      },
       goBack: async (id: number) => {
         if (!tabs.has(id)) throw new Error(`No tab with id: ${id}.`);
         if (!history) throw new Error('Cannot find a next page in history.');
@@ -89,3 +95,8 @@ pinTab(2, 1);
 const before = activated.length;
 if ((await back()).includes('went to the tab that opened it') !== true || (await targetTabId()) !== 1 || activated.length !== before) throw new Error('back: the agent tab moves to where it came from, behind');
 pinTab(null);
+
+// OT4: the agent's first goto gets a blank tab right after the front one, in the background, with no opener.
+active = 2;
+if ((await openBehind()) !== 10) throw new Error('openBehind: returns the new tab');
+if (JSON.stringify(created) !== JSON.stringify([{ url: 'about:blank', active: false, windowId: 1, index: 5 }])) throw new Error(`openBehind: created ${JSON.stringify(created)}`);

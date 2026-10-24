@@ -5,7 +5,7 @@ import { fileName, RunDownloads } from '@/lib/downloads';
 import { captchaAll, labelFor, nameFor, readAll } from '@/lib/frames';
 import { HOST_NAME } from '@/lib/host-install';
 import { HandOver, StopLine } from '@/lib/messages';
-import { follow, pinTab, targetTabId } from '@/lib/navigation';
+import { follow, openBehind, pinTab, targetTabId } from '@/lib/navigation';
 import { pageReport } from '@/lib/page-diff';
 import { remember, type Remembered } from '@/lib/panel-memory';
 import type { Step } from '@/lib/panel-port';
@@ -412,12 +412,12 @@ async function agentTab(name: string): Promise<number> {
 }
 
 // OT1: makes tab id the agent's. The log says so when it changes; the title is page text, so it's capped. OT2: it joins
-// the Ichiro group; followed: the agent's page opened it, so it leaves your group if Chrome put it there.
-async function keepTab(id: number, followed: boolean) {
+// the Ichiro group; opened: the agent or its page opened it, so it leaves your group if Chrome put it there.
+async function keepTab(id: number, opened: boolean) {
   const b = bridge;
   if (!b || b.tab === id) return;
   b.tab = id;
-  sign(() => groupTab(id, followed));
+  sign(() => groupTab(id, opened));
   const { site, title } = await where(b.sites, id);
   print(`   The agent works in: ${title ? `${title.slice(0, 80)} (${site})` : site}`);
 }
@@ -430,8 +430,10 @@ async function agentCommand(line: string, last: boolean): Promise<AgentReply> {
   // #16, OT1: one command, one tab: the agent's own (agentTab). Its checks, action and read all go there, whatever tab
   // is in front. back may move it to the tab it followed this one from (#15), but not in a repeat's recipe. The pin
   // ends with the command (inRunTab).
-  const from = await agentTab(name);
-  pinTab(from, name === 'back' && !repeating ? (bridge?.came.get(from) ?? null) : null);
+  const picking = bridge?.tab === null; // OT4: no tab of its own yet, so a goto opens one
+  let from = await agentTab(name);
+  let own: number | undefined; // OT4: the tab this goto opened
+  pinTab(from,name === 'back' && !repeating ? (bridge?.came.get(from) ?? null) : null);
   // Checked right before acting: a click may have left the Sites. back and goto (to
   // the Sites only, checked below) get it home.
   const now = await where(sites);
@@ -473,6 +475,9 @@ async function agentCommand(line: string, last: boolean): Promise<AgentReply> {
       const href = checkGoto(args[0], sites);
       output = await allowOnce(async (allow) => {
         if (!allow && isCheckoutUrl(href)) throw new StopLine(`Stop-line: goto ${href} (checkout page)`);
+        // OT4: with no tab of its own yet, the agent's goto opens one behind yours, only after every check above. Once:
+        // an allowed retry goes to the same tab. from moves too, so a tab this page opens is followed from there.
+        if (picking && own === undefined) pinTab((from = own = await openBehind()));
         return commands.goto!.run([href], allow);
       }, bridgeAsks);
     } else if (name === 'look') {
@@ -497,6 +502,9 @@ async function agentCommand(line: string, last: boolean): Promise<AgentReply> {
       }, bridgeAsks);
     }
   } catch (err) {
+    // OT4: a goto still loading or failed leaves the agent in the tab it opened, so its next read goes there. A tab
+    // gone meanwhile only loses the log line: the next command says it was closed.
+    if (own !== undefined) await keepTab(own, true).catch(() => {});
     // allowOnce took the first try's stop-line or hand-over; one from the allowed try (or goto's site ask) ends here.
     if (err instanceof StopLine || err instanceof HandOver) throw new Error(`${err.message}. Not done: tell the user to do this step by hand.`);
     throw err;
@@ -513,7 +521,7 @@ async function agentCommand(line: string, last: boolean): Promise<AgentReply> {
     bridge?.came.set(opened, from);
     followed = true;
   }
-  await keepTab(await targetTabId(), followed); // OT1: a tab it picked, followed or went back to is the agent's now
+  await keepTab(await targetTabId(), followed || own !== undefined); // OT1: a tab it picked, followed or went back to is the agent's now
   // A click can land off the Sites (here or in the new tab): that page's text stays here, like a redirect's.
   // In both returns below the read isn't sent, so bridge.page stays the last list the agent got.
   const after = await where(sites);

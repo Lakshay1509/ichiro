@@ -79,6 +79,17 @@ export async function loaded(id: number): Promise<boolean> {
   }
 }
 
+// OT4: the agent's own tab for its first goto: next to the front tab, in the background, so your page stays as it was.
+// No openerTabId: your tab didn't open it, and back from a command you type there would take you to your tab (#15).
+// Blank and loaded first, so goto starts from about:blank, never from a URL still committing under it.
+// Source: https://developer.chrome.com/docs/extensions/reference/api/tabs#method-create
+export async function openBehind(): Promise<number> {
+  const [front] = await browser.tabs.query({ active: true, currentWindow: true });
+  const tab = await browser.tabs.create({ url: 'about:blank', active: false, ...(front && { windowId: front.windowId, index: front.index + 1 }) });
+  if (tab.id === undefined || !(await loaded(tab.id))) throw new Error("Couldn't open a tab for goto");
+  return tab.id;
+}
+
 // Moves on to tab id, if it's in the same window as tab from. In front only if from was (OT1: the agent's tab can be
 // behind yours). active is "in its window": https://developer.chrome.com/docs/extensions/reference/api/tabs#type-Tab
 async function bringForward(id: number, from: number): Promise<boolean> {

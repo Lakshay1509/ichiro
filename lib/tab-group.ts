@@ -12,12 +12,13 @@ async function ichiroGroups(windowId?: number) {
 }
 
 // Puts tab id in its window's Ichiro group, made if there's none. A tab in one of your groups stays there, unless the
-// agent's page opened it (followed): Chrome puts a link tab next to the front tab, in your group if it has one.
+// agent or its page opened it (opened): Chrome puts a link tab next to the front tab, in your group if it has one, and
+// a goto's new tab (OT4) sits next to yours too.
 // Source: https://developer.chrome.com/docs/extensions/reference/api/tabs#method-group
-export async function groupTab(id: number, followed: boolean): Promise<void> {
+export async function groupTab(id: number, opened: boolean): Promise<void> {
   const tab = await browser.tabs.get(id);
   const [group] = await ichiroGroups(tab.windowId);
-  if (tab.groupId === group?.id || (tab.groupId !== NONE && !followed)) return;
+  if (tab.groupId === group?.id || (tab.groupId !== NONE && !opened)) return;
   if (group) {
     await browser.tabs.group({ tabIds: id, groupId: group.id });
     return;
