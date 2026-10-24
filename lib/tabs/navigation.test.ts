@@ -1,5 +1,5 @@
 // Checks safeUrl (only http(s) URLs pass) and arrived (goto's honest result). Run: npm test
-import { arrived, back, follow, loaded, openBehind, pinTab, safeUrl, targetTabId } from './navigation.ts';
+import { arrived, back, follow, GOTO_RULE, gotoRule, guardedGoto, loaded, openBehind, pinTab, safeUrl, targetTabId } from './navigation.ts';
 
 const allowed = ['https://en.wikipedia.org/wiki/Alan_Turing', 'http://localhost:3000/'];
 const blocked = ['javascript:alert(1)', 'JavaScript:alert(1)', 'data:text/html,hi', 'file:///C:/x.html', 'chrome://settings', 'wikipedia.org', ''];
@@ -100,3 +100,20 @@ pinTab(null);
 active = 2;
 if ((await openBehind()) !== 10) throw new Error('openBehind: returns the new tab');
 if (JSON.stringify(created) !== JSON.stringify([{ url: 'about:blank', active: false, windowId: 1, index: 5 }])) throw new Error(`openBehind: created ${JSON.stringify(created)}`);
+
+// Lead 2 (audit 2026-10-24): while the agent's goto loads, its tab can't load a page off the Sites, so a redirect on
+// an allowed site can't carry page data to a site you never added. One session rule, this tab only, top pages only.
+const rule = gotoRule(7, ['httpbin.org', 'shop.com']);
+if (rule.action.type !== 'block') throw new Error('gotoRule must block');
+if (rule.condition.tabIds.join() !== '7' || rule.condition.resourceTypes.join() !== 'main_frame') throw new Error('gotoRule: this tab, top pages only');
+if (rule.condition.excludedRequestDomains.join() !== 'httpbin.org,shop.com') throw new Error('gotoRule: every site but the Sites');
+// The rule is on before the navigation starts and off after, even when the goto fails.
+const dnr: string[] = [];
+(globalThis as unknown as { browser: Record<string, unknown> }).browser.declarativeNetRequest = {
+  updateSessionRules: async (o: { addRules?: { id: number }[]; removeRuleIds?: number[] }) => void dnr.push(o.addRules?.length ? `add ${o.addRules[0]!.id}` : `remove ${o.removeRuleIds?.join()}`),
+};
+await guardedGoto(7, ['shop.com'], async () => void dnr.push('goto'));
+if (dnr.join() !== `add ${GOTO_RULE},goto,remove ${GOTO_RULE}`) throw new Error(`guardedGoto order: ${dnr.join()}`);
+dnr.length = 0;
+try { await guardedGoto(7, ['shop.com'], async () => { throw new Error('timeout'); }); } catch { /* the goto's own error */ }
+if (dnr.at(-1) !== `remove ${GOTO_RULE}`) throw new Error('guardedGoto must remove the rule after a failed goto');

@@ -1,6 +1,6 @@
 // Checks P1's PDF text for the model: pdf.js text items joined per page, text all and find on a PDF, the %PDF- check.
 // P2: text page N, the read-on note, pages without text. Run: npm test
-import { isPdf, pageText, pdfFind, pdfText } from './pdf-text.ts';
+import { checkPdfResponse, isPdf, PDF_FETCH, pageText, pdfFind, pdfText } from './pdf-text.ts';
 import { TEXT_CAP } from '../page/page-text.ts';
 
 const fail = (what: string): never => {
@@ -44,3 +44,12 @@ if (!found.startsWith('2 matches for "reissue" in the PDF:\n1. page 2: ') || !fo
 const long = { pages: ['a '.repeat(TEXT_CAP), 'Late more than three hours: TDR before the actual departure'], total: 2 };
 if (pdfText(long).includes('actual departure') || !pdfFind(long, 'actual departure').includes('1. page 2: ')) fail('find past the text all cut');
 if (pdfFind(doc, 'tatkaal') !== 'No match for "tatkaal" in the PDF (2 of 3 pages read).') fail(`find miss: ${pdfFind(doc, 'tatkaal')}`);
+
+// Lead 9 (audit 2026-10-24): the PDF re-fetch carries your cookies, so it never follows a redirect: the bytes must
+// come from the tab's own URL, the one the Sites check passed. A redirect answer is refused, before any other site
+// is asked for anything.
+if (PDF_FETCH.redirect !== 'manual') fail('the PDF fetch must not follow redirects');
+let refused = '';
+try { checkPdfResponse({ type: 'opaqueredirect', ok: false, status: 0 }); } catch (err) { refused = (err as Error).message; }
+if (!/redirect/i.test(refused)) fail(`a redirect answer must be refused: ${JSON.stringify(refused)}`);
+checkPdfResponse({ type: 'basic', ok: true, status: 200 });

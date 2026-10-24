@@ -58,4 +58,15 @@ export function pdfFind(p: PdfText, query: string): string {
 }
 
 // A PDF file has %PDF- in its first 1024 bytes (where readers look for it); a site's HTML error page doesn't.
+// The PDF re-fetch (pdf.ts) sends your cookies, so it never follows a redirect (audit 2026-10-24, lead 9): the bytes
+// must come from the tab's own URL, the one the Sites check passed. The tab already shows a PDF's final URL, so a
+// redirect here is a server answering this fetch differently, refused before another site gets a request.
+// Source: https://developer.mozilla.org/en-US/docs/Web/API/RequestInit#redirect
+export const PDF_FETCH = { credentials: 'include', cache: 'force-cache', redirect: 'manual' } as const;
+
+export function checkPdfResponse(res: { type: string; ok: boolean; status: number }) {
+  if (res.type === 'opaqueredirect') throw new Error('the PDF URL sent a redirect, which is never followed with your cookies: open the PDF itself in the tab, then try again');
+  if (!res.ok) throw new Error(`the PDF didn't load (HTTP ${res.status})`);
+}
+
 export const isPdf = (bytes: Uint8Array) => new TextDecoder('latin1').decode(bytes.subarray(0, 1024)).includes('%PDF-');

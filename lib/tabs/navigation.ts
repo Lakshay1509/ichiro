@@ -37,6 +37,30 @@ export async function targetTabId(): Promise<number> {
 const LOAD_MS = 15000;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// Audit 2026-10-24, lead 2: goto checks only the URL it was given, so while the agent's goto loads, its tab can't load
+// a top page off the Sites. A redirect on an allowed site could otherwise carry page data in its URL to a site you
+// never added: this session rule blocks that hop before the request leaves (Chrome shows its "blocked" page instead).
+// declarativeNetRequestWithHostAccess: no install warning with Ichiro's access to all sites. tabIds: session rules only.
+// Source: https://developer.chrome.com/docs/extensions/reference/api/declarativeNetRequest
+export const GOTO_RULE = 1;
+export const gotoRule = (tabId: number, sites: string[]) => ({
+  id: GOTO_RULE,
+  priority: 1,
+  action: { type: 'block' as const },
+  condition: { tabIds: [tabId], resourceTypes: ['main_frame' as const], excludedRequestDomains: sites },
+});
+
+// Runs the agent's goto in tabId with gotoRule on, and always takes it off after. A rule that can't be added stops
+// the goto: it never runs unguarded.
+export async function guardedGoto<T>(tabId: number, sites: string[], run: () => Promise<T>): Promise<T> {
+  await browser.declarativeNetRequest.updateSessionRules({ removeRuleIds: [GOTO_RULE], addRules: [gotoRule(tabId, sites)] });
+  try {
+    return await run();
+  } finally {
+    await browser.declarativeNetRequest.updateSessionRules({ removeRuleIds: [GOTO_RULE] }).catch(() => {});
+  }
+}
+
 // Waits until the new page has replaced the old one (or the load ended without it), then says where the tab really is.
 // pendingUrl is "the URL the tab is navigating to, before it has committed".
 // Source: https://developer.chrome.com/docs/extensions/reference/api/tabs#type-Tab

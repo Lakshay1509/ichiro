@@ -3,7 +3,7 @@ import { MAX_COMMAND } from '@/lib/bridge/bridge';
 import { focusedFrame, numbersAll } from '@/lib/page/frames';
 import { keyEvents, parseKey, scriptKey } from '@/lib/actions/keys';
 import { targetTabId } from '@/lib/tabs/navigation';
-import { attach, checkPoint, checkScriptClick, clickAtPoint, dragAlong, moveTo, sendKeys, sendMouse, sendText, type Point } from '@/lib/actions/real-input';
+import { attach, checkPoint, checkScriptClick, clickAtPoint, dragAlong, moveTo, pressAt, sendKeys, sendMouse, sendText, type Point } from '@/lib/actions/real-input';
 import { isDrawn, shrink, takeShot, type Shot } from '@/lib/page/screenshot';
 import { send, sendToTab } from '@/lib/tabs/send-to-tab';
 
@@ -33,7 +33,13 @@ export async function realMouse(target: { n?: number; text?: string }, allow: bo
   let blocked = '';
   try {
     const point = checkPoint(aimed);
-    sent = await sendMouse(tabId, hover ? moveTo(point) : clickAtPoint(point, clicks, modifiers));
+    if (hover) sent = await sendMouse(tabId, moveTo(point));
+    else if (await sendMouse(tabId, moveTo(point))) {
+      // Checked again with the mouse there, as realPoints does (audit 2026-10-24, lead 8): a frame the page slides under
+      // a hovering mouse is caught here, and a press that still goes elsewhere is reported by aimDone (endGuard).
+      const again = await sendToTab({ type: 'aim', ...target, allow, hover });
+      sent = !!again && (await sendMouse(tabId, pressAt(checkPoint(again), clicks, modifiers)));
+    }
   } finally {
     // A click that navigates leaves no page to ask: nothing was stopped then.
     if (!hover) blocked = await sendToTab({ type: 'aimDone' }).catch(() => '');

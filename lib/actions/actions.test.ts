@@ -88,3 +88,9 @@ guardClick(false, checked);
 press({});
 why = endGuard();
 if (pageSaw !== 1 || why.startsWith('Stopped') || !why.startsWith('Maybe done:') || !why.includes('reload the tab')) fail(`late: ${pageSaw} ${why}`);
+
+// Lead 8 (audit 2026-10-24): a press that never reached this page is reported, never "ok". A frame the page slid under
+// the mouse takes it, and that frame's events never come up to this window, so the guard saw nothing at all.
+guardClick(false, checked);
+const unseen = endGuard();
+if (!/never reached/.test(unseen)) fail(`a press that never reached the page must be reported: ${JSON.stringify(unseen)}`);

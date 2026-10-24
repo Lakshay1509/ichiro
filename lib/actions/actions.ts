@@ -172,7 +172,11 @@ export function endGuard(): string {
   const g = guard;
   g?.off();
   guard = null;
-  if (!g?.blocked) return '';
+  if (!g) return '';
+  // Audit 2026-10-24, lead 8: no press at all reached this page. A frame slid under the mouse takes it, and a frame's
+  // events never come up to this window, so nothing here could stop it: say so, never "ok".
+  if (!g.blocked && !g.pressed) return 'Not sure it landed: the press never reached this page, so something laid over it (a frame) may have taken it';
+  if (!g.blocked) return '';
   if (!first) return `Maybe done: ${g.blocked}. This tab was open before the extension loaded, so the page may have taken the click before it could be stopped (reload the tab to fix)`;
   return `Stopped: ${g.blocked}: ${g.pressed ? 'the rest was held back' : 'nothing reached the page'}`;
 }

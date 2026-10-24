@@ -32,12 +32,13 @@ const withModifiers = (events: MouseEvent[], modifiers: number) => (modifiers ? 
 export const moveTo = ({ x, y }: Point): MouseEvent[] => [{ type: 'mouseMoved', x, y, button: 'none', buttons: 0, clickCount: 0 }];
 const press = ({ x, y }: Point, clickCount = 1): MouseEvent => ({ type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount });
 const release = ({ x, y }: Point, clickCount = 1): MouseEvent => ({ type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount });
-export const clickAtPoint = (p: Point, clicks: 1 | 2 = 1, modifiers = 0): MouseEvent[] => withModifiers([
-  ...moveTo(p),
+// pressAt: the click without the move, for a press sent after the target was checked again with the mouse there.
+export const pressAt = (p: Point, clicks: 1 | 2 = 1, modifiers = 0): MouseEvent[] => withModifiers([
   press(p),
   release(p),
   ...(clicks === 2 ? [press(p, 2), release(p, 2)] : []),
 ], modifiers);
+export const clickAtPoint = (p: Point, clicks: 1 | 2 = 1, modifiers = 0): MouseEvent[] => [...withModifiers(moveTo(p), modifiers), ...pressAt(p, clicks, modifiers)];
 
 // WR1: press at the first point, move to each next one in steps with the button held (apps draw from the moves in
 // between), release at the last. At most 10 steps a stretch, so a long drag stays quick.

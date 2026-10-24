@@ -5,7 +5,7 @@
 // Sources: https://github.com/mozilla/pdf.js, https://github.com/advisories/GHSA-wgrm-67xf-hhpq
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
 import workerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
-import { isPdf, pageText, type PdfText } from './pdf-text.ts';
+import { checkPdfResponse, isPdf, pageText, PDF_FETCH, type PdfText } from './pdf-text.ts';
 
 GlobalWorkerOptions.workerSrc = workerSrc; // bundled with the extension, served from its own origin
 
@@ -15,9 +15,11 @@ const MAX_MS = 15_000;
 const MAX_CHARS = 100_000; // read past text all's cut, so find reaches the later pages
 
 // The tab's own URL, with its cookies, from the cache when it can be (browser-use fetches with force-cache too).
+// Never through a redirect (PDF_FETCH).
 async function fetchPdf(url: string): Promise<Uint8Array> {
-  const res = await fetch(url, { credentials: 'include', cache: 'force-cache', signal: AbortSignal.timeout(MAX_MS) });
-  if (!res.ok || !res.body) throw new Error(`the PDF didn't load (HTTP ${res.status})`);
+  const res = await fetch(url, { ...PDF_FETCH, signal: AbortSignal.timeout(MAX_MS) });
+  checkPdfResponse(res);
+  if (!res.body) throw new Error(`the PDF didn't load (HTTP ${res.status})`);
   const bytes = await capped(res.body);
   if (!isPdf(bytes)) throw new Error('the file at this URL isn\'t a PDF');
   return bytes;

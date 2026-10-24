@@ -1,6 +1,6 @@
 // The MCP agent's downloads (D1, D2): what it's told about each one, and the pause that waits for your yes.
 // Source: https://developer.chrome.com/docs/extensions/reference/api/downloads
-import { oneLine } from '../agent-prompt.ts';
+import { oneLine, onSites } from '../agent-prompt.ts';
 
 type Item = Browser.downloads.DownloadItem;
 
@@ -18,7 +18,19 @@ export function downloadNote(item: Item): string {
   return `download started: ${name} (still going)`;
 }
 
+// Lead 7 (audit 2026-10-24): a download came from a page on the Sites: its referrer, else its own URL (a blob:'s
+// creator). Only those ride an Allow once step or a repeat's allowance; any other pauses and asks as usual.
+export function fromSites(item: Item, sites: string[]): boolean {
+  const src = item.referrer || item.url || '';
+  return onSites(src.startsWith('blob:') ? src.slice(5) : src, sites);
+}
+
 export class RunDownloads {
+  // Says if a new download came from the agent's Sites (fromSites): required, so no window can let any download in.
+  readonly ours: (item: Item) => boolean;
+  constructor(ours: (item: Item) => boolean) {
+    this.ours = ours;
+  }
   allowing = false; // true only while an Allow once step runs: downloads it starts are part of what you allowed
   created = 0; // RP1: downloads started in the run so far, to compare a repeat's items with item 1
   // RP1: downloads the repeat item now running may start without asking: item 1's count, which you approved with the
@@ -35,8 +47,9 @@ export class RunDownloads {
   readonly onCreated = (item: Item) => {
     this.created++;
     this.told.set(item.id, '');
-    if (this.allowing) return void this.allowed.push(item.id);
-    if (this.allowance > 0) {
+    const ours = this.ours(item);
+    if (this.allowing && ours) return void this.allowed.push(item.id);
+    if (this.allowance > 0 && ours) {
       this.allowance--;
       this.allowed.push(item.id);
       return;

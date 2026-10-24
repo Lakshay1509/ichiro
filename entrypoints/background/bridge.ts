@@ -1,11 +1,11 @@
 // BG4: the MCP bridge (/mcp on) and the coding agent's commands, each run like a typed one with the agent's guards.
 import { checkGoto, frameSiteToAsk, onSites, siteOn, siteToAdd, siteToOpen, wantsSite } from '@/lib/agent-prompt';
 import { allowOnce, batchProblem, batchReply, captchaHold, checkAgentTip, checkCommands, isAnswer, LOOK_HELP, lookShot, MAX_ASK, MAX_OUTPUT, MCP_COMMANDS, picksTab, retryUnlisted, showsPage, TIP_HELP, tipsOnce, type AskNotice, type BridgeAsk, type BridgeImage, type BridgeReply } from '@/lib/bridge/bridge';
-import { fileName, RunDownloads } from '@/lib/files/downloads';
+import { fileName, fromSites, RunDownloads } from '@/lib/files/downloads';
 import { captchaAll, frameFor, labelFor, nameFor, readAll } from '@/lib/page/frames';
 import { bridgeOff, HOST_NAME } from '@/lib/bridge/host-install';
 import { HandOver, StopLine } from '@/lib/messages';
-import { follow, openBehind, pinTab, targetTabId } from '@/lib/tabs/navigation';
+import { follow, guardedGoto, openBehind, pinTab, targetTabId } from '@/lib/tabs/navigation';
 import { pageReport } from '@/lib/page/page-diff';
 import { remember, type Remembered } from '@/lib/memory/panel-memory';
 import type { Step } from '@/lib/panel/panel-port';
@@ -362,7 +362,7 @@ async function agentRun(line: string, last = true): Promise<AgentReply> {
   await runEnded;
   // A command you type waits until this one has fully stopped, its downloads asked about.
   return inRunTab(null, async () => {
-    if (!agentDownloads) browser.downloads.onCreated.addListener((agentDownloads = new RunDownloads()).onCreated);
+    if (!agentDownloads) browser.downloads.onCreated.addListener((agentDownloads = new RunDownloads((item) => fromSites(item, bridge?.sites ?? []))).onCreated);
     const downloads = agentDownloads;
     const late = await downloads.report(askDownload); // started after its last command ended
     if (id !== lastCommand) throw new Error('Stopped: the user ran another command. Ask them what to do.');
@@ -494,7 +494,8 @@ async function agentCommand(line: string, last: boolean): Promise<AgentReply> {
         // OT4: with no tab of its own yet, the agent's goto opens one behind yours, only after every check above. Once:
         // an allowed retry goes to the same tab. from moves too, so a tab this page opens is followed from there.
         if (picking && own === undefined) pinTab((from = own = await openBehind()));
-        return commands.goto!.run([href], allow);
+        // Lead 2: no redirect may take this tab off the Sites while it loads (guardedGoto).
+        return guardedGoto(await targetTabId(), sites, async () => commands.goto!.run([href], allow));
       }, bridgeAsks);
     } else if (name === 'look') {
       if (args.length) throw new Error('Usage: look (no arguments)');

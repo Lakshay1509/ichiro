@@ -1,5 +1,5 @@
 // Checks downloads (D1, D2): the model's line (name only, capped) and the pause that waits for your yes. Run: npm test
-import { downloadNote, RunDownloads } from './downloads.ts';
+import { downloadNote, fromSites, RunDownloads } from './downloads.ts';
 
 const fail = (what: string): never => {
   throw new Error(what);
@@ -26,9 +26,10 @@ if (long.includes('\n') || long.length > 150 || long.includes('x\\')) fail(`long
 const yes = async () => true;
 const no = async () => false;
 const never = async (): Promise<boolean> => fail('asked for an allowed download');
+const anySite = () => true; // these cases test the pause and the ask, not where a download came from (lead 7, below)
 
 // Allowed (an Allow once step): never paused or asked; told once while going, once when done, then nothing.
-let run = new RunDownloads();
+let run = new RunDownloads(anySite);
 run.allowing = true;
 items.set(1, item(1));
 run.onCreated(items.get(1)!);
@@ -40,7 +41,7 @@ if ((await run.report(never)).join() !== 'downloaded "report.csv" (5 KB)') fail(
 if ((await run.report(never)).length) fail('finished download told again');
 
 // Not allowed: paused at once, and the next report asks you. Yes resumes it.
-run = new RunDownloads();
+run = new RunDownloads(anySite);
 items.set(2, item(2));
 run.onCreated(items.get(2)!);
 if (calls.join() !== 'pause 2' || run.paused !== 1) fail('not paused');
@@ -56,13 +57,13 @@ if ((await run.report(no)).length) fail('refused download told again');
 
 // Finished before the pause landed: not asked (nothing to stop), and the model and you are told.
 items.set(4, item(4, { state: 'complete', fileSize: 1_000 }));
-run = new RunDownloads();
+run = new RunDownloads(anySite);
 run.onCreated(items.get(4)!);
 if ((await run.report(never)).join() !== 'downloaded "report.csv" (1 KB) (it finished before it could be paused for the user\'s ok)') fail('got through');
 
 // RP1: a repeat's item may start as many downloads as its allowance (item 1's count, approved with the list) without
 // asking; the next one is paused and asked as usual, and so is any download once the allowance is back to 0.
-run = new RunDownloads();
+run = new RunDownloads(anySite);
 calls.length = 0;
 run.allowance = 1;
 for (const id of [5, 6]) {
@@ -77,7 +78,7 @@ if (run.created !== 3) fail(`created counts every download: ${run.created}`);
 
 // P2 downloads: only the downloads you allowed may be read: an Allow once step's (1), a yes (2), a repeat's allowance
 // (5); never one you said no to (3), one that finished before it could be asked (4), or one still waiting (6, 7).
-run = new RunDownloads();
+run = new RunDownloads(anySite);
 run.allowing = true;
 run.onCreated(items.get(1)!);
 run.allowing = false;
@@ -92,3 +93,21 @@ await run.report(never);
 run.allowance = 1;
 for (const id of [5, 6, 7]) run.onCreated(items.get(id)!);
 if (run.allowed.join() !== '1,2,5') fail(`allowed downloads: ${run.allowed.join()}`);
+
+// Lead 7 (audit 2026-10-24): only a download from a page on the Sites rides an Allow once step or a repeat's
+// allowance. Any other (a tab of yours, another site) pauses and asks as usual, so it can't join what the agent may read.
+(globalThis as unknown as { browser: { publicSuffix: unknown } }).browser.publicSuffix = { getDomain: (host: string) => host.split('.').slice(-2).join('.') };
+const shopOnly = (i: Item) => fromSites(i, ['shop.com']);
+calls.length = 0;
+run = new RunDownloads(shopOnly);
+run.allowing = true;
+run.onCreated(item(20, { referrer: 'https://evil.example/bank-statement' }));
+if (run.allowed.includes(20) || !calls.includes('pause 20')) fail('a download from another site rode the Allow once step');
+run.onCreated(item(21, { referrer: 'https://www.shop.com/orders' }));
+if (!run.allowed.includes(21)) fail('a download from the Sites page should ride Allow once');
+run.onCreated(item(22, { referrer: '', url: 'blob:https://shop.com/5d1e' }));
+if (!run.allowed.includes(22)) fail("a blob download counts as its page's site");
+run = new RunDownloads(shopOnly);
+run.allowance = 1;
+run.onCreated(item(23, { referrer: 'https://evil.example/' }));
+if (run.allowed.includes(23) || run.allowance !== 1) fail("another site's download used up a repeat's allowance");
