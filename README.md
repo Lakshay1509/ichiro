@@ -170,4 +170,4 @@ Issues and pull requests are welcome. Before you open a pull request, run `npm r
 
 ## License
 
-No license has been chosen yet. Until one is added, all rights are reserved.
+Ichiro is released under the [MIT License](LICENSE).
