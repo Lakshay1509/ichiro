@@ -58,7 +58,7 @@ function Entry({ item }: { item: Item }) {
         <div class={item.className}>{item.text}</div>
         {item.more && (
           <details>
-            <summary>What the agent got</summary>
+            <summary>Details</summary>
             <div class="well">{item.more}</div>
           </details>
         )}
@@ -79,18 +79,24 @@ function Entry({ item }: { item: Item }) {
   }
   if (item.kind === 'step') {
     const status = stepStatus({ ended: item.ended, asking: item.items.some((i) => i.kind === 'ask') });
+    // The agent's replies are for the agent: they wait in Details with its commands as sent. A one-action step's title
+    // already says its action, so that line goes too.
+    const lineOf = (i: Item, className: string) => i.kind === 'line' && i.className === className;
+    const replies = item.items.flatMap((i) => (i.kind === 'line' && i.className === 'reply' ? [[i.text, i.more].filter(Boolean).join('\n')] : []));
+    const shown = item.items.filter((i) => !lineOf(i, 'reply') && !(item.raw.length === 1 && lineOf(i, 'cmd')));
     return (
       <div class="step">
         <div class="step-head">
           <span class={`status ${STATUS_CLASS[status]}`}>{status}</span>
           <span class="step-title">{item.title}</span>
+          <span class="step-n">Step {item.n}</span>
         </div>
-        {item.items.map((i) => <Entry key={i.id} item={i} />)}
+        {shown.map((i) => <Entry key={i.id} item={i} />)}
         {/* RL3: closed until you open it; redraws leave its open state alone (no open prop). Source:
             https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/details */}
         <details>
-          <summary>Commands as sent</summary>
-          <div class="well">{item.raw.join('\n')}</div>
+          <summary>Details</summary>
+          <div class="well">{`The agent sent:\n${item.raw.join('\n')}${replies.length ? `\n\nIt got back:\n${replies.join('\n\n')}` : ''}`}</div>
         </details>
       </div>
     );

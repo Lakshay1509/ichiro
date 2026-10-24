@@ -77,8 +77,8 @@ export function clearLog() {
 }
 
 // RL2: an agent call's block; what prints until it ends goes inside it.
-export function openStep(title: string, raw: string[]): Step {
-  const step: Step = { id: ++lastId, kind: 'step', title, raw, items: [] };
+export function openStep(n: number, title: string, raw: string[]): Step {
+  const step: Step = { id: ++lastId, kind: 'step', n, title, raw, items: [] };
   change({ type: 'open', step });
   return step;
 }

@@ -9,8 +9,9 @@ export const MAX_LOG = 300;
 // Source: https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/lifecycle
 export const PING_MS = 20_000;
 
-// RL2: one agent call, its lines inside. raw: its commands as sent (RL3). ended: set once the call has replied.
-export type Step = { id: number; kind: 'step'; title: string; raw: string[]; items: Item[]; ended?: 'Done' | 'Stopped' };
+// RL2: one agent call, its lines inside. n: its step number (repeat <step>); title: what it does (stepTitle). raw: its
+// commands as sent (RL3). ended: set once the call has replied.
+export type Step = { id: number; kind: 'step'; n: number; title: string; raw: string[]; items: Item[]; ended?: 'Done' | 'Stopped' };
 // One thing in the log. Its text is often page or agent text: the panel shows it as text, never as HTML.
 // An ask's buttons are labels only: a click goes back as { type: 'press', id, button } (the label's index).
 export type Item =

@@ -33,7 +33,7 @@ body {
   flex-direction: column;
   background: var(--canvas);
   color: var(--ink-2);
-  font: 14px/1.5 var(--sans);
+  font: 13px/1.5 var(--sans);
   font-feature-settings: 'cv11'; /* Inter's single-storey a: calmer at small sizes */
 }
 
@@ -86,57 +86,60 @@ body:has(#mcp:not([data-state='off'])) #out:empty::before {
 .stop {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 12px 14px;
+  gap: 2px;
+  padding: 10px 12px;
   border: 1px solid var(--hairline);
   border-radius: 10px;
   background: var(--canvas);
   color: var(--ink-2);
 }
-.stop-head { color: var(--ink); font-size: 15px; font-weight: 600; line-height: 1.4; }
+.stop-head { color: var(--ink); font-size: 13.5px; font-weight: 600; line-height: 1.4; }
 .stop:has(+ .ask) { border-color: var(--warn-line); background: var(--warn-soft); }
 .stop:has(+ .ask, + .answer) { border-bottom: 0; border-radius: 10px 10px 0 0; padding-bottom: 4px; }
 .stop + :is(.ask, .answer) {
   margin-top: calc(-1 * var(--gap));
-  padding: 8px 14px 14px;
+  padding: 6px 12px 12px;
   border: 1px solid var(--hairline);
   border-top: 0;
   border-radius: 0 0 10px 10px;
   background: var(--canvas);
 }
 .stop + .ask { border-color: var(--warn-line); background: var(--warn-soft); }
-.stop + .answer { padding-top: 6px; color: var(--ink-muted); font-size: 13px; }
+.stop + .answer { padding-top: 4px; color: var(--ink-muted); font-size: 12px; }
 
 /* Both choices look the same on purpose: the panel never nudges you toward Allow. Wide and tall, so easy to hit. */
 .ask { display: flex; gap: 8px; }
-.ask button { flex: 1; height: 36px; font-size: 13.5px; }
+.ask button { flex: 1; height: 32px; }
 
 /* One agent call */
 
 .step, .tips {
-  --gap: 6px; /* an ask's joined card inside measures its overlap by this */
+  --gap: 4px; /* an ask's joined card inside measures its overlap by this */
   display: flex;
   flex-direction: column;
   gap: var(--gap);
-  padding: 12px 14px 10px;
+  padding: 10px 12px 6px;
   border: 1px solid var(--hairline);
   border-radius: 12px;
   background: var(--surface);
   color: var(--ink-2);
 }
 
-.step-head { display: flex; align-items: center; gap: 8px; }
-.step-title { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+/* Status, what the step does, then its number at the right (the agent's repeat <step> goes by it). */
+.step-head { display: flex; align-items: baseline; gap: 8px; }
+.step-title { flex: 1; min-width: 0; color: var(--ink); font-weight: 600; }
+.step-head + * { margin-top: 2px; }
+.step-n { flex: none; color: var(--ink-muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
 
 /* One status mark: the word on a tint of its colour. */
-.status { padding: 1px 8px; border-radius: 9999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.status { padding: 0 7px; border-radius: 9999px; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
 .status.running { color: var(--blue-ink); background: var(--blue-soft); }
 .status.waiting { color: var(--warn); background: var(--warn-soft); }
 .status.stopped { color: var(--danger); background: var(--danger-soft); }
 .status.done { color: var(--ink-muted); background: rgba(55, 53, 47, 0.06); }
 
-/* The agent's commands, named, each on a light chip; the plain lines under each are its results. */
-.cmd { margin-top: 2px; padding: 4px 8px; border-radius: 6px; background: var(--canvas); color: var(--ink); font: 12.5px/1.5 var(--mono); }
+/* A batch's actions in plain words, one per line, a thin rule holding them together like a list. */
+.cmd { padding-left: 10px; border-left: 2px solid var(--hairline); color: var(--ink-2); }
 
 /* Show / hide: the agent's full reply and the commands as sent */
 

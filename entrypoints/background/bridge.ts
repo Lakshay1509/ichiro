@@ -10,7 +10,7 @@ import { pageReport } from '@/lib/page-diff';
 import { remember, type Remembered } from '@/lib/panel-memory';
 import type { Step } from '@/lib/panel-port';
 import { parseCommand } from '@/lib/parse-command';
-import { shownLine, splitReply } from '@/lib/readable-log';
+import { saidLine, splitReply, stepTitle } from '@/lib/readable-log';
 import { detachAll } from '@/lib/real-input';
 import { failed, recordLine } from '@/lib/repeat';
 import { saveTip, useSite } from '@/lib/site-store';
@@ -184,7 +184,7 @@ async function onBridge(port: Port, m: { type?: string; commands?: unknown; erro
   let block: Step | null = null;
   try {
     const lines = checkCommands(m.commands);
-    block = openStep(`Step ${before + 1}`, lines);
+    block = openStep(before + 1, stepTitle(lines, nameFor), lines); // named before it runs, like each line (RL1)
     const { text, image } = await agentBatch(lines);
     const tips = await bridgeTips(); // first, so a long page can't cut them off
     reply = { type: 'output', text: (numbered() + (tips ? `${tips}\n\n${text}` : text)).slice(0, MAX_OUTPUT), ...(image && { image }) };
@@ -339,7 +339,7 @@ type AgentReply = { text: string; image?: BridgeImage; stop?: string };
 
 // last: false for a batch's earlier commands, which don't read the page (agentBatch).
 async function agentRun(line: string, last = true): Promise<AgentReply> {
-  print(shownLine(line, nameFor), 'cmd'); // RL1: named before it runs, while its number is still this read's
+  print(saidLine(line, nameFor), 'cmd'); // RL1: in plain words, named before it runs, while its number is still this read's
   // Like a command you type: closes an open ask first.
   closeAsk('Closed, nothing ran: the agent sent a command.');
   const id = nextCommand();
@@ -534,7 +534,7 @@ async function agentCommand(line: string, last: boolean): Promise<AgentReply> {
   // The read in output is of the old tab: the agent reads the new one next.
   if (followed) output = `${(output || 'ok').split('\n')[0]} — it opened a new tab, now the current one: ${after.url}. Send read to see it (text page 1 if it's a PDF).`;
   else if (bridge && agentRead !== null) bridge.page = agentRead;
-  if (output) show({ kind: 'line', ...splitReply(output) }); // RL4: the result; the page behind a click
+  if (output) show({ kind: 'line', className: 'reply', ...splitReply(output) }); // RL4: for the agent, so the panel keeps it in Details
   // A new document, not a new URL: Maps' tabs change the URL by script (pushState) on the same page. Unknown: stops.
   const docAfter = await topDocument(await targetTabId());
   const stop = followed ? 'it opened a new tab' : !docBefore || docBefore !== docAfter ? 'a new page loaded' : undefined;

@@ -1,5 +1,5 @@
 // Checks the readable log (harness/readable-log.md): RL1 names, RL2 status words, RL3 the cut, RL4 the result. Run: npm test
-import { shownLine, splitReply, stepStatus } from './readable-log.ts';
+import { saidLine, shownLine, splitReply, stepStatus, stepTitle } from './readable-log.ts';
 
 const fail = (what: string): never => {
   throw new Error(what);
@@ -40,3 +40,23 @@ same(shown('ok — real click'), JSON.stringify({ text: 'ok — real click', mor
 same(shown('ok — real click\n\nURL: https://a.com/\n[1] link "x"'), JSON.stringify({ text: 'ok — real click', more: 'URL: https://a.com/\n[1] link "x"' }), 'page after a blank line');
 same(shown('URL: https://a.com/\nTitle: A\n[1] link "x"'), JSON.stringify({ text: 'URL: https://a.com/', more: 'Title: A\n[1] link "x"' }), "read's list");
 same(shown('1. ok — real click\n2. Error: not found\nNot run: 3. key Enter\n\nURL: https://a.com/'), JSON.stringify({ text: '1. ok — real click\n2. Error: not found\nNot run: 3. key Enter', more: 'URL: https://a.com/' }), "a batch's results");
+
+// Each command as a plain sentence: named like its line, an unnamed element in words, typed text left out.
+same(saidLine('click 12', nameFor), 'Clicked "Search"', 'named click');
+same(saidLine('click 3', nameFor), 'Clicked item 3', 'unnamed');
+same(saidLine('click 9', nameFor), 'Clicked item 9', 'blank name');
+same(saidLine('click 340,220', nameFor), 'Clicked a spot on the page', 'a spot');
+same(saidLine('click "Search"', nameFor), 'Clicked "Search"', 'label already');
+same(saidLine('type 5 "secret words"', nameFor), 'Typed into "Email"', 'typed text stays out');
+same(saidLine('type here hello', nameFor), 'Typed some text', 'type here');
+same(saidLine('scroll down', nameFor), 'Scrolled the page down', 'scroll the page');
+same(saidLine('scroll down 12', nameFor), 'Scrolled "Search" down', 'scroll a box');
+same(saidLine('goto nowhere', nameFor), 'Opened a page', 'not a URL');
+same(saidLine('click 8', nameFor), 'Clicked "Pay now \\"fast\\""', 'page text stays one quoted line');
+same(saidLine('click 7', nameFor), `Clicked "${'x'.repeat(60)}…"`, 'a long name is capped');
+
+// A step card's title: "Agent" and its first action, then how many more.
+same(stepTitle(['goto https://www.nodejs.org/'], nameFor), 'Agent opened nodejs.org', 'goto names the host');
+same(stepTitle(['click 12', 'scroll down', 'read'], nameFor), 'Agent clicked "Search" and did 2 more things', 'a batch');
+same(stepTitle(['click 12', 'read'], nameFor), 'Agent clicked "Search" and did 1 more thing', 'one more');
+same(stepTitle(['read'], nameFor), 'Agent read the page', 'only a read');

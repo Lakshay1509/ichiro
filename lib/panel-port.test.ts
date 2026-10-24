@@ -7,7 +7,7 @@ const fail = (what: string): never => {
 
 // The log: a step collects what shows while it's open; leave and close end that; swap finds items inside steps too.
 const line = (id: number, text: string): Item => ({ id, kind: 'line', text });
-const step = (id: number): Step => ({ id, kind: 'step', title: `Step ${id}`, raw: ['read'], items: [] });
+const step = (id: number): Step => ({ id, kind: 'step', n: id, title: 'Read the page', raw: ['read'], items: [] });
 const log: Log = { items: [], open: null };
 apply(log, { type: 'show', item: line(1, 'mine') });
 apply(log, { type: 'open', step: step(2) });
