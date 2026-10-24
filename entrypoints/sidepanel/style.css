@@ -287,11 +287,17 @@ body.welcoming #out, body.welcoming form { display: none; }
 .welcome .welcome-step { color: var(--ink-muted); font-size: 12px; font-weight: 500; } /* --placeholder is 4.3:1 here */
 .welcome.connect { align-items: stretch; text-align: left; }
 
-/* What the agent will see, before "Agree and continue": a quiet left-aligned note, its one link in DESIGN.md's blue. */
-.shares { display: flex; flex-direction: column; gap: 8px; width: 100%; text-align: left; }
-.welcome .shares p, .shares ul { color: var(--ink-muted); font-size: 13px; }
-.shares ul { margin: 0; padding-left: 18px; }
-.shares a { color: var(--blue); }
+.welcome > p { text-wrap: balance; } /* no lone last word under the title */
+
+/* What the agent gets, before "Agree and continue": one white hairline card like the panel's, an eyebrow title, the
+   list in ink, the footnote muted with its one link in DESIGN.md's blue. */
+.shares { display: flex; flex-direction: column; gap: 10px; width: 100%; padding: 14px 16px; border: 1px solid var(--hairline); border-radius: 8px; background: var(--surface); text-align: left; }
+.shares h2 { margin: 0; color: var(--ink); font-size: 12px; font-weight: 600; letter-spacing: 0.125px; }
+.shares ul { display: flex; flex-direction: column; gap: 4px; margin: 0; padding-left: 18px; color: var(--ink-2); font-size: 13px; line-height: 1.45; }
+.shares li::marker { color: var(--placeholder); }
+.welcome .shares p { font-size: 12px; line-height: 1.5; }
+.shares li, .shares p { text-wrap: pretty; } /* no lone last word */
+.shares a { color: var(--blue); white-space: nowrap; }
 
 /* The one black call to action per step: full pill, like DESIGN.md's marketing CTA, in the logo's ink. */
 button.cta { height: 40px; padding: 0 24px; border: 0; border-radius: 9999px; background: #000; color: #fff; font-size: 14px; }

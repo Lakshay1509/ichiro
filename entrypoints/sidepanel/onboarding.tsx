@@ -37,7 +37,7 @@ function Welcome({ done }: { done: () => void }) {
       },
     );
 
-  // key: each step mounts fresh, so its autoFocus lands on its first button.
+  // key: each step mounts fresh, so step 2's autoFocus lands on Copy.
   if (step === 1) {
     return (
       <section key={1} class="welcome" aria-labelledby="welcome-title">
@@ -47,19 +47,21 @@ function Welcome({ done }: { done: () => void }) {
           <img src="/blink.svg" alt="" width={104} height={100} />
         </picture>
         <h1 id="welcome-title">Welcome to Ichiro</h1>
-        <p>Let your coding agent use this browser: read pages, click and type. Anything risky waits for your OK.</p>
-        <div class="shares">
-          <p>Once connected, your agent gets:</p>
+        <p>Your coding agent's hands and eyes in Chrome.</p>
+        <section class="shares" aria-labelledby="shares-title">
+          <h2 id="shares-title">Your agent will see</h2>
           <ul>
-            <li>The text, links and form fields of pages it works on, on sites you allow</li>
-            <li>Page addresses, screenshots it asks for, and files you let it read</li>
+            <li>Page text and form fields on sites you allow</li>
+            <li>Screenshots it asks for</li>
+            <li>Files you let it read</li>
           </ul>
           <p>
-            This goes only to the coding agent on this computer, which may send it to its AI provider. Ichiro has no
-            server, so nothing is sent to us. <a href={PRIVACY} target="_blank" rel="noreferrer">Privacy policy</a>
+            Nothing goes to Ichiro. Your agent may pass it to its AI provider.{' '}
+            <a href={PRIVACY} target="_blank" rel="noreferrer">Privacy policy</a>
           </p>
-        </div>
-        <button type="button" class="cta" autoFocus onClick={() => setStep(2)}>
+        </section>
+        {/* Not autofocused: consent is a choice you make after reading, never a pre-selected Enter. */}
+        <button type="button" class="cta" onClick={() => setStep(2)}>
           Agree and continue
         </button>
       </section>
