@@ -9,7 +9,7 @@
     "zip": "wxt zip",
     "typecheck": "tsc --noEmit",
     "postinstall": "wxt prepare",
-    "test": "node --test lib/*.test.ts",
+    "test": "node --test \"lib/**/*.test.ts\" \"host/*.test.ts\"",
     "host:install": "node host/install.ts install",
     "host:uninstall": "node host/install.ts uninstall"
   },

@@ -1,22 +1,22 @@
 // BG4: the MCP bridge (/mcp on) and the coding agent's commands, each run like a typed one with the agent's guards.
 import { checkGoto, onSites, siteOn, siteToAdd, siteToOpen, wantsSite } from '@/lib/agent-prompt';
-import { allowOnce, batchProblem, batchReply, captchaHold, checkAgentTip, checkCommands, isAnswer, LOOK_HELP, lookShot, MAX_ASK, MAX_OUTPUT, MCP_COMMANDS, picksTab, retryUnlisted, showsPage, TIP_HELP, tipsOnce, type AskNotice, type BridgeAsk, type BridgeImage, type BridgeReply } from '@/lib/bridge';
-import { fileName, RunDownloads } from '@/lib/downloads';
-import { captchaAll, labelFor, nameFor, readAll } from '@/lib/frames';
-import { bridgeOff, HOST_NAME } from '@/lib/host-install';
+import { allowOnce, batchProblem, batchReply, captchaHold, checkAgentTip, checkCommands, isAnswer, LOOK_HELP, lookShot, MAX_ASK, MAX_OUTPUT, MCP_COMMANDS, picksTab, retryUnlisted, showsPage, TIP_HELP, tipsOnce, type AskNotice, type BridgeAsk, type BridgeImage, type BridgeReply } from '@/lib/bridge/bridge';
+import { fileName, RunDownloads } from '@/lib/files/downloads';
+import { captchaAll, labelFor, nameFor, readAll } from '@/lib/page/frames';
+import { bridgeOff, HOST_NAME } from '@/lib/bridge/host-install';
 import { HandOver, StopLine } from '@/lib/messages';
-import { follow, openBehind, pinTab, targetTabId } from '@/lib/navigation';
-import { pageReport } from '@/lib/page-diff';
-import { remember, type Remembered } from '@/lib/panel-memory';
-import type { Step } from '@/lib/panel-port';
+import { follow, openBehind, pinTab, targetTabId } from '@/lib/tabs/navigation';
+import { pageReport } from '@/lib/page/page-diff';
+import { remember, type Remembered } from '@/lib/memory/panel-memory';
+import type { Step } from '@/lib/panel/panel-port';
 import { parseCommand } from '@/lib/parse-command';
-import { saidLine, splitReply, stepTitle } from '@/lib/readable-log';
-import { detachAll } from '@/lib/real-input';
-import { failed, recordLine } from '@/lib/repeat';
-import { saveTip, useSite } from '@/lib/site-store';
-import { MAX_TIPS } from '@/lib/site-tips';
-import { isCheckoutUrl, stopLineAsk } from '@/lib/stop-lines';
-import { groupTab, ungroupAll } from '@/lib/tab-group';
+import { saidLine, splitReply, stepTitle } from '@/lib/panel/readable-log';
+import { detachAll } from '@/lib/actions/real-input';
+import { failed, recordLine } from '@/lib/memory/repeat';
+import { saveTip, useSite } from '@/lib/memory/site-store';
+import { MAX_TIPS } from '@/lib/memory/site-tips';
+import { isCheckoutUrl, stopLineAsk } from '@/lib/safety/stop-lines';
+import { groupTab, ungroupAll } from '@/lib/tabs/tab-group';
 import { answerAsk, askKeepGoing, askOrAuto, askResume, closeAsk, lastCommand, nextCommand } from './asks';
 import { commands, runLine } from './commands';
 import { screenshot } from './input';
@@ -66,7 +66,7 @@ function unwatch(downloads: RunDownloads) {
 // F9: true while a step's earlier commands run. A read renumbers the page's elements, so it waits for the last one:
 // otherwise the step's next number could point at a different element.
 export let skipRead = false;
-// MCP option 1 (harness/mcp-context.md): true while a bridge command runs. Its page replies say what changed since the
+// MCP option 1 (docs/mcp-context.md): true while a bridge command runs. Its page replies say what changed since the
 // last page list the agent got (bridge.page), not the whole list: the agent keeps every reply. agentRead is this
 // command's read; it becomes bridge.page only once it's sent (agentCommand).
 export let forAgent = false;
@@ -251,7 +251,7 @@ async function agentTip(args: string[], site: string): Promise<AgentReply> {
   return { text: `Saved your tip for ${site}.` };
 }
 
-// MCP option 2 (harness/mcp-context.md): a run's commands in order, each through agentRun with all of its own checks
+// MCP option 2 (docs/mcp-context.md): a run's commands in order, each through agentRun with all of its own checks
 // (Sites, a new site's ask, stop-lines, downloads, your takeover). Only the last reads the page, so the reply has one
 // change report. It stops early at an error, a new page or tab, or a command you typed: the rest could land on a page
 // the agent hasn't seen. Your switching tabs doesn't stop it (OT1: it stays in its tab). The page then comes once at

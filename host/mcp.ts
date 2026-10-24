@@ -7,9 +7,9 @@ import { connect } from 'node:net';
 import { CLIENT_CAPABILITIES_META_KEY, inputRequired, inputResponse, McpServer } from '@modelcontextprotocol/server';
 import { serveStdio } from '@modelcontextprotocol/server/stdio';
 import * as z from 'zod/v4';
-import { askDialog, checkReply, dialogAnswer, formDialogs, MAX_BATCH, MAX_COMMAND, untrusted, type BridgeAsk, type BridgeReply } from '../lib/bridge.ts';
-import { hostPaths } from '../lib/host-install.ts';
-import { frame, isObject, readFrames } from '../lib/host-request.ts';
+import { askDialog, checkReply, dialogAnswer, formDialogs, MAX_BATCH, MAX_COMMAND, untrusted, type BridgeAsk, type BridgeReply } from '../lib/bridge/bridge.ts';
+import { hostPaths } from '../lib/bridge/host-install.ts';
+import { frame, isObject, readFrames } from '../lib/bridge/host-request.ts';
 import { lateReplies } from './late-reply.ts';
 
 const OFF = 'The browser bridge is off. Ask the user to open the Ichiro side panel and type /mcp on.';

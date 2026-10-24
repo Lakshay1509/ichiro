@@ -1,6 +1,6 @@
 // BG4: the open side panels and the log they all show. The engine prints with these (they were log.tsx's): each change
-// goes into the log kept here and, as the same op, to every open panel (lib/panel-port.ts).
-import { apply, type Item, type Log, type LogOp, type McpState, type Step, type ToPanel } from '@/lib/panel-port';
+// goes into the log kept here and, as the same op, to every open panel (lib/panel/panel-port.ts).
+import { apply, type Item, type Log, type LogOp, type McpState, type Step, type ToPanel } from '@/lib/panel/panel-port';
 
 type Port = Browser.runtime.Port;
 // An item before show gives it its id.

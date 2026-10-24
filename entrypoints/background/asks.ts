@@ -1,9 +1,9 @@
 // BG4: the one open ask (Allow once, Keep going, a new site, a download…) and the command count that makes old asks stale.
-import type { BridgeAnswer } from '@/lib/bridge';
+import type { BridgeAnswer } from '@/lib/bridge/bridge';
 import { StopLine } from '@/lib/messages';
-import { pressed } from '@/lib/panel-port';
-import { stopLineAsk } from '@/lib/stop-lines';
-import { detachAll } from '@/lib/real-input';
+import { pressed } from '@/lib/panel/panel-port';
+import { stopLineAsk } from '@/lib/safety/stop-lines';
+import { detachAll } from '@/lib/actions/real-input';
 import { askAgent } from './bridge';
 import { autoMode, print, show, swap } from './panels';
 

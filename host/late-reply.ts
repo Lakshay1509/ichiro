@@ -1,6 +1,6 @@
 // Keeps each MCP tool call under the agent's time limit: a panel reply that takes longer (the panel is asking the user)
 // becomes "still waiting", and that late reply goes to the agent's next call instead of being lost (cloud-run2.md bug 2).
-import type { BridgeReply } from '../lib/bridge.ts';
+import type { BridgeReply } from '../lib/bridge/bridge.ts';
 
 // Claude Code gave up after 60 s in cloud run 2, and progress notifications don't extend its per-call limit
 // (https://code.claude.com/docs/en/mcp), so we answer first. 50 s leaves time for the answer to get there.

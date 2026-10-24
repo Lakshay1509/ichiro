@@ -2,7 +2,7 @@
 // Inter, shipped inside the extension (no font request leaves it). Source: https://www.npmjs.com/package/@fontsource-variable/inter
 import '@fontsource-variable/inter/wght.css';
 import './style.css';
-import { PANEL_PORT, PING_MS, type FromPanel, type McpState, type ToPanel } from '@/lib/panel-port';
+import { PANEL_PORT, PING_MS, type FromPanel, type McpState, type ToPanel } from '@/lib/panel/panel-port';
 import { change, load } from './log';
 import { welcome } from './onboarding';
 import { slashMenu } from './slash-menu';

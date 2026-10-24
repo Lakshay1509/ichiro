@@ -1,7 +1,7 @@
 // The hidden page's script: reads a PDF's text with pdf.js, or a downloaded text file, when one of this extension's own
-// pages asks (lib/offscreen.ts).
-import { fromOwnPage, isPdfAsk, isTextAsk } from '@/lib/offscreen';
-import { loadPdf } from '@/lib/pdf';
+// pages asks (lib/files/offscreen.ts).
+import { fromOwnPage, isPdfAsk, isTextAsk } from '@/lib/files/offscreen';
+import { loadPdf } from '@/lib/files/pdf';
 
 browser.runtime.onMessage.addListener((msg: unknown, sender, sendResponse) => {
   // This page fetches with your cookies and reads file:// downloads, so a content script (which a page can drive) never gets an answer.

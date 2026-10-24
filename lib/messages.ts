@@ -1,7 +1,7 @@
 // Messages the side panel sends to the page, and the page's replies. Add new commands here.
 export type Message =
   | { type: 'ping' }
-  | { type: 'read'; next: number; overlay: boolean } // next: the last element number given out (lib/numbers.ts); overlay: /overlay's setting
+  | { type: 'read'; next: number; overlay: boolean } // next: the last element number given out (lib/page/numbers.ts); overlay: /overlay's setting
   | { type: 'text'; all?: boolean } // all: the whole page, not just the screen (F3a)
   | { type: 'find'; query: string; nth: number }
   | { type: 'pick'; selector: string } // F3b: read-only, text only

@@ -1,6 +1,6 @@
 // Checks the shared site rules (Sites, a new site's ask, goto's check) and history lines. Run: npm test
 import { checkGoto, onSites, siteOn, siteToAdd, siteToOpen, summarize, wantsSite } from './agent-prompt.ts';
-import { splitReply } from './readable-log.ts';
+import { splitReply } from './panel/readable-log.ts';
 
 const fail = (what: string): never => {
   throw new Error(what);

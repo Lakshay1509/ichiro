@@ -1,10 +1,10 @@
 // Background worker: makes the toolbar icon open the side panel, and runs the command engine (BG4) for every open panel.
 // WXT imports this file in Node at build time, so every listener is added inside main, none at a module's top level.
 // Source: https://wxt.dev/guide/essentials/entrypoints.html
-import { sendToAllFrames, setOverlayOn } from '@/lib/frames';
-import { INSTALL_DEFAULTS, recall, remember } from '@/lib/panel-memory';
-import { isFromPanel, isPanelSender, PANEL_PORT } from '@/lib/panel-port';
-import { pruneSites } from '@/lib/site-store';
+import { sendToAllFrames, setOverlayOn } from '@/lib/page/frames';
+import { INSTALL_DEFAULTS, recall, remember } from '@/lib/memory/panel-memory';
+import { isFromPanel, isPanelSender, PANEL_PORT } from '@/lib/panel/panel-port';
+import { pruneSites } from '@/lib/memory/site-store';
 import { closeAsk, nextCommand, pressAsk, startBadge } from './asks';
 import { bridge, endAgentTurn, runEnded, save, startBridge, stopBridge } from './bridge';
 import { commands, typed } from './commands';

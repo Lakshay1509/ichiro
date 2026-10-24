@@ -23,9 +23,9 @@ export default defineConfig({
     // debugger: real mouse input (I1) through the DevTools Protocol's Input domain only, on the command's tab, only while
     // a command or run goes; Chrome shows its "debugging this browser" bar then. Stronger install warning.
     // Source: https://developer.chrome.com/docs/extensions/reference/api/debugger
-    // offscreen: the hidden page that reads PDFs with pdf.js (BG2, lib/offscreen.ts). No install warning.
+    // offscreen: the hidden page that reads PDFs with pdf.js (BG2, lib/files/offscreen.ts). No install warning.
     // Source: https://developer.chrome.com/docs/extensions/reference/api/offscreen
-    // tabGroups: name and color the agent's tab group "Ichiro" (OT2, lib/tab-group.ts). Install warning: "View and
+    // tabGroups: name and color the agent's tab group "Ichiro" (OT2, lib/tabs/tab-group.ts). Install warning: "View and
     // manage your tab groups". Source: https://developer.chrome.com/docs/extensions/reference/api/tabGroups
     permissions: ['sidePanel', 'tabs', 'scripting', 'storage', 'webNavigation', 'webRequest', 'nativeMessaging', 'publicSuffix', 'downloads', 'debugger', 'offscreen', 'tabGroups'],
     // chrome.publicSuffix arrived in Chrome 153; older Chrome can't install the extension.

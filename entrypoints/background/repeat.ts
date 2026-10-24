@@ -1,8 +1,8 @@
 // BG4: repeat <step> on <numbers> (RP1): item 1's recorded commands, run again on each other item in a list.
 import { oneLine } from '@/lib/agent-prompt';
-import { captchaAll, frameFor, labelFor, nameFor, numberFor, readAll } from '@/lib/frames';
-import { downloadsSince, failed, filesLine, forItem, item1On, itemMiss, itemTarget, notAlikeError, parseRepeat, recipeFrom, repeatAsk, repeatDone, stoppedAt } from '@/lib/repeat';
-import { sendToTab } from '@/lib/send-to-tab';
+import { captchaAll, frameFor, labelFor, nameFor, numberFor, readAll } from '@/lib/page/frames';
+import { downloadsSince, failed, filesLine, forItem, item1On, itemMiss, itemTarget, notAlikeError, parseRepeat, recipeFrom, repeatAsk, repeatDone, stoppedAt } from '@/lib/memory/repeat';
+import { sendToTab } from '@/lib/tabs/send-to-tab';
 import { askOrAuto, lastCommand } from './asks';
 import type { BridgeStep } from './bridge';
 import { print } from './panels';

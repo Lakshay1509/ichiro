@@ -1,14 +1,14 @@
 // Content script: runs inside every web page (and every frame in it) and answers the side panel.
 import { HandOver, STALE_MS, StopLine, type Message, type Replies } from '@/lib/messages';
-import { aim, aimKey, aimPoints, aimText, click, focusHere, pasteText, clickText, endGuard, hover, pressKey, scroll, selectOption, typeText, watchMouse } from '@/lib/actions';
-import { captchaKind, visibleCaptcha } from '@/lib/captcha';
-import { onScreen } from '@/lib/in-view';
-import { drawForShot, endShot, setOverlay } from '@/lib/overlay';
-import { loadPage, withNote } from '@/lib/load-page';
-import { findSnippets, findText, pageItems, pageLines, readText, TEXT_CAP, textTargets } from '@/lib/page-text';
-import { notAlike, pickAll, pickLike } from '@/lib/pick';
-import { getElements, read, secretOnScreen } from '@/lib/reader';
-import { waitForQuiet } from '@/lib/settle';
+import { aim, aimKey, aimPoints, aimText, click, focusHere, pasteText, clickText, endGuard, hover, pressKey, scroll, selectOption, typeText, watchMouse } from '@/lib/actions/actions';
+import { captchaKind, visibleCaptcha } from '@/lib/safety/captcha';
+import { onScreen } from '@/lib/page/in-view';
+import { drawForShot, endShot, setOverlay } from '@/lib/page/overlay';
+import { loadPage, withNote } from '@/lib/page/load-page';
+import { findSnippets, findText, pageItems, pageLines, readText, TEXT_CAP, textTargets } from '@/lib/page/page-text';
+import { notAlike, pickAll, pickLike } from '@/lib/page/pick';
+import { getElements, read, secretOnScreen } from '@/lib/page/reader';
+import { waitForQuiet } from '@/lib/tabs/settle';
 
 // One handler per message type. The type checks each reply matches lib/messages.ts. Handlers may be async.
 // Messages that act on the page. Inside a CAPTCHA's own frame they're refused (4.2).

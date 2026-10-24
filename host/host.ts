@@ -4,9 +4,9 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, type Socket } from 'node:net';
 import { dirname } from 'node:path';
-import { checkAnswer, checkReply, checkRun, isBridgeStart, type AskNotice, type BridgeAnswer, type BridgeReply } from '../lib/bridge.ts';
-import { hostPaths } from '../lib/host-install.ts';
-import { frame, readFrames } from '../lib/host-request.ts';
+import { checkAnswer, checkReply, checkRun, isBridgeStart, type AskNotice, type BridgeAnswer, type BridgeReply } from '../lib/bridge/bridge.ts';
+import { hostPaths } from '../lib/bridge/host-install.ts';
+import { frame, readFrames } from '../lib/bridge/host-request.ts';
 
 const send = (message: object) => process.stdout.write(frame(message));
 // Exit only after the error has reached Chrome.

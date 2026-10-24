@@ -4,8 +4,8 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { hostPaths, launcher, manifest } from '../lib/host-install.ts';
-import { appDataRedirected } from '../lib/packaged-app.ts';
+import { hostPaths, launcher, manifest } from '../lib/bridge/host-install.ts';
+import { appDataRedirected } from '../lib/bridge/packaged-app.ts';
 
 function reg(exe: string, args: string[]) {
   // No shell: arguments reach reg.exe as-is.

@@ -1,10 +1,10 @@
 // Side panel log: Preact draws the background's log (lines, asks, agent calls, tip and site lists) above the command box.
 import { render } from 'preact';
 import { useState } from 'preact/hooks';
-import { apply, type FromPanel, type Item, type Log, type LogOp } from '@/lib/panel-port';
-import { stepStatus } from '@/lib/readable-log';
-import { deleteSite, deleteTip } from '@/lib/site-store';
-import { MAX_TIPS } from '@/lib/site-tips';
+import { apply, type FromPanel, type Item, type Log, type LogOp } from '@/lib/panel/panel-port';
+import { stepStatus } from '@/lib/panel/readable-log';
+import { deleteSite, deleteTip } from '@/lib/memory/site-store';
+import { MAX_TIPS } from '@/lib/memory/site-tips';
 
 const out = document.querySelector<HTMLElement>('#out')!;
 let log: Log = { items: [], open: null };

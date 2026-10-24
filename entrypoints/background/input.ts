@@ -1,11 +1,11 @@
 // BG4: real input on the command's tab (mouse, keyboard, typing where the cursor is) and look's screenshot.
-import { MAX_COMMAND } from '@/lib/bridge';
-import { focusedFrame, numbersAll } from '@/lib/frames';
-import { keyEvents, parseKey, scriptKey } from '@/lib/keys';
-import { targetTabId } from '@/lib/navigation';
-import { attach, checkPoint, checkScriptClick, clickAtPoint, dragAlong, moveTo, sendKeys, sendMouse, sendText, type Point } from '@/lib/real-input';
-import { isDrawn, shrink, takeShot, type Shot } from '@/lib/screenshot';
-import { send, sendToTab } from '@/lib/send-to-tab';
+import { MAX_COMMAND } from '@/lib/bridge/bridge';
+import { focusedFrame, numbersAll } from '@/lib/page/frames';
+import { keyEvents, parseKey, scriptKey } from '@/lib/actions/keys';
+import { targetTabId } from '@/lib/tabs/navigation';
+import { attach, checkPoint, checkScriptClick, clickAtPoint, dragAlong, moveTo, sendKeys, sendMouse, sendText, type Point } from '@/lib/actions/real-input';
+import { isDrawn, shrink, takeShot, type Shot } from '@/lib/page/screenshot';
+import { send, sendToTab } from '@/lib/tabs/send-to-tab';
 
 // Tab switches in any window. A switch during a capture means the picture may show your tab, so it's dropped (takeShot).
 export let tabSwitches = 0;
@@ -47,7 +47,7 @@ const NO_REAL_MOUSE = "No real mouse on this page (the debugging bar was cancell
 
 // WR1: a click or drag at points in the last screenshot, with the real mouse only: a canvas has no element to fall back
 // to. The content script checks both ends (stop-lines unless allowed) and guards them, as for a click.
-// Round 2 (harness/mcp-context.md): checked again once the mouse is at the press point, because a page can change under
+// Round 2 (docs/mcp-context.md): checked again once the mouse is at the press point, because a page can change under
 // a hovering mouse (Google Slides does): the press then lands on exactly what that second check passed. The first check
 // refuses a bad point before the mouse moves at all.
 export async function realPoints(points: Point[], clicks: 1 | 2, modifiers: number, allow: boolean): Promise<string> {
