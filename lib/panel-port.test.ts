@@ -71,6 +71,7 @@ const msgs: [unknown, boolean][] = [
   [{ type: 'press', id: 3, button: 0.5 }, false],
   [{ type: 'press', id: 3 }, false],
   [{ type: 'ping' }, true],
+  [{ type: 'connected' }, true],
   [{ type: 'run', commands: ['click 1'] }, false],
   [null, false],
   ['ping', false],

@@ -1,5 +1,5 @@
 // Checks the launcher, manifest and paths host:install builds for each OS. Run: npm test
-import { HOST_NAME, hostPaths, launcher, manifest, originFor } from './host-install.ts';
+import { bridgeOff, HOST_NAME, hostPaths, launcher, manifest, originFor } from './host-install.ts';
 
 const fail = (what: string): never => {
   throw new Error(what);
@@ -53,3 +53,12 @@ throws(() => launcher('linux', 'not-an-id', '/usr/bin/node', '/x/host.ts'), 'lau
 const m = JSON.parse(manifest('/home/me/.ichiro/host.sh', ID));
 const want = { name: HOST_NAME, description: 'Ichiro MCP bridge', path: '/home/me/.ichiro/host.sh', type: 'stdio', allowed_origins: [ORIGIN] };
 if (JSON.stringify(m) !== JSON.stringify(want)) fail(`manifest: ${JSON.stringify(m)}`);
+
+// The bridge's end: not set up yet (Chrome's two setup errors) says how, with this id, as a calm card; anything else
+// stays a red error with Chrome's reason.
+const setup = bridgeOff('Specified native messaging host not found.', ID);
+if (setup.className !== 'stop' || !setup.text.startsWith('Set up MCP once') || !setup.text.includes(`npm run host:install -- ${ID}\n`)) fail(`not found: ${JSON.stringify(setup)}`);
+if (bridgeOff('Access to the specified native messaging host is forbidden.', ID).className !== 'stop') fail('forbidden is setup too');
+const crash = bridgeOff('Native host has exited.', ID);
+if (crash.className !== 'error' || crash.text !== 'MCP bridge off: Native host has exited.') fail(`crash: ${JSON.stringify(crash)}`);
+if (bridgeOff(undefined, ID).text !== 'MCP bridge off: the local helper stopped') fail('no reason');

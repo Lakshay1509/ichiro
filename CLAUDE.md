@@ -17,7 +17,7 @@ A Chrome extension that lets a coding agent (Claude Code, Codex…) read any web
 - Tests: `npm test` (Node's built-in runner; files are `lib/*.test.ts`, plain `throw` on failure)
 - Load in Chrome: `chrome://extensions` → Developer mode on → **Load unpacked** → pick `.output/chrome-mv3/`. After each build, hit the reload icon on the extension card.
 - Native host, once per PC: `npm run host:install -- <extension-id>` in **your own terminal** (on Windows, not inside the Claude desktop app: it hides its registry writes, and the script refuses). Registers every Chromium browser (Chrome, Edge, Brave, Vivaldi, Opera, Arc…); files in `~/.ichiro`. Rules: `lib/host-install.ts`.
-- MCP (any coding agent drives the browser): side panel `/mcp on` (a new site asks you: Add site / No), then register once: `claude mcp add --transport stdio --scope user ichiro -- node <repo>/host/mcp.ts`. Path: agent ⇄ `host/mcp.ts` ⇄ random pipe + token (`bridge.json` next to the launcher) ⇄ `host/host.ts` ⇄ panel. Rules: `lib/bridge.ts`.
+- MCP (any coding agent drives the browser): on by default for a new install, with always-on (`INSTALL_DEFAULTS`, `lib/panel-memory.ts`); else side panel `/mcp on` (a new site asks you: Add site / No). Then register once: `claude mcp add --transport stdio --scope user ichiro -- node <repo>/host/mcp.ts`. Path: agent ⇄ `host/mcp.ts` ⇄ random pipe + token (`bridge.json` next to the launcher) ⇄ `host/host.ts` ⇄ panel. Rules: `lib/bridge.ts`.
 - Code lives in `entrypoints/` (each file there becomes part of the extension). Shared code lives in `lib/`. Manifest settings live in `wxt.config.ts`.
 
 ## Who you're talking to

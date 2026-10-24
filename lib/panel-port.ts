@@ -38,8 +38,8 @@ export type ToPanel =
   | { type: 'mcp'; state: McpState; alwaysOn: boolean; auto: boolean }
   | { type: 'hello'; log: Log; mcp: McpState; alwaysOn: boolean; auto: boolean; commands: Record<string, { help: string }> };
 
-// Panel → background: a line you typed, a button you pressed, or the keep-alive ping.
-export type FromPanel = { type: 'line'; text: string } | { type: 'press'; id: number; button: number } | { type: 'ping' };
+// Panel → background: a line you typed, a button you pressed, the keep-alive ping, or the welcome's "I've connected".
+export type FromPanel = { type: 'line'; text: string } | { type: 'press'; id: number; button: number } | { type: 'ping' } | { type: 'connected' };
 
 const stepOf = (log: Log, id: number | null) => log.items.find((i): i is Step => i.kind === 'step' && i.id === id);
 
@@ -88,7 +88,7 @@ export function isFromPanel(msg: unknown): msg is FromPanel {
   const m = msg as Record<string, unknown>;
   if (m.type === 'line') return typeof m.text === 'string';
   if (m.type === 'press') return isIndex(m.id) && isIndex(m.button);
-  return m.type === 'ping';
+  return m.type === 'ping' || m.type === 'connected';
 }
 
 // The open ask's button a press means. A press for an ask that is closed or replaced means nothing, so an old Allow

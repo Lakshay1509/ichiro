@@ -3,7 +3,7 @@ import { checkGoto, onSites, siteOn, siteToAdd, siteToOpen, wantsSite } from '@/
 import { allowOnce, batchProblem, batchReply, captchaHold, checkAgentTip, checkCommands, isAnswer, LOOK_HELP, lookShot, MAX_ASK, MAX_OUTPUT, MCP_COMMANDS, picksTab, retryUnlisted, showsPage, TIP_HELP, tipsOnce, type AskNotice, type BridgeAsk, type BridgeImage, type BridgeReply } from '@/lib/bridge';
 import { fileName, RunDownloads } from '@/lib/downloads';
 import { captchaAll, labelFor, nameFor, readAll } from '@/lib/frames';
-import { HOST_NAME } from '@/lib/host-install';
+import { bridgeOff, HOST_NAME } from '@/lib/host-install';
 import { HandOver, StopLine } from '@/lib/messages';
 import { follow, openBehind, pinTab, targetTabId } from '@/lib/navigation';
 import { pageReport } from '@/lib/page-diff';
@@ -137,7 +137,8 @@ export function startBridge(sites: string[]): string {
     sign(ungroupAll);
     showMcp('off');
     endAgentTurn();
-    print(`MCP bridge off: ${browser.runtime.lastError?.message ?? 'the local helper stopped'}`, 'error');
+    const off = bridgeOff(browser.runtime.lastError?.message, browser.runtime.id); // not set up yet: says how
+    print(off.text, off.className);
   });
   port.postMessage({ type: 'bridge' });
   return `MCP bridge starting. Sites: ${sites.join(', ') || 'none yet'}. Any other site asks you first.`;

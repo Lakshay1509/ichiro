@@ -4,6 +4,7 @@ import '@fontsource-variable/inter/wght.css';
 import './style.css';
 import { PANEL_PORT, PING_MS, type FromPanel, type McpState, type ToPanel } from '@/lib/panel-port';
 import { change, load } from './log';
+import { welcome } from './onboarding';
 import { slashMenu } from './slash-menu';
 
 const form = document.querySelector('form')!;
@@ -36,6 +37,18 @@ port.onMessage.addListener((msg: ToPanel) => {
   } else if (msg.type === 'mcp') showMcp(msg.state, msg.alwaysOn, msg.auto);
   else change(msg);
 });
+
+// The welcome on every panel open until you press "I've connected" (no skip): it hides the log and the command box.
+// The background saves that press (onboarded) and turns MCP on.
+browser.storage.local.get('onboarded').then(({ onboarded }) => {
+  if (onboarded === true) return;
+  document.body.classList.add('welcoming');
+  welcome(document.querySelector<HTMLElement>('#welcome')!, () => {
+    post({ type: 'connected' });
+    document.body.classList.remove('welcoming');
+    input.focus();
+  });
+}, console.error);
 
 // Keeps the background awake while this panel is open: Chrome stops an idle worker after 30 s, and since Chrome 114
 // only a message sent over a port counts. Source: https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/lifecycle

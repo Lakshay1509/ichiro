@@ -2,11 +2,11 @@
 // WXT imports this file in Node at build time, so every listener is added inside main, none at a module's top level.
 // Source: https://wxt.dev/guide/essentials/entrypoints.html
 import { sendToAllFrames, setOverlayOn } from '@/lib/frames';
-import { recall } from '@/lib/panel-memory';
+import { INSTALL_DEFAULTS, recall, remember } from '@/lib/panel-memory';
 import { isFromPanel, isPanelSender, PANEL_PORT } from '@/lib/panel-port';
 import { pruneSites } from '@/lib/site-store';
 import { closeAsk, nextCommand, pressAsk, startBadge } from './asks';
-import { bridge, endAgentTurn, runEnded, startBridge, stopBridge } from './bridge';
+import { bridge, endAgentTurn, runEnded, save, startBridge, stopBridge } from './bridge';
 import { commands, typed } from './commands';
 import { watchTabSwitches } from './input';
 import { addPanel, alwaysOn, print, removePanel, showAlwaysOn } from './panels';
@@ -17,7 +17,16 @@ export default defineBackground(() => {
   watchTabSwitches();
   browser.runtime.onConnect.addListener(onConnect);
   browser.runtime.onStartup.addListener(chromeStarted);
+  browser.runtime.onInstalled.addListener(installed);
 });
+
+// A fresh install starts with INSTALL_DEFAULTS: MCP and always-on on. Not on an update, or an unpacked extension's
+// reload ("update" too), so your own choices stay. The first panel open then turns MCP on.
+// Source: https://developer.chrome.com/docs/extensions/reference/api/runtime#event-onInstalled
+function installed({ reason }: { reason: string }) {
+  if (reason !== 'install') return;
+  remember(INSTALL_DEFAULTS).catch((err: Error) => print(`Couldn't save the first settings: ${err.message}`, 'error'));
+}
 
 // BG5: Chrome started (not on an extension reload). With always-on, MCP comes back on if it was on, with no panel open.
 // Source: https://developer.chrome.com/docs/extensions/reference/api/runtime#event-onStartup
@@ -39,12 +48,20 @@ function onConnect(port: Browser.runtime.Port) {
     if (!isFromPanel(msg)) return; // a port message is input: only the exact shapes count
     if (msg.type === 'press') pressAsk(msg);
     else if (msg.type === 'line') void typed(msg.text);
+    else if (msg.type === 'connected') connected().catch((err: Error) => print(`Couldn't turn MCP on: ${err.message}`, 'error'));
     // ping: nothing to do; it only keeps this worker up while the panel is open (PING_MS)
   });
   port.onDisconnect.addListener(() => {
     if (removePanel(port)) void lastPanelClosed();
   });
   if (first) firstPanelOpened();
+}
+
+// The welcome's "I've connected": the panel opens on its log from now on, and MCP turns on if it isn't running (the
+// agent may have just set up the local helper). Like a panel opening, it keeps the saved Sites.
+async function connected() {
+  await save({ onboarded: true, mcpOn: true });
+  if (!bridge) startBridge((await recall()).mcpSites);
 }
 
 // What the panel did each time it opened, before BG4.

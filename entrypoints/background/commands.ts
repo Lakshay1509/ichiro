@@ -296,7 +296,7 @@ export const commands: Record<string, Command> = {
   },
   // BG5. Not in MCP_COMMANDS: only you can keep the bridge on past the panel.
   'always-on': {
-    help: 'always-on on|off — keep MCP on when you close the side panel, and turn it back on when Chrome starts (remembered; off by default). An ask from the agent then waits until you open the panel',
+    help: 'always-on on|off — keep MCP on when you close the side panel, and turn it back on when Chrome starts (remembered; on for a new install). An ask from the agent then waits until you open the panel',
     run: async ([on]) => {
       if (on !== 'on' && on !== 'off') throw new Error('Usage: always-on on|off');
       showAlwaysOn(on === 'on');

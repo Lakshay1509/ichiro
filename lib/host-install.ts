@@ -3,6 +3,16 @@
 // No Node imports here: the extension's background imports HOST_NAME from this file.
 export const HOST_NAME = 'com.ichiro.host';
 
+// The log line when the bridge ends. Before host:install ran for this extension's id, Chrome says "Specified native
+// messaging host not found." (or "Access to the specified native messaging host is forbidden." for another id): a
+// first-time setup, so it says how, as a calm card with a headline (className stop), not a red error.
+export function bridgeOff(reason: string | undefined, id: string): { text: string; className: 'stop' | 'error' } {
+  if (/native messaging host (not found|is forbidden)/.test(reason ?? '')) {
+    return { text: `Set up MCP once on this computer\nIn your own terminal (not one inside the Claude app), in the Ichiro folder, run:\nnpm run host:install -- ${id}\nThen close and reopen this side panel.`, className: 'stop' };
+  }
+  return { text: `MCP bridge off: ${reason ?? 'the local helper stopped'}`, className: 'error' };
+}
+
 // Where each Chromium browser looks for native hosts, so /mcp on works in any of them, not only Chrome.
 // Windows registry (HKCU\Software\…): Chrome, Chromium, Edge, Brave, Vivaldi as KeePassXC's installer registers them; Opera,
 // Arc, Island, Prisma as Anthropic's Claude installer does. Edge also falls back to Chrome's key.
