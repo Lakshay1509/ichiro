@@ -41,6 +41,7 @@ The agent drives your real browser, with your logins, so Ichiro puts you in the 
 - **Hand-over.** Sign-in, password and card fields, and CAPTCHAs are always left to you. Do the step yourself and press Resume.
 - **Downloads.** Each download waits for your yes.
 - **Untrusted page text.** Everything read from a page reaches the agent marked as untrusted, and the tool tells the agent never to follow instructions found there.
+- **Privacy.** Ichiro has no server. Page data goes only to the coding agent on your computer. See [PRIVACY.md](PRIVACY.md).
 
 `/auto on` lets stop-lines, new sites, downloads and repeats go ahead without asking. It is off by default and isn't remembered. CAPTCHAs, password and card fields, and `pause` still wait for you.
 
@@ -79,7 +80,7 @@ Chrome warns about some permissions at install. `debugger` sends real mouse inpu
 
    Other agents: add a stdio server that runs `node /path/to/ichiro/host/mcp.ts`.
 
-5. Click the Ichiro icon to open the side panel. A new install starts with the bridge on. Then ask your agent to do something in the browser.
+5. Click the Ichiro icon to open the side panel. The welcome shows what your agent will get; the bridge turns on once you agree and press **I've connected**. Then ask your agent to do something in the browser.
 
 ## Usage
 

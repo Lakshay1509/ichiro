@@ -50,8 +50,8 @@ if ((await recall()).onboarded) fail('onboarded saved as a string');
 
 console.log('panel-memory: ok');
 
-// A fresh install: MCP and always-on on, nothing else. Never a trusted site or the overlay (every site asks first).
-if (JSON.stringify(INSTALL_DEFAULTS) !== '{"mcpOn":true,"alwaysOn":true}') fail(`install defaults: ${JSON.stringify(INSTALL_DEFAULTS)}`);
+// A fresh install: always-on only. MCP stays off until the welcome's consent, and never a trusted site or the overlay.
+if (JSON.stringify(INSTALL_DEFAULTS) !== '{"alwaysOn":true}') fail(`install defaults: ${JSON.stringify(INSTALL_DEFAULTS)}`);
 store = {};
 await remember(INSTALL_DEFAULTS);
-if (JSON.stringify(await recall()) !== '{"mcpOn":true,"mcpSites":[],"overlayOn":false,"alwaysOn":true,"onboarded":false}') fail(`after install: ${JSON.stringify(await recall())}`);
+if (JSON.stringify(await recall()) !== '{"mcpOn":false,"mcpSites":[],"overlayOn":false,"alwaysOn":true,"onboarded":false}') fail(`after install: ${JSON.stringify(await recall())}`);

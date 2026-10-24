@@ -8,11 +8,12 @@ import { lock } from './site-store.ts';
 // onboarded: the welcome's "I've connected" was pressed, so the panel opens on its log from then on.
 export type Remembered = { mcpOn: boolean; mcpSites: string[]; overlayOn: boolean; alwaysOn: boolean; onboarded: boolean };
 
-// A fresh install's switches (developer, 2026-10-24): MCP and always-on on, so a coding agent can work once the local
-// helper is set up, panel open or not. Off on purpose: the overlay (numbers on your own browsing) and Sites (none
-// trusted, so every site asks first); /auto is never saved. Written once, on Chrome's install event: an update or a
-// reload keeps your own choices.
-export const INSTALL_DEFAULTS: Partial<Remembered> = { mcpOn: true, alwaysOn: true };
+// A fresh install's switches (developer, 2026-10-24): always-on on, so once you connect, a coding agent can work with
+// the panel open or not. Off on purpose: MCP itself, until you agree to what the agent gets and press "I've connected"
+// in the welcome (Web Store consent); the overlay (numbers on your own browsing); and Sites (none trusted, so every
+// site asks first). /auto is never saved. Written once, on Chrome's install event: an update or a reload keeps your
+// own choices.
+export const INSTALL_DEFAULTS: Partial<Remembered> = { alwaysOn: true };
 
 // What was saved. Storage is a trust boundary for the bridge's Sites: a site comes back only if it is exactly what
 // mcp on would make of it, so a bad or odd value is dropped, never widened into a site you didn't add.

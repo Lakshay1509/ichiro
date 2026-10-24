@@ -287,6 +287,12 @@ body.welcoming #out, body.welcoming form { display: none; }
 .welcome .welcome-step { color: var(--ink-muted); font-size: 12px; font-weight: 500; } /* --placeholder is 4.3:1 here */
 .welcome.connect { align-items: stretch; text-align: left; }
 
+/* What the agent will see, before "Agree and continue": a quiet left-aligned note, its one link in DESIGN.md's blue. */
+.shares { display: flex; flex-direction: column; gap: 8px; width: 100%; text-align: left; }
+.welcome .shares p, .shares ul { color: var(--ink-muted); font-size: 13px; }
+.shares ul { margin: 0; padding-left: 18px; }
+.shares a { color: var(--blue); }
+
 /* The one black call to action per step: full pill, like DESIGN.md's marketing CTA, in the logo's ink. */
 button.cta { height: 40px; padding: 0 24px; border: 0; border-radius: 9999px; background: #000; color: #fff; font-size: 14px; }
 button.cta:hover { background: var(--ink-2); }

@@ -1,16 +1,17 @@
-// Side panel welcome, before the log: 1 the Ichiro symbol and "Connect to your agent", 2 a prompt you paste into your
-// coding agent to set up the connection, then "I've connected". Shown until that press (main.ts).
+// Side panel welcome, before the log: 1 the Ichiro symbol, what your agent will see, and "Agree and continue" (the
+// Chrome Web Store's prominent disclosure and consent), 2 a prompt you paste into your coding agent to set up the
+// connection, then "I've connected". Shown until that press (main.ts), which is what turns MCP on.
+// Source: https://developer.chrome.com/docs/webstore/program-policies/policies
 import { render } from 'preact';
 import { useRef, useState } from 'preact/hooks';
 
-// Placeholder until the repo has a public home (developer, 2026-10-24). <owner> can't be a GitHub account, so an agent
-// can never clone a stranger's repo from it: the prompt tells it to ask you for the real link.
-const REPO = 'https://github.com/<owner>/ichiro';
+const REPO = 'https://github.com/Lakshay1509/ichiro';
+const PRIVACY = `${REPO}/blob/main/PRIVACY.md`;
 
 // What you paste into the agent. id: this extension's, the one the local helper must be registered for.
 export const connectPrompt = (id: string) => `Connect yourself to my browser through Ichiro, a Chrome extension with an MCP server.
 
-1. Clone ${REPO} and run npm install in it. That link is a placeholder: ask me for the real one.
+1. Clone ${REPO} and run npm install in it.
 2. Register the browser helper for my extension: npm run host:install -- ${id}
    If it refuses because it runs inside the Claude desktop app on Windows, ask me to run that one command in my own terminal.
 3. Add an MCP server named "ichiro" (stdio) that runs: node <the clone's folder>/host/mcp.ts
@@ -47,8 +48,19 @@ function Welcome({ done }: { done: () => void }) {
         </picture>
         <h1 id="welcome-title">Welcome to Ichiro</h1>
         <p>Let your coding agent use this browser: read pages, click and type. Anything risky waits for your OK.</p>
+        <div class="shares">
+          <p>Once connected, your agent gets:</p>
+          <ul>
+            <li>The text, links and form fields of pages it works on, on sites you allow</li>
+            <li>Page addresses, screenshots it asks for, and files you let it read</li>
+          </ul>
+          <p>
+            This goes only to the coding agent on this computer, which may send it to its AI provider. Ichiro has no
+            server, so nothing is sent to us. <a href={PRIVACY} target="_blank" rel="noreferrer">Privacy policy</a>
+          </p>
+        </div>
         <button type="button" class="cta" autoFocus onClick={() => setStep(2)}>
-          Connect to your agent
+          Agree and continue
         </button>
       </section>
     );

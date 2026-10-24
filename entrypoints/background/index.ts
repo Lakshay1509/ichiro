@@ -20,8 +20,8 @@ export default defineBackground(() => {
   browser.runtime.onInstalled.addListener(installed);
 });
 
-// A fresh install starts with INSTALL_DEFAULTS: MCP and always-on on. Not on an update, or an unpacked extension's
-// reload ("update" too), so your own choices stay. The first panel open then turns MCP on.
+// A fresh install starts with INSTALL_DEFAULTS: always-on on, MCP off. Not on an update, or an unpacked extension's
+// reload ("update" too), so your own choices stay. MCP turns on only when you finish the welcome (connected).
 // Source: https://developer.chrome.com/docs/extensions/reference/api/runtime#event-onInstalled
 function installed({ reason }: { reason: string }) {
   if (reason !== 'install') return;
