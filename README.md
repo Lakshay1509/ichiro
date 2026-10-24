@@ -7,6 +7,23 @@
 
 <p align="center">Your coding agent's hands and eyes in Chrome.</p>
 
+## Install
+
+You need Chrome 153+ and Node.js 22.18+ (see [Requirements](#requirements)).
+
+1. **Install and build.** Clone this repository, then run:
+
+   ```bash
+   npm install
+   npm run build
+   ```
+
+2. **Load it into Chrome.** Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked** and choose `.output/chrome-mv3/`.
+
+3. **Open the extension and follow its steps.** Click the Ichiro icon to open the side panel. The welcome walks you through connecting your coding agent.
+
+## What it does
+
 Ichiro lets a coding agent such as Claude Code or Codex read web pages and act on them in your own browser. It is a Chrome extension plus a small local MCP server that gives the agent one tool, `browser`.
 
 The extension has no AI and needs no API key. Your agent decides what to do. Ichiro carries out each command, shows it in the side panel, and asks you before anything risky: paying, sending, signing in, or opening a site you haven't allowed.
@@ -53,18 +70,13 @@ Chrome warns about some permissions at install. `debugger` sends real mouse inpu
 - Node.js 22.18 or newer (the MCP server and native host are TypeScript files that Node runs directly).
 - A coding agent that supports MCP over stdio.
 
-## Getting started
+## Connect by hand
 
-1. Clone this repository, then install and build:
+The welcome gives you a prompt that has your agent do this. To do it yourself instead:
 
-   ```bash
-   npm install
-   npm run build
-   ```
+1. Copy the extension ID from its card on `chrome://extensions`.
 
-2. Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked** and choose `.output/chrome-mv3/`. Copy the extension ID shown on its card.
-
-3. Register the native host. Run this once per computer, in your own terminal:
+2. Register the native host. Run this once per computer, in your own terminal:
 
    ```bash
    npm run host:install -- <extension-id>
@@ -72,7 +84,7 @@ Chrome warns about some permissions at install. `debugger` sends real mouse inpu
 
    On Windows, don't run it from inside a packaged app such as the Claude desktop app. Those apps hide registry writes from the browser, and the script refuses to run there.
 
-4. Add the MCP server to your agent. For Claude Code:
+3. Add the MCP server to your agent. For Claude Code:
 
    ```bash
    claude mcp add --transport stdio --scope user ichiro -- node /path/to/ichiro/host/mcp.ts
@@ -80,7 +92,7 @@ Chrome warns about some permissions at install. `debugger` sends real mouse inpu
 
    Other agents: add a stdio server that runs `node /path/to/ichiro/host/mcp.ts`.
 
-5. Click the Ichiro icon to open the side panel. The welcome shows what your agent will get; the bridge turns on once you agree and press **I've connected**. Then ask your agent to do something in the browser.
+4. In the side panel, agree to what your agent will see, then press **I've connected**. Then ask your agent to do something in the browser.
 
 ## Usage
 
