@@ -1,7 +1,7 @@
 // Messages the side panel sends to the page, and the page's replies. Add new commands here.
 export type Message =
   | { type: 'ping' }
-  | { type: 'read'; next: number; overlay: boolean } // next: the last element number given out (lib/numbers.ts); overlay: /overlay's setting
+  | { type: 'read'; next: number; overlay: boolean } // next: the last element number given out (lib/page/numbers.ts); overlay: /overlay's setting
   | { type: 'text'; all?: boolean } // all: the whole page, not just the screen (F3a)
   | { type: 'find'; query: string; nth: number }
   | { type: 'pick'; selector: string } // F3b: read-only, text only
@@ -18,18 +18,16 @@ export type Message =
   // WR1: a click or drag at points in the last screenshot (shot: its size), and a real key: checks only, the panel acts.
   | { type: 'aimPoints'; points: { x: number; y: number }[]; shot: { width: number; height: number }; allow?: boolean }
   | { type: 'aimKey'; key: string; allow?: boolean }
-  // WR2: does focus end in this frame; the checks before typing or pasting text there (given: the text is in your goal).
+  // WR2: does focus end in this frame; the checks before typing or pasting text there.
   | { type: 'focusHere' }
-  | { type: 'aimText'; paste: boolean; allow?: boolean; given?: boolean }
-  | { type: 'pasteText'; text: string; allow?: boolean; given?: boolean }
+  | { type: 'aimText'; paste: boolean; allow?: boolean }
+  | { type: 'pasteText'; text: string; allow?: boolean }
   | { type: 'hover'; n: number }
-  // given: the text is in the goal you typed (the panel checks, never the AI). Skips only the personal-data ask.
-  | { type: 'type'; n: number; text: string; enter: boolean; slow: boolean; allow?: boolean; given?: boolean }
-  | { type: 'select'; n: number; option: string; allow?: boolean; given?: boolean }
+  | { type: 'type'; n: number; text: string; enter: boolean; slow: boolean; allow?: boolean }
+  | { type: 'select'; n: number; option: string; allow?: boolean }
   | { type: 'scroll'; dir: 'up' | 'down' | 'left' | 'right'; n?: number }
   | { type: 'key'; key: string; allow?: boolean }
   | { type: 'settle'; maxMs: number }
-  | { type: 'fields' } // F9: how many form fields are shown (no read, so numbers stay)
   | { type: 'captcha' }
   | { type: 'inView' } // #16: does this frame show on the tab's screen (null: no answer, a hidden tab)
   | { type: 'overlay'; on: boolean }
@@ -37,7 +35,7 @@ export type Message =
   | { type: 'shot'; on: boolean };
 
 // contentType: application/pdf in a PDF tab, whose content Chrome's own viewer shows (P1).
-export type PingReply = { url: string; title: string; contentType?: string };
+export type PingReply = { url: string; title: string; contentType?: string; visible: boolean }; // visible: BG3, isDrawn
 
 // One frame's part of a read: header (top frame only), numbered element lines, and how many were found in total.
 // page: what the AI reads (F2): the element lines with the visible text around them, in page order.
@@ -68,7 +66,6 @@ export type Replies = {
   scroll: string;
   key: string;
   settle: boolean;
-  fields: number;
   captcha: string;
   inView: boolean | null;
   overlay: string;

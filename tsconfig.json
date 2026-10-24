@@ -1,3 +1,6 @@
 {
-  "extends": "./.wxt/tsconfig.json"
+  "extends": "./.wxt/tsconfig.json",
+  // Preact's JSX (the side panel's components); Vite's Oxc transformer reads these too.
+  // Sources: https://preactjs.com/guide/v10/typescript/ and https://vite.dev/guide/features#jsx
+  "compilerOptions": { "jsx": "react-jsx", "jsxImportSource": "preact" }
 }

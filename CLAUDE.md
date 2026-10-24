@@ -1,21 +1,24 @@
-# Browser Agent
+# Ichiro
 
-A Chrome extension that reads any web page and acts on it. Phase 1 = typed commands only, no AI yet.
+A Chrome extension that lets a coding agent (Claude Code, Codex…) read any web page and act on it, through one MCP tool: `browser`.
 
-- Plan: `phase-A.md` … `phase-F.md` (A–E done; current: F, the 15-task test run). Test tasks: `tasks.md`. Results: `results.md`.
-- After F: the harness (AI loop + stop-lines, replay, proof of done, pause/resume). Plan and progress: `harness/plan.md`. Do its first unticked task.
-- Site tips, repeat and saved recipes (agent works faster on sites it has seen): build tracker `harness/remember-and-repeat.md`; tick its slices there, not in the docs it points to.
-- **For now, `harness/why-it-loops.md` comes first** (developer, 2026-10-14): fixes that make the agent smarter. Do its first unticked fix; `plan.md` waits until the developer says the agent is smart enough.
+- **Pure MCP** (developer, 2026-10-22): the extension has **no API key and no AI of its own**. The coding agent is the brain. The side panel shows its commands, asks you at stop-lines and new sites, and takes `/commands` from you (plain text is refused).
+- Work tracker: `docs/remember-and-repeat.md` (site tips, repeat, saved recipes: faster on sites it has seen; tick slices there, not in the docs it points to). Do the first unticked slice only when the developer asks.
+- MCP design notes: `docs/mcp-context.md` (why replies say only what changed, batches).
+- **History, don't build from it:** the removed AI loop and Phase 1's typed-command plan live only in git history.
 - Stack: WXT 0.21 + TypeScript 7, Chrome side panel (Chrome 153+: `chrome.publicSuffix` for Sites).
+- **Side panel UI:** read `docs/DESIGN.md` (Notion style) before writing any. Use its calm base (off-white, dark text, one blue); skip the sticker colors, since the panel has no decoration.
+- **Brand:** Ichiro (renamed from Browser Agent on 2026-10-23). Logo files and rules: `art/logo/GUIDE.md`.
 
 ## Commands
 
 - Build: `npm run build` → output in `.output/chrome-mv3/`
 - Type check: `npm run typecheck`
-- Tests: `npm test` (Node's built-in runner; files are `lib/*.test.ts`, plain `throw` on failure)
+- Tests: `npm test` (Node's built-in runner; each `x.test.ts` sits next to its `x.ts` in `lib/` or `host/`, plain `throw` on failure)
 - Load in Chrome: `chrome://extensions` → Developer mode on → **Load unpacked** → pick `.output/chrome-mv3/`. After each build, hit the reload icon on the extension card.
-- MCP (any coding agent drives the browser): side panel `/mcp on` (a new site asks you: Add site / No), then register once: `claude mcp add --transport stdio --scope user browser-agent -- node <repo>/host/mcp.ts`. Path: agent ⇄ `host/mcp.ts` ⇄ random pipe + token (`bridge.json` next to the launcher) ⇄ `host/host.ts` ⇄ panel. Rules: `lib/bridge.ts`.
-- Code lives in `entrypoints/` (each file there becomes part of the extension). Shared code lives in `lib/`. Manifest settings live in `wxt.config.ts`.
+- Native host, once per PC: `npm run host:install -- <extension-id>` in **your own terminal** (on Windows, not inside the Claude desktop app: it hides its registry writes, and the script refuses). Registers every Chromium browser (Chrome, Edge, Brave, Vivaldi, Opera, Arc…); files in `~/.ichiro`. Rules: `lib/bridge/host-install.ts`.
+- MCP (any coding agent drives the browser): on by default for a new install, with always-on (`INSTALL_DEFAULTS`, `lib/memory/panel-memory.ts`); else side panel `/mcp on` (a new site asks you: Add site / No). Then register once: `claude mcp add --transport stdio --scope user ichiro -- node <repo>/host/mcp.ts`. Path: agent ⇄ `host/mcp.ts` ⇄ random pipe + token (`bridge.json` next to the launcher) ⇄ `host/host.ts` ⇄ panel. Rules: `lib/bridge/bridge.ts`.
+- Code lives in `entrypoints/` (each file there becomes part of the extension). Shared code lives in `lib/`, one folder per area (map in `README.md`); a new file goes in the folder of the area it serves. Manifest settings live in `wxt.config.ts`.
 
 ## Who you're talking to
 
@@ -52,8 +55,8 @@ APIs for WXT, Chrome extensions (Manifest V3), and libraries change often. Your 
 
 ## Security: no lazy parts
 
-Even in dev, we act on the **real web** with a **real API key**. So dev gets the same security as a product.
+Even in dev, an agent acts on the **real web** in your **real Chrome**, with your logins. So dev gets the same security as a product.
 
-- **No "fine for dev" shortcuts.** Never skip validation, guards or key protection because it's only dev.
-- **No open ends.** A security guard (stop-lines, judge, secret fields, key storage, untrusted page text) is finished and tested in the task that adds it. No security TODOs, no `shortcut:` comments on security code.
+- **No "fine for dev" shortcuts.** Never skip validation, guards or the bridge's token check because it's only dev.
+- **No open ends.** A security guard (stop-lines, Sites, secret fields, the bridge token, untrusted page text) is finished and tested in the task that adds it. No security TODOs, no `shortcut:` comments on security code.
 - **Found a gap you can't close in this task?** Stop and tell the developer. Don't leave it for later silently.

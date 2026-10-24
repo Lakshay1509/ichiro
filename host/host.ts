@@ -1,17 +1,12 @@
-// The native messaging host: Chrome starts it for our side panel; it adds the API key and asks Claude,
-// or (/mcp on) bridges a coding agent's commands from a local pipe to the panel.
-// stdout belongs to Chrome's message channel, so logs go to stderr only (console.error), and never the key or token.
+// The native messaging host: Chrome starts it for the side panel's /mcp on; it bridges a coding agent's commands from
+// a local pipe to the panel. stdout belongs to Chrome's message channel, so logs go to stderr only, and never the token.
 import { randomBytes, randomUUID } from 'node:crypto';
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, type Socket } from 'node:net';
 import { dirname } from 'node:path';
-import { checkReply, checkRun, isBridgeStart, type BridgeReply } from '../lib/bridge.ts';
-import { hostPaths } from '../lib/host-install.ts';
-import { apiRequest, checkAsk, frame, readFrames, toReply } from '../lib/host-request.ts';
-import { readKey } from './key.ts';
-
-// Hard-coded so nothing the extension sends can point the key somewhere else.
-const API_URL = 'https://api.anthropic.com/v1/messages';
+import { checkAnswer, checkReply, checkRun, isBridgeStart, type AskNotice, type BridgeAnswer, type BridgeReply } from '../lib/bridge/bridge.ts';
+import { hostPaths } from '../lib/bridge/host-install.ts';
+import { frame, readFrames } from '../lib/bridge/host-request.ts';
 
 const send = (message: object) => process.stdout.write(frame(message));
 // Exit only after the error has reached Chrome.
@@ -25,55 +20,34 @@ if (!process.env.BA_ORIGIN || process.argv[2] !== process.env.BA_ORIGIN) {
   process.exit(1);
 }
 
-let key = ''; // read on the first ask, kept in memory only; the bridge never needs it
-let mode: 'ask' | 'bridge' | undefined; // set by the first message, then fixed for this process
+let bridging = false; // set by the first message, which must start the bridge; then fixed for this process
 
-async function handle(text: string) {
-  if (mode === 'bridge') return panelReply(text);
-  if (!mode && isStart(text)) return startBridge();
-  mode = 'ask';
-  let ask;
-  try {
-    ask = checkAsk(text);
-  } catch (e) {
-    return send({ type: 'error', error: (e as Error).message }); // refused: no API call
-  }
-  try {
-    key ||= await readKey();
-  } catch (e) {
-    return fail((e as Error).message);
-  }
-  try {
-    const res = await fetch(API_URL, apiRequest(ask, key));
-    const json: unknown = await res.json().catch(() => null);
-    const reply = toReply(res.status, json);
-    if (reply.type === 'error') console.error(reply.error, (json as { error?: { message?: string } } | null)?.error?.message ?? '');
-    send(reply);
-  } catch (e) {
-    console.error('API call failed:', String((e as Error).cause ?? (e as Error).message));
-    send({ type: 'error', error: 'Could not reach the API' });
-  }
+function handle(text: string) {
+  if (bridging) return panelReply(text);
+  if (!isStart(text)) return fail('The first message must be {"type":"bridge"}');
+  startBridge();
 }
 
 const isStart = (text: string) => {
   try {
     return isBridgeStart(text);
   } catch {
-    return false; // not JSON: checkAsk refuses it with its own message
+    return false; // not JSON
   }
 };
 
 // --- The MCP bridge (/mcp on). The pipe's name is random and written, with a fresh token, to a file only you can
 // read; host/mcp.ts reads it to connect. Each connection carries one run (1–10 command lines); runs reach the panel one at a time.
-let waiting: ((reply: BridgeReply) => void) | null = null; // the agent waiting on the panel's reply
+// BG7: while its run is the current one, a connection also gets the panel's open ask and may send your dialog's answer.
+let waiting: { socket: Socket; done: (reply: BridgeReply) => void } | null = null; // the run the panel is working on
 let line: Promise<unknown> = Promise.resolve();
 
 function startBridge() {
-  mode = 'bridge';
+  bridging = true;
   const token = randomBytes(32).toString('hex');
   const file = hostPaths(process.platform, process.env).bridge;
   // Windows pipes vanish with the process. A Unix socket is a file: removed on exit.
-  const pipe = process.platform === 'win32' ? `\\\\.\\pipe\\browser-agent-${randomUUID()}` : `${dirname(file)}/bridge-${randomUUID()}.sock`;
+  const pipe = process.platform === 'win32' ? `\\\\.\\pipe\\ichiro-${randomUUID()}` : `${dirname(file)}/bridge-${randomUUID()}.sock`;
   if (process.platform !== 'win32') process.on('exit', () => rmSync(pipe, { force: true }));
   const server = createServer((socket) => serve(socket, token));
   server.on('error', (e) => fail(`MCP bridge: ${e.message}`));
@@ -84,12 +58,23 @@ function startBridge() {
     } catch (e) {
       return fail(`MCP bridge: can't write ${file}: ${(e as Error).message}`);
     }
+    // Two browsers share one file and the last /mcp on wins. On exit, delete it only if it still names our pipe, so the
+    // agent hears "off" instead of dialling a dead pipe. Chrome closes stdin and waits 2 s before killing us, so this runs.
+    // Source: https://textslashplain.com/2023/03/16/improving-native-message-host-reliability-on-windows/
+    process.on('exit', () => {
+      try {
+        if (JSON.parse(readFileSync(file, 'utf8')).pipe === pipe) rmSync(file);
+      } catch {
+        // gone already, or rewritten mid-way: not ours to delete
+      }
+    });
     send({ type: 'ready' });
   });
 }
 
 function serve(socket: Socket, token: string) {
   let buf: Buffer = Buffer.alloc(0);
+  let ran = false; // one run per connection; after it, only that run's answers (BG7)
   const reply = (r: BridgeReply) => socket.end(frame(r));
   socket.on('error', () => {}); // the agent left; its reply is dropped
   socket.on('data', (chunk: Buffer) => {
@@ -99,35 +84,57 @@ function serve(socket: Socket, token: string) {
     } catch (e) {
       return reply({ type: 'error', error: (e as Error).message });
     }
-    if (messages[0] === undefined) return;
-    socket.removeAllListeners('data'); // one run per connection
-    let commands: string[];
-    try {
-      commands = checkRun(messages[0], token);
-    } catch (e) {
-      console.error('MCP bridge refused a pipe message:', (e as Error).message);
-      return reply({ type: 'error', error: (e as Error).message });
+    for (const m of messages) {
+      if (ran) {
+        answered(socket, m);
+        continue;
+      }
+      ran = true;
+      let run: ReturnType<typeof checkRun>;
+      try {
+        run = checkRun(m, token);
+      } catch (e) {
+        console.error('MCP bridge refused a pipe message:', (e as Error).message);
+        return reply({ type: 'error', error: (e as Error).message });
+      }
+      line = line.then(() => new Promise<void>((done) => {
+        waiting = {
+          socket,
+          done: (r) => {
+            waiting = null;
+            reply(r);
+            done();
+          },
+        };
+        send({ type: 'run', ...run });
+      }));
     }
-    line = line.then(() => new Promise<void>((done) => {
-      waiting = (r) => {
-        waiting = null;
-        reply(r);
-        done();
-      };
-      send({ type: 'run', commands });
-    }));
   });
 }
 
+// BG7: your answer in the agent app's dialog. It counts only from the run the panel is working on now, on that run's
+// own connection (which passed the token check); the panel then checks it's for the ask open right now.
+function answered(socket: Socket, text: string) {
+  let a: BridgeAnswer;
+  try {
+    a = checkAnswer(text);
+  } catch (e) {
+    return console.error('MCP bridge refused a pipe message:', (e as Error).message);
+  }
+  if (waiting?.socket !== socket) return console.error("MCP bridge: dropped an answer from a run that isn't the current one");
+  send(a);
+}
+
 function panelReply(text: string) {
-  let r: BridgeReply;
+  let r: BridgeReply | AskNotice;
   try {
     r = checkReply(text);
   } catch (e) {
     return fail(`MCP bridge: ${(e as Error).message}`);
   }
   if (!waiting) return console.error('MCP bridge: dropped a reply nobody asked for');
-  waiting(r);
+  if (r.type === 'ask') return void waiting.socket.write(frame(r)); // BG7: the run's agent app shows it too
+  waiting.done(r);
 }
 
 let buf: Buffer = Buffer.alloc(0);

@@ -1,5 +1,5 @@
 {
-  "name": "browser-agent",
+  "name": "ichiro",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -9,10 +9,7 @@
     "zip": "wxt zip",
     "typecheck": "tsc --noEmit",
     "postinstall": "wxt prepare",
-    "test": "node --test lib/*.test.ts",
-    "key:set": "node host/key.ts set",
-    "key:check": "node host/key.ts check",
-    "key:clear": "node host/key.ts clear",
+    "test": "node --test \"lib/**/*.test.ts\" \"host/*.test.ts\"",
     "host:install": "node host/install.ts install",
     "host:uninstall": "node host/install.ts uninstall"
   },
@@ -22,8 +19,10 @@
     "wxt": "^0.21.4"
   },
   "dependencies": {
+    "@fontsource-variable/inter": "^5.3.0",
     "@modelcontextprotocol/server": "^2.3.1",
     "pdfjs-dist": "^6.4.299",
+    "preact": "^11.0.1",
     "zod": "^4.6.7"
   }
 }

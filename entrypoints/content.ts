@@ -1,14 +1,14 @@
 // Content script: runs inside every web page (and every frame in it) and answers the side panel.
 import { HandOver, STALE_MS, StopLine, type Message, type Replies } from '@/lib/messages';
-import { aim, aimKey, aimPoints, aimText, click, focusHere, pasteText, clickText, endGuard, hover, pressKey, scroll, selectOption, typeText, watchMouse } from '@/lib/actions';
-import { captchaKind, visibleCaptcha } from '@/lib/captcha';
-import { onScreen } from '@/lib/in-view';
-import { drawForShot, endShot, setOverlay } from '@/lib/overlay';
-import { loadPage, withNote } from '@/lib/load-page';
-import { findSnippets, findText, pageItems, pageLines, readText, TEXT_CAP, textTargets } from '@/lib/page-text';
-import { notAlike, pickAll, pickLike } from '@/lib/pick';
-import { fieldCount, getElements, read, secretOnScreen } from '@/lib/reader';
-import { waitForQuiet } from '@/lib/settle';
+import { aim, aimKey, aimPoints, aimText, click, focusHere, pasteText, clickText, endGuard, hover, pressKey, scroll, selectOption, typeText, watchMouse } from '@/lib/actions/actions';
+import { captchaKind, visibleCaptcha } from '@/lib/safety/captcha';
+import { onScreen } from '@/lib/page/in-view';
+import { drawForShot, endShot, setOverlay } from '@/lib/page/overlay';
+import { loadPage, withNote } from '@/lib/page/load-page';
+import { findSnippets, findText, pageItems, pageLines, readText, TEXT_CAP, textTargets } from '@/lib/page/page-text';
+import { notAlike, pickAll, pickLike } from '@/lib/page/pick';
+import { getElements, read, secretOnScreen } from '@/lib/page/reader';
+import { waitForQuiet } from '@/lib/tabs/settle';
 
 // One handler per message type. The type checks each reply matches lib/messages.ts. Handlers may be async.
 // Messages that act on the page. Inside a CAPTCHA's own frame they're refused (4.2).
@@ -17,7 +17,8 @@ const ACTIONS = new Set<Message['type']>(['click', 'clickText', 'aim', 'aimPoint
 const handlers: {
   [K in Message['type']]: (msg: Extract<Message, { type: K }>) => Replies[K] | Promise<Replies[K]>;
 } = {
-  ping: () => ({ url: location.href, title: document.title, contentType: document.contentType }),
+  // visible: read here, apart from the page's own scripts, so the page can't fake it. Source: https://developer.mozilla.org/en-US/docs/Web/API/Document/visibilityState
+  ping: () => ({ url: location.href, title: document.title, contentType: document.contentType, visible: document.visibilityState === 'visible' }),
   // The panel sends its overlay setting with every read, so a page opened since draws the numbers too.
   read: ({ next, overlay }) => {
     const reply = read(next);
@@ -43,15 +44,14 @@ const handlers: {
   aimPoints: ({ points, shot, allow }) => aimPoints(points, shot, allow),
   aimKey: ({ key, allow }) => aimKey(key, allow),
   focusHere: () => focusHere(),
-  aimText: ({ paste, allow, given }) => aimText(paste, allow, given),
-  pasteText: ({ text, allow, given }) => pasteText(text, allow, given),
+  aimText: ({ paste, allow }) => aimText(paste, allow),
+  pasteText: ({ text, allow }) => pasteText(text, allow),
   hover: ({ n }) => hover(n),
-  type: ({ n, text, enter, slow, allow, given }) => typeText(n, text, enter, slow, allow, given),
-  select: ({ n, option, allow, given }) => selectOption(n, option, allow, given),
+  type: ({ n, text, enter, slow, allow }) => typeText(n, text, enter, slow, allow),
+  select: ({ n, option, allow }) => selectOption(n, option, allow),
   scroll: ({ dir, n }) => scroll(dir, n),
   key: ({ key, allow }) => pressKey(key, allow),
   settle: ({ maxMs }) => waitForQuiet(maxMs),
-  fields: () => fieldCount(),
   captcha: () => visibleCaptcha(),
   inView: () => onScreen(),
   overlay: ({ on }) => {

@@ -1,25 +1,36 @@
 <!doctype html>
-<!-- Side panel UI: output scrolls above, the goal / command input sits at the bottom. -->
+<!-- Side panel UI: output scrolls above, the /command input sits at the bottom. Look: style.css. -->
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Browser Agent</title>
-    <style>
-      body { margin: 0; height: 100vh; display: flex; flex-direction: column; font: 13px ui-monospace, Consolas, monospace; }
-      #out { flex: 1; overflow-y: auto; padding: 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
-      .error { color: #c62828; }
-      .stop { color: #8a4b00; font-weight: bold; }
-      .ask button, .tips button { font: inherit; margin: 4px 8px 4px 0; padding: 4px 10px; cursor: pointer; }
-      .ask textarea { display: block; box-sizing: border-box; width: 100%; margin-top: 4px; font: inherit; resize: vertical; }
-      .ask textarea[readonly] { background: #f5f5f5; }
-      form { border-top: 1px solid #ccc; }
-      input { box-sizing: border-box; width: 100%; padding: 8px; border: 0; font: inherit; }
-    </style>
+    <title>Ichiro</title>
   </head>
   <body>
+    <!-- The welcome (onboarding.tsx), until you press "I've connected": it takes the place of the log and the command box. -->
+    <main id="welcome"></main>
     <div id="out" role="log"></div>
     <form>
-      <input aria-label="What you want, or a /command" placeholder="Say what you want · /help for commands" autocomplete="off" spellcheck="false" autofocus />
+      <!-- The / menu (slash-menu.ts): commands that start with what you type, floating over the log. -->
+      <ul id="slash" role="listbox" aria-label="Commands" hidden></ul>
+      <input aria-label="A /command" placeholder="/command · /help for the list" autocomplete="off" spellcheck="false" autofocus role="combobox" aria-controls="slash" aria-autocomplete="list" aria-expanded="false" />
+      <!-- MCP on or off (main.ts showMcp), the command box's bottom row. Icons: Lucide plug / unplug, ISC licence, https://lucide.dev -->
+      <div id="mcp" role="status" data-state="off">
+        <!-- /auto on, at the row's left: hover or focus opens its words. Icon: Lucide hand, ISC licence, https://lucide.dev -->
+        <span class="mcp-auto" tabindex="0" hidden>
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2" /><path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2" /><path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8" /><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" />
+          </svg>
+          <span class="mcp-auto-label">Auto approval on</span>
+        </span>
+        <svg class="plug" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22v-5" /><path d="M15 8V2" /><path d="M17 8a1 1 0 0 1 1 1v4a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1z" /><path d="M9 8V2" />
+        </svg>
+        <svg class="unplug" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="m19 5 3-3" /><path d="m2 22 3-3" /><path d="M6.3 20.3a2.4 2.4 0 0 0 3.4 0L12 18l-6-6-2.3 2.3a2.4 2.4 0 0 0 0 3.4Z" /><path d="M7.5 13.5 10 11" /><path d="M10.5 16.5 13 14" /><path d="m12 6 6 6 2.3-2.3a2.4 2.4 0 0 0 0-3.4l-2.6-2.6a2.4 2.4 0 0 0-3.4 0Z" />
+        </svg>
+        <span class="mcp-name">MCP</span>
+        <span class="mcp-state">off</span>
+        <span class="mcp-always" title="MCP stays on when you close the side panel. /always-on off to change" hidden>· always-on</span>      </div>
     </form>
     <script type="module" src="./main.ts"></script>
   </body>

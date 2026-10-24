@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "browser-agent-cloud": {
+    "ichiro-cloud": {
       "command": "node",
       "args": ["host/mcp.ts"]
     }

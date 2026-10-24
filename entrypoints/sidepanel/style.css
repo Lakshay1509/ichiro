@@ -1,0 +1,319 @@
+/* Side panel look: DESIGN.md's calm base (warm off-white, dark ink, one blue), Inter for words, mono for commands. */
+
+:root {
+  color-scheme: light;
+  --canvas: #f6f5f4;
+  --surface: #ffffff;
+  --ink: rgba(0, 0, 0, 0.92);
+  --ink-2: #31302e;
+  --ink-muted: #615d59;
+  --placeholder: #78736e; /* ink-faint is too light for 4.5:1 */
+  --hairline: #e6e6e6;
+  --line: rgba(0, 0, 0, 0.12);
+  --hover: rgba(55, 53, 47, 0.06);
+  --blue: #0075de;
+  --blue-ink: #005bab; /* DESIGN.md primary-active: 4.5:1 on --blue-soft, which #0075de misses */
+  --blue-soft: rgba(0, 117, 222, 0.08);
+  --danger: #d1242f;
+  --danger-soft: #fdeeee;
+  --warn: #8a4b00;
+  --warn-soft: #fdf5e8;
+  --warn-line: #f0dcb8;
+  --sans: 'Inter Variable', system-ui, 'Segoe UI', sans-serif;
+  --mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  --gap: 8px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--canvas);
+  color: var(--ink-2);
+  font: 13px/1.5 var(--sans);
+  font-feature-settings: 'cv11'; /* Inter's single-storey a: calmer at small sizes */
+}
+
+/* The log */
+
+#out {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 16px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  white-space: pre-line; /* keeps line breaks; drops the old log's leading spaces ("   The agent works in") */
+  overflow-wrap: anywhere;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.18) transparent;
+}
+
+/* MCP off, nothing yet: the Ichiro wordmark (art/logo/GUIDE.md) above the words, with clear space below it. */
+#out:empty::before {
+  content: 'Type /mcp on to let a coding agent use this browser, or /help for the list.';
+  margin: auto;
+  max-width: 250px;
+  padding-top: 60px;
+  background: url(/ichiro-wordmark.svg) center top / 120px auto no-repeat;
+  text-align: center;
+  color: var(--ink-muted);
+}
+/* MCP on, nothing yet: the Ichiro symbol blinking and looking around (art/blink/build.mjs) above the words. Its SVG is 104 × 100. */
+body:has(#mcp:not([data-state='off'])) #out:empty::before {
+  content: "When a coding agent uses the browser, its steps show here.";
+  box-sizing: border-box;
+  width: 280px;
+  max-width: 100%;
+  padding: 116px 15px 0;
+  background: url(/blink.svg) center top / 104px 100px no-repeat;
+}
+@media (prefers-reduced-motion: reduce) {
+  body:has(#mcp:not([data-state='off'])) #out:empty::before { background-image: url(/blink-still.svg); }
+}
+
+.error { color: var(--danger); font-weight: 500; }
+
+/* Your own commands, as typed. Not a chat bubble: the panel takes /commands, not messages. */
+.mine { color: var(--ink); font: 12px/1.5 var(--mono); }
+
+/* An ask (stop-line, new site, download, your turn): a bold headline, then the detail in plain dark text. While it's
+   open, its buttons (.ask, right after) join it into one warm card. Once answered it goes calm, your choice (.answer)
+   at its foot, so only the open ask stands out. */
+.stop {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  background: var(--canvas);
+  color: var(--ink-2);
+}
+.stop-head { color: var(--ink); font-size: 13.5px; font-weight: 600; line-height: 1.4; }
+.stop:has(+ .ask) { border-color: var(--warn-line); background: var(--warn-soft); }
+.stop:has(+ .ask, + .answer) { border-bottom: 0; border-radius: 10px 10px 0 0; padding-bottom: 4px; }
+.stop + :is(.ask, .answer) {
+  margin-top: calc(-1 * var(--gap));
+  padding: 6px 12px 12px;
+  border: 1px solid var(--hairline);
+  border-top: 0;
+  border-radius: 0 0 10px 10px;
+  background: var(--canvas);
+}
+.stop + .ask { border-color: var(--warn-line); background: var(--warn-soft); }
+.stop + .answer { padding-top: 4px; color: var(--ink-muted); font-size: 12px; }
+
+/* Both choices look the same on purpose: the panel never nudges you toward Allow. Wide and tall, so easy to hit. */
+.ask { display: flex; gap: 8px; }
+.ask button { flex: 1; height: 32px; }
+
+/* One agent call */
+
+.step, .tips {
+  --gap: 4px; /* an ask's joined card inside measures its overlap by this */
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  padding: 10px 12px 6px;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink-2);
+}
+
+/* Status, what the step does, then its number at the right (the agent's repeat <step> goes by it). */
+.step-head { display: flex; align-items: baseline; gap: 8px; }
+.step-title { flex: 1; min-width: 0; color: var(--ink); font-weight: 600; }
+.step-head + * { margin-top: 2px; }
+.step-n { flex: none; color: var(--ink-muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+
+/* One status mark: the word on a tint of its colour. */
+.status { padding: 0 7px; border-radius: 9999px; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+.status.running { color: var(--blue-ink); background: var(--blue-soft); }
+.status.waiting { color: var(--warn); background: var(--warn-soft); }
+.status.stopped { color: var(--danger); background: var(--danger-soft); }
+.status.done { color: var(--ink-muted); background: rgba(55, 53, 47, 0.06); }
+
+/* A batch's actions in plain words, one per line, a thin rule holding them together like a list. */
+.cmd { padding-left: 10px; border-left: 2px solid var(--hairline); color: var(--ink-2); }
+
+/* Show / hide: the agent's full reply and the commands as sent */
+
+summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  margin-left: -4px;
+  padding: 2px 6px 2px 4px;
+  border-radius: 4px;
+  color: var(--ink-muted);
+  font-size: 12px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+summary::-webkit-details-marker { display: none; }
+summary::before {
+  content: '';
+  border-left: 4px solid currentColor;
+  border-top: 3.5px solid transparent;
+  border-bottom: 3.5px solid transparent;
+}
+details[open] > summary::before { transform: rotate(90deg); }
+summary:hover { color: var(--ink); background: var(--hover); }
+
+.well {
+  max-height: 240px;
+  overflow: auto;
+  margin: 4px 0 4px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--canvas);
+  color: var(--ink-2);
+  font: 12px/1.5 var(--mono);
+  white-space: pre-wrap; /* the page as the agent got it, its indents kept */
+  scrollbar-width: thin;
+}
+
+/* Saved tips */
+
+.tips-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-bottom: 6px; }
+.tips-site { color: var(--ink); font-weight: 600; }
+.tips ul { margin: 0; padding: 0; list-style: none; }
+.tips li { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; border-top: 1px solid var(--hairline); color: var(--ink-2); }
+.tips li > span { flex: 1; }
+.tips li.gone { color: var(--ink-muted); }
+
+/* Buttons: DESIGN.md's utility button */
+
+button {
+  flex: none;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font: 500 12.5px/1 var(--sans);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s, transform 0.1s;
+}
+button:hover { background: #f1f0ef; }
+button:active { transform: scale(0.97); }
+button.small { height: 26px; padding: 0 10px; font-size: 12px; }
+button.danger { color: var(--danger); }
+button.danger:hover { background: var(--danger-soft); border-color: rgba(209, 36, 47, 0.3); }
+
+:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+/* The command box */
+
+/* The command box, built like a composer: a roomy field for what you type, then a quieter bottom row for
+   MCP on/off, set apart by space and size rather than a line. */
+form {
+  position: relative; /* the / menu floats just above it */
+  margin: 8px 16px 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  transition: border-color 0.15s;
+}
+form:focus-within { border-color: var(--blue); }
+
+input {
+  display: block;
+  width: 100%;
+  padding: 14px 16px 18px;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: 14px/20px var(--sans);
+}
+input::placeholder { color: var(--placeholder); }
+input:focus-visible { outline: none; } /* the card's blue border shows focus, not a second ring */
+
+/* The / menu: a popover over the log, the row Enter picks tinted like a hover. */
+#slash {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 6px);
+  z-index: 1;
+  max-height: 240px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.04), 0 23px 52px rgba(0, 0, 0, 0.05); /* DESIGN.md level 2: popovers */
+  scrollbar-width: thin;
+}
+#slash li { display: flex; align-items: baseline; gap: 10px; padding: 6px 10px; border-radius: 5px; cursor: pointer; }
+#slash li[aria-selected='true'] { background: var(--hover); }
+.slash-name { flex: none; color: var(--ink); font: 12px/1.5 var(--mono); }
+.slash-help { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-muted); font-size: 12px; }
+
+/* MCP on or off, at the right like a setting: the name in ink, its state quieter, the icon blue when on. */
+#mcp { display: flex; justify-content: flex-end; align-items: center; gap: 6px; padding: 0 14px 12px; color: var(--ink-muted); font-size: 12.5px; line-height: 16px; }
+#mcp svg { width: 14px; height: 14px; flex: none; }
+.mcp-name { color: var(--ink-2); font-weight: 500; }
+#mcp[data-state='on'] .plug { color: var(--blue-ink); }
+/* /auto on: a hand at the row's left, tinted like the waiting status mark. Hover or keyboard focus opens its words. */
+.mcp-auto { display: inline-flex; align-items: center; margin-right: auto; padding: 2px 4px; border-radius: 9999px; color: var(--warn); background: var(--warn-soft); font-size: 12px; font-weight: 600; cursor: default; }
+.mcp-auto[hidden] { display: none; }
+.mcp-auto-label { max-width: 0; overflow: hidden; white-space: nowrap; opacity: 0; }
+.mcp-auto:is(:hover, :focus-visible) .mcp-auto-label { max-width: 10em; padding: 0 4px 0 5px; opacity: 1; }
+#mcp[data-state='off'] .plug, #mcp:not([data-state='off']) .unplug { display: none; }
+
+/* The welcome (onboarding.tsx): it takes the panel's place until "I've connected". Step 1 centred under the blinking
+   symbol (clear space around it: art/logo/GUIDE.md); step 2 left-aligned, since the prompt is long. */
+
+#welcome { display: none; flex: 1; overflow-y: auto; padding: 24px 20px; }
+body.welcoming #welcome { display: flex; }
+body.welcoming #out, body.welcoming form { display: none; }
+
+.welcome { display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%; max-width: 360px; margin: auto; text-align: center; }
+.welcome picture { margin: 12px 0 8px; }
+.welcome h1 { margin: 0; color: var(--ink); font-size: 22px; font-weight: 700; line-height: 1.27; letter-spacing: -0.25px; }
+.welcome p { margin: 0; color: var(--ink-muted); font-size: 14px; }
+.welcome .welcome-step { color: var(--ink-muted); font-size: 12px; font-weight: 500; } /* --placeholder is 4.3:1 here */
+.welcome.connect { align-items: stretch; text-align: left; }
+
+/* The one black call to action per step: full pill, like DESIGN.md's marketing CTA, in the logo's ink. */
+button.cta { height: 40px; padding: 0 24px; border: 0; border-radius: 9999px; background: #000; color: #fff; font-size: 14px; }
+button.cta:hover { background: var(--ink-2); }
+.welcome:not(.connect) button.cta { margin-top: 8px; }
+
+/* The prompt: read-only, selectable, scrolls inside itself. White on the warm page, like the panel's cards. Copy sits
+   right under it, a step taller than a utility button: it's what this step is for. */
+.welcome.connect button:not(.cta, .link) { height: 36px; font-size: 13px; }
+textarea.prompt {
+  width: 100%;
+  resize: none;
+  padding: 10px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink-2);
+  font: 12px/1.5 var(--mono);
+  scrollbar-width: thin;
+}
+button.link { align-self: center; height: auto; padding: 4px 8px; border: 0; background: none; color: var(--ink-muted); font-weight: 400; }
+button.link:hover { color: var(--ink); background: none; text-decoration: underline; }
+
+/* Motion: only what says something (a new line arrives, a section opens). */
+
+@media (prefers-reduced-motion: no-preference) {
+  #out > *, .step > * { animation: arrive 0.18s ease-out; }
+  summary::before { transition: transform 0.15s; }
+  .mcp-auto-label { transition: max-width 0.2s ease-out, padding 0.2s ease-out, opacity 0.15s; }
+}
+@keyframes arrive { from { opacity: 0; transform: translateY(3px); } }
