@@ -227,10 +227,14 @@ function value(el: Element): string | undefined {
   if (el instanceof HTMLInputElement && !NO_VALUE.includes(el.type)) return el.value;
 }
 
-// Passwords, card fields and one-time codes. Their values are never printed.
+// Passwords, card fields and one-time codes. Their values are never printed. A revealed password ("show password"
+// makes it type=text) still counts: by its autocomplete token, or a text field named or id'd for a password.
+// Source: https://html.spec.whatwg.org/multipage/form-control-infrastructure.html#autofill-detail-tokens
 export function isSecret(el: Element): boolean {
   const autocomplete = el.getAttribute('autocomplete')?.toLowerCase() ?? '';
-  return (el instanceof HTMLInputElement && el.type === 'password') || /\b(cc-|one-time-code)/.test(autocomplete);
+  if (/\b(cc-|one-time-code|current-password|new-password)/.test(autocomplete)) return true;
+  if (!(el instanceof HTMLInputElement)) return false;
+  return el.type === 'password' || (el.type === 'text' && /pass(word|wd|code)/i.test(`${el.name} ${el.id}`));
 }
 
 // F4b: a field with a suggestion list (ARIA combobox or autocomplete, or an HTML datalist): typing there opens a list
@@ -241,7 +245,7 @@ export const suggests = (attr: (name: string) => string | null) =>
 
 // F1b: a password, card or code field on screen right now, listed or not (one may appear after the read).
 // Screenshots skip any step where one shows: a picture can't hide a value like the list does.
-export const secretOnScreen = () => [...getElements().values(), ...document.querySelectorAll('input[type=password], [autocomplete]')]
+export const secretOnScreen = () => [...getElements().values(), ...document.querySelectorAll('input[type=password], [autocomplete], input[name*=pass i], input[id*=pass i]')]
   .some((el) => isSecret(el) && el.checkVisibility({ visibilityProperty: true }) && visibleCenter(el) !== null);
 
 function state(el: Element): string[] {

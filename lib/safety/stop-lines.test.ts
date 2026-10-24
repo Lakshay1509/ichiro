@@ -1,6 +1,7 @@
 // Checks stopWord (risky button labels), isCheckoutUrl (pages where any click can move money) and the cookie exception
 // (privacyLabel, riskyWord, inCookieBox: a cookie box's least-consent button isn't a stop-line). Run: npm test
-import { inCookieBox, isCheckoutUrl, privacyLabel, riskyWord, stopLineAsk, stopWord } from './stop-lines.ts';
+import { checkStopLines, enterTargets, inCookieBox, isCheckoutUrl, privacyLabel, riskyWord, stopLineAsk, stopWord } from './stop-lines.ts';
+import { StopLine } from '../messages.ts';
 
 const matches: [string, string][] = [
   ['Pay now', 'pay'],
@@ -130,3 +131,32 @@ for (const [b, want, what] of cookieCases) {
 const asked = stopLineAsk('Stop-line: click "Place order" (word "pay" on the box around it). Needs your ok.');
 if (asked !== 'This step needs your OK\nclick "Place order" (word "pay" on the box around it).') throw new Error(`stopLineAsk: ${asked}`);
 if (!stopLineAsk('Stop-line: goto https://shop.example/checkout (checkout page)').endsWith('\ngoto https://shop.example/checkout (checkout page)')) throw new Error('stopLineAsk, goto');
+
+// enterTargets outside a form: a chat composer sends on Enter from the page's own handler, with its Send button beside
+// the box. The buttons in the nearest box around the field count as Enter targets, so "send" stops Enter like a click
+// on Send does. Audit 2026-10-24, lead 3.
+(globalThis as { ShadowRoot?: unknown }).ShadowRoot ??= class {};
+type Fake = { parentElement: Fake | null; parentNode: Fake | null; closest: () => null; querySelectorAll: () => Fake[] };
+const fake = (parent: Fake | null, buttons: Fake[] = []): Fake => ({ parentElement: parent, parentNode: parent, closest: () => null, querySelectorAll: () => buttons });
+const send = fake(null);
+const editor = fake(fake(null, [send])); // the editable box (no buttons inside), in the composer that holds Send
+const message = fake(editor);
+if (!enterTargets(message as unknown as Element).includes(send as unknown as Element)) throw new Error('enterTargets: a field outside a form should include the Send button beside it');
+const lone = fake(fake(fake(null)));
+if (enterTargets(lone as unknown as Element).length !== 1) throw new Error('enterTargets: a field with no buttons near it is its only target');
+const page2 = { ...fake(null, [fake(null)]), localName: 'body' };
+if (enterTargets(fake(page2) as unknown as Element).length !== 1) throw new Error('enterTargets: never every button on the page (stops at body)');
+
+// checkStopLines: one command with two stop-lines (typing personal data, then Enter submitting "Subscribe") asks once,
+// naming both, so Allow once approves exactly what the ask showed. Audit 2026-10-24, lead 4.
+const personal = () => { throw new StopLine('Stop-line: type into [3] "Email" (personal data: email). Needs your ok.'); };
+const submit = () => { throw new StopLine('Stop-line: Enter in "Email" (word "subscribe"). Needs your ok.'); };
+const stopsWith = (checks: (() => void)[]) => {
+  try { checkStopLines(checks); } catch (err) { if (err instanceof StopLine) return err.message; throw err; }
+  return null;
+};
+const both = stopsWith([personal, submit]);
+if (!both?.includes('personal data: email') || !both.includes('word "subscribe"')) throw new Error(`checkStopLines: the ask must name both stop-lines: ${both}`);
+if (!stopLineAsk(both).endsWith('(word "subscribe").')) throw new Error(`checkStopLines: the ask keeps the stop-line form: ${stopLineAsk(both)}`);
+if (stopsWith([() => {}, personal]) !== 'Stop-line: type into [3] "Email" (personal data: email). Needs your ok.') throw new Error('checkStopLines: one stop-line keeps its own message');
+if (stopsWith([() => {}, () => {}]) !== null) throw new Error('checkStopLines: no stop-line, no ask');

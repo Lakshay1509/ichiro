@@ -96,9 +96,20 @@ export function clickTargets(el: Element, hit: Element): Element[] {
 
 // What Enter on el can trigger: el itself and its form's default button, the first submit button.
 // Source: https://html.spec.whatwg.org/multipage/form-control-infrastructure.html#implicit-submission
+// Outside a form, the page sends on Enter itself (chat and mail composers), with its Send button beside the box: the
+// buttons in the nearest box around el that holds any, up to 4 levels up, so "send" stops Enter like a click on Send.
+// Erring wide on purpose: a stop word on any button there asks, even one Enter wouldn't press. Never past <body>: the
+// whole page's buttons aren't "beside" anything (Enter with nothing focused lands on body).
 export function enterTargets(el: Element): Element[] {
   const form = (el as HTMLInputElement).form ?? el.closest('form');
-  const submit = [...(form?.elements ?? [])].find(
+  if (!form) {
+    for (let x = parentOf(el), up = 0; x && !['body', 'html'].includes(x.localName) && up < 4; x = parentOf(x), up++) {
+      const buttons = [...x.querySelectorAll('button, [role=button], input[type=submit]')];
+      if (buttons.length) return [el, ...buttons];
+    }
+    return [el];
+  }
+  const submit = [...form.elements].find(
     (e) => (e instanceof HTMLButtonElement || e instanceof HTMLInputElement) && ['submit', 'image'].includes(e.type),
   );
   return submit ? [el, submit] : [el];
@@ -108,6 +119,21 @@ export function enterTargets(el: Element): Element[] {
 export function checkStopLine(what: string, els: Element[]) {
   const reason = stopReason(els);
   if (reason) throw new StopLine(`Stop-line: ${what} (${reason}). Needs your ok.`);
+}
+
+// Every stop-line of one command, asked as one: "type into [3] … (personal data); then Enter … (word "subscribe")".
+// Allow once re-runs the whole command, so the ask must name each check it waives, never just the first one thrown.
+export function checkStopLines(checks: (() => void)[]) {
+  const found: string[] = [];
+  for (const check of checks) {
+    try {
+      check();
+    } catch (err) {
+      if (!(err instanceof StopLine)) throw err;
+      found.push(err.message.replace(/^Stop-line: /, '').replace(/\. Needs your ok\.$/, ''));
+    }
+  }
+  if (found.length) throw new StopLine(`Stop-line: ${found.join('; then ')}. Needs your ok.`);
 }
 
 // A stop-line as the panel's ask: a headline, then what it would do and why. "Stop-line:" and "Needs your ok." (in the

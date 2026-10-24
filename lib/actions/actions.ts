@@ -8,7 +8,7 @@ import { HandOver, StopLine } from '../messages.ts';
 import { chooseText, NO_REACTION, reaction, readText, textTargets } from '../page/page-text.ts';
 import { waitForQuiet } from '../tabs/settle.ts';
 import { checkPersonal } from '../safety/personal.ts';
-import { checkStopLine, clickTargets, enterTargets, stopWord } from '../safety/stop-lines.ts';
+import { checkStopLine, checkStopLines, clickTargets, enterTargets, stopWord } from '../safety/stop-lines.ts';
 import { browserKey, keyRefusal, keyStop, parseKey } from './keys.ts';
 import { sameLayout, toViewport, type Point } from './real-input.ts';
 
@@ -415,9 +415,11 @@ export async function typeText(n: number, text: string, enter: boolean, slow: bo
     throw new Error(`Element [${n}] is ${role(el)} ${JSON.stringify(name(el))}, not a text field`);
   }
   // Checked before typing, so a refused command leaves the page as it was. Clearing a field shares nothing. Secrets
-  // (above) and the Enter stop-line (below) still apply to it.
-  if (text && !allow) checkPersonal(el, `type into [${n}]`);
-  if (enter && !allow) checkStopLine(`Enter in ${JSON.stringify(name(el))}`, enterTargets(el));
+  // (above) and the Enter stop-line still apply to it. Both asked as one, so Allow once never waives an unseen submit.
+  if (!allow) checkStopLines([
+    () => { if (text) checkPersonal(el, `type into [${n}]`); },
+    () => { if (enter) checkStopLine(`Enter in ${JSON.stringify(name(el))}`, enterTargets(el)); },
+  ]);
   // F4b: the screen's text before typing, without the field's own text, to say afterwards how the page reacted.
   const screen = () => readText(false, el).split('\n');
   const before = enter ? [] : screen();

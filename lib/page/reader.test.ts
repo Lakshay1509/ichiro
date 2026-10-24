@@ -1,7 +1,7 @@
 // Checks scrollLine, sideRoom and sideLine (boxes that scroll sideways), urlName (unlabeled image links), cut
 // (shortened names), saysMore (calendar labels), ranges (panel and scroll box numbers) and classHint (unnamed icon
 // buttons). Run: npm test
-import { besideText, classHint, cut, ranges, saysMore, scrollLine, sideLine, sideRoom, suggests, urlName } from './reader.ts';
+import { besideText, classHint, cut, isSecret, ranges, saysMore, scrollLine, sideLine, sideRoom, suggests, urlName } from './reader.ts';
 
 // besideText: an unlabeled checkbox or radio is named by the text right beside it, up to the next control. Seen live
 // in 4 runs: boxes sharing a parent all got the parent's whole text ("… Yes No Clear") or nothing, and the model
@@ -137,3 +137,30 @@ const fields: [Record<string, string>, boolean][] = [
 for (const [a, want] of fields) {
   if (suggests(attrs(a)) !== want) throw new Error(`suggests(${JSON.stringify(a)}) should be ${want}`);
 }
+
+// isSecret: a revealed password ("show password" turns type=password into text) keeps its autocomplete token or its
+// name, so it stays secret: read prints •••, typing hands over, screenshots wait. Audit 2026-10-24, lead 5.
+class FakeInput {
+  type: string;
+  attrs: Record<string, string>;
+  constructor(type: string, attrs: Record<string, string>) { this.type = type; this.attrs = attrs; }
+  getAttribute(n: string) { return this.attrs[n] ?? null; }
+  get name() { return this.attrs.name ?? ''; }
+  get id() { return this.attrs.id ?? ''; }
+}
+(globalThis as { HTMLInputElement?: unknown }).HTMLInputElement = FakeInput;
+const secrets: [string, Record<string, string>, boolean][] = [
+  ['password', {}, true],
+  ['text', { autocomplete: 'current-password' }, true],
+  ['text', { autocomplete: 'new-password' }, true],
+  ['text', { name: 'password' }, true],
+  ['text', { id: 'user-passcode' }, true],
+  ['text', { autocomplete: 'cc-number' }, true],
+  ['text', { autocomplete: 'email', name: 'email' }, false],
+  ['text', { name: 'passport' }, false],
+];
+for (const [type, attrs, want] of secrets) {
+  if (isSecret(new FakeInput(type, attrs) as unknown as Element) !== want) throw new Error(`isSecret(type=${type} ${JSON.stringify(attrs)}) should be ${want}`);
+}
+// A show-password button isn't a field: its id doesn't make it secret (else every login page would stop all clicks).
+if (isSecret({ getAttribute: () => null, id: 'show-password' } as unknown as Element)) throw new Error('isSecret: a show-password button is not secret');
