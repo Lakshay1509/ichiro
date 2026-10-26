@@ -13,6 +13,22 @@ export function bridgeOff(reason: string | undefined, id: string): { text: strin
   return { text: `MCP bridge off: ${reason ?? 'the local helper stopped'}`, className: 'error' };
 }
 
+// /update: what you paste into your coding agent after an Ichiro update, so the local copy behind its MCP server (and the
+// helper Chrome starts from it) catches up. unpacked: Chrome loads the extension from that copy too, so it builds.
+// The restart is a reload, never /mcp on: that also trusts the current tab's site.
+export function updatePrompt(id: string, unpacked: boolean): string {
+  const steps = [
+    'Find the Ichiro folder: your "ichiro" MCP server runs node <that folder>/host/mcp.ts (in Claude Code: claude mcp get ichiro).',
+    "In it, run git pull --ff-only, then npm install. If the pull can't fast-forward, stop and tell me why: don't discard my changes.",
+    `If the pull changed host/install.ts or lib/bridge/host-install.ts, register the browser helper again: npm run host:install -- ${id}\n   If it refuses because it runs inside the Claude desktop app on Windows, ask me to run that one command in my own terminal.`,
+    unpacked
+      ? 'Run npm run build, then ask me to press the reload icon on the Ichiro card in chrome://extensions and open its side panel: that loads the new build and starts the updated helper.'
+      : 'Ask me to turn Ichiro off and back on in chrome://extensions and open its side panel: that starts the updated helper.',
+    'Tell me when it\'s done, and whether I need to restart you so the updated "browser" tool loads.',
+  ];
+  return `Update Ichiro on this computer: the local copy behind your "ichiro" MCP server.\n\n${steps.map((s, i) => `${i + 1}. ${s}`).join('\n')}`;
+}
+
 // Where each Chromium browser looks for native hosts, so /mcp on works in any of them, not only Chrome.
 // Windows registry (HKCU\Software\…): Chrome, Chromium, Edge, Brave, Vivaldi as KeePassXC's installer registers them; Opera,
 // Arc, Island, Prisma as Anthropic's Claude installer does. Edge also falls back to Chrome's key.

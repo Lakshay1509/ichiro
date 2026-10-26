@@ -112,7 +112,7 @@ if (lookShot('checkout or payment page').image || lookShot('checkout or payment 
 if (!isBridgeStart(run({ type: 'bridge' })) || isBridgeStart(run({ type: 'bridge', x: 1 })) || isBridgeStart(run({ type: 'ask' }))) fail('bridge start');
 
 // Commands: never the panel-only or key-spending ones, never tab (goal runs only) or search (leaves the Sites); read is in.
-for (const n of ['goal', 'model', 'help', 'clear', 'stop', 'overlay', 'mcp', 'tips', 'tab', 'search']) if (MCP_COMMANDS.includes(n)) fail(`MCP offers ${n}`);
+for (const n of ['goal', 'model', 'help', 'clear', 'stop', 'overlay', 'mcp', 'tips', 'tab', 'search', 'update']) if (MCP_COMMANDS.includes(n)) fail(`MCP offers ${n}`);
 if (!MCP_COMMANDS.includes('read') || !MCP_COMMANDS.includes('click') || !MCP_COMMANDS.includes('look') || !MCP_COMMANDS.includes('tip')) fail('MCP lacks read, click, look or tip');
 // RP1 2.5: repeat works over the bridge too, as a batch's last command (it waits on the user's ok, then runs many).
 if (!MCP_COMMANDS.includes('repeat')) fail('MCP lacks repeat');

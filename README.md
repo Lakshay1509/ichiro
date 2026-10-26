@@ -143,6 +143,7 @@ You control Ichiro from the side panel with slash commands:
 - `/mcp on` and `/mcp off` turn the bridge on or off. `/mcp on` also adds the current site to your allowed sites.
 - `/sites` lists allowed sites, and `/tips` lists saved tips. Both have Delete buttons.
 - `/always-on on|off` keeps the bridge running with the panel closed.
+- `/update` gives you a prompt to paste into your coding agent after Ichiro updates. It brings your local copy up to date.
 - `/auto on|off` skips the asks described under [Safety](#safety).
 - `/overlay on|off` draws element numbers on every page the agent reads.
 - `/stop` stops the agent's running command, and `/help` lists everything.

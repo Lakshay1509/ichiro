@@ -5,6 +5,7 @@ import { apply, type FromPanel, type Item, type Log, type LogOp } from '@/lib/pa
 import { stepStatus } from '@/lib/panel/readable-log';
 import { deleteSite, deleteTip } from '@/lib/memory/site-store';
 import { MAX_TIPS } from '@/lib/memory/site-tips';
+import { CopyPrompt } from './onboarding';
 
 const out = document.querySelector<HTMLElement>('#out')!;
 let log: Log = { items: [], open: null };
@@ -102,6 +103,17 @@ function Entry({ item }: { item: Item }) {
     );
   }
   if (item.kind === 'sites') return <Sites sites={item.sites} />;
+  // /update: Copy isn't autofocused, so focus stays in the command box.
+  if (item.kind === 'prompt') {
+    return (
+      <div class="tips copy">
+        <div class="tips-head">
+          <span class="tips-site">Paste this into your coding agent</span>
+        </div>
+        <CopyPrompt text={item.text} />
+      </div>
+    );
+  }
   return <Tips site={item.site} tips={item.tips} />;
 }
 

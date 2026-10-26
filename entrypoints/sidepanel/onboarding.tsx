@@ -21,21 +21,33 @@ export const connectPrompt = (id: string) => `Connect yourself to my browser thr
 // Draws the welcome into el; done runs on "I've connected".
 export const welcome = (el: HTMLElement, done: () => void) => render(<Welcome done={done} />, el);
 
-function Welcome({ done }: { done: () => void }) {
-  const [step, setStep] = useState<1 | 2>(1);
+// A prompt you paste into your coding agent, with Copy: the welcome's step 2 and /update's box in the log.
+export function CopyPrompt({ text, autoFocus }: { text: string; autoFocus?: boolean }) {
   const [copied, setCopied] = useState('');
   const box = useRef<HTMLTextAreaElement>(null);
-  const prompt = connectPrompt(browser.runtime.id);
   // A click is the user gesture the clipboard needs. Refused anyway: the text is selected for your own Ctrl+C.
   // Source: https://developer.mozilla.org/en-US/docs/Web/API/Clipboard/writeText
   const copy = () =>
-    navigator.clipboard.writeText(prompt).then(
+    navigator.clipboard.writeText(text).then(
       () => setCopied('Copied'),
       () => {
         box.current?.select();
         setCopied('Selected: press Ctrl+C (Cmd+C on a Mac)');
       },
     );
+  return (
+    <>
+      <textarea ref={box} class="prompt" readOnly rows={11} aria-label="Prompt for your agent" value={text} />
+      {/* aria-live: a screen reader says "Copied" (or the Ctrl+C hint) when the label changes. */}
+      <button type="button" autoFocus={autoFocus} aria-live="polite" onClick={copy}>
+        {copied || 'Copy prompt'}
+      </button>
+    </>
+  );
+}
+
+function Welcome({ done }: { done: () => void }) {
+  const [step, setStep] = useState<1 | 2>(1);
 
   // key: each step mounts fresh, so step 2's autoFocus lands on Copy.
   if (step === 1) {
@@ -72,11 +84,7 @@ function Welcome({ done }: { done: () => void }) {
       <p class="welcome-step">Step 2 of 2</p>
       <h1 id="connect-title">Connect your agent</h1>
       <p>Copy this prompt and paste it into your coding agent (Claude Code, Codex…). It sets up the connection.</p>
-      <textarea ref={box} class="prompt" readOnly rows={11} aria-label="Prompt for your agent" value={prompt} />
-      {/* aria-live: a screen reader says "Copied" (or the Ctrl+C hint) when the label changes. */}
-      <button type="button" autoFocus aria-live="polite" onClick={copy}>
-        {copied || 'Copy prompt'}
-      </button>
+      <CopyPrompt text={connectPrompt(browser.runtime.id)} autoFocus />
       <button type="button" class="cta" onClick={done}>
         I've connected
       </button>

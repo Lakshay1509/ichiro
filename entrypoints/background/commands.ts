@@ -17,6 +17,7 @@ import { searchUrl } from '@/lib/tabs/search';
 import { sendToTab } from '@/lib/tabs/send-to-tab';
 import { settleAfter } from '@/lib/tabs/settle';
 import { listSites } from '@/lib/memory/site-store';
+import { updatePrompt } from '@/lib/bridge/host-install';
 import { askResume, closeAsk, nextCommand, runAndPrint } from './asks';
 import { agentDownloads, agentPage, bridge, endAgentTurn, forAgent, runEnded, running, save, skipRead, startBridge, stopBridge } from './bridge';
 import { checkText, realKey, realMouse, realPoints, typeHere, typingFrame } from './input';
@@ -323,6 +324,16 @@ export const commands: Record<string, Command> = {
       if (bridge) bridge.sites = left;
       await save({ mcpSites: left });
       return `Removed ${site}. The agent has to ask you before using it again.`;
+    },
+  },
+  // Not in MCP_COMMANDS: a prompt only you paste into your agent, so its local copy of Ichiro catches up after an update.
+  update: {
+    help: 'update — a prompt to paste into your coding agent after Ichiro updates: it updates the local copy behind its MCP server (and builds it, if you loaded Ichiro unpacked)',
+    run: async () => {
+      // installType "development": loaded unpacked. getSelf needs no "management" permission.
+      // Source: https://developer.chrome.com/docs/extensions/reference/api/management#method-getSelf
+      const { installType } = await browser.management.getSelf();
+      show({ kind: 'prompt', text: updatePrompt(browser.runtime.id, installType === 'development') });
     },
   },
   // Not in MCP_COMMANDS: only you can turn your asks off. Never saved, so it can't stay on by accident.

@@ -19,6 +19,7 @@ export type Item =
   | { id: number; kind: 'ask'; buttons: string[] }
   | { id: number; kind: 'tips'; site: string; tips: string[] }
   | { id: number; kind: 'sites'; sites: string[] } // /sites: the bridge's Sites, each with a Delete button
+  | { id: number; kind: 'prompt'; text: string } // /update: a prompt to paste into your coding agent, with Copy
   | Step;
 
 export type Log = { items: Item[]; open: number | null }; // open: the step new items go into
