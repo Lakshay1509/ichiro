@@ -1,11 +1,11 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="art/logo/svg/ichiro-horizontal-white.svg">
-    <img src="art/logo/svg/ichiro-horizontal.svg" alt="Ichiro" width="300">
+    <img src="art/logo/svg/ichiro-horizontal.svg" alt="Ichiro logo" width="300">
   </picture>
 </p>
 
-<p align="center">Your coding agent's hands and eyes in Chrome.</p>
+<h1 align="center">Open source browser MCP for Claude Code, Codex and any coding agent</h1>
 
 ## Install
 
@@ -24,9 +24,15 @@ You need Chrome 153+ and Node.js 22.18+ (see [Requirements](#requirements)).
 
 ## What it does
 
-Ichiro lets a coding agent such as Claude Code or Codex read web pages and act on them in your own browser. It is a Chrome extension plus a small local MCP server that gives the agent one tool, `browser`.
+Ichiro is a free, open source Chrome extension and MCP server. It lets a coding agent such as Claude Code or Codex read web pages and act on them in your own browser, logged in as you. The agent gets one MCP tool, `browser`, and any agent that runs stdio MCP servers can use it.
 
-The extension has no AI and needs no API key. Your agent decides what to do. Ichiro carries out each command, shows it in the side panel, and asks you before anything risky: paying, sending, signing in, or opening a site you haven't allowed.
+The extension has no AI and needs no API key or account. Your agent decides what to do. Ichiro carries out each command, shows it in the side panel, and asks you before anything risky: paying, sending, signing in, or opening a site you haven't allowed.
+
+## An open source alternative to Claude in Chrome
+
+Claude in Chrome and the Codex Chrome extension are the official ways to give those agents a browser. Claude in Chrome needs a paid Claude plan, and each extension is built for its own maker's agents. Ichiro is free under the MIT license and works with any MCP agent, so you can change agents and keep the same browser setup.
+
+Playwright MCP and Chrome DevTools MCP are open source too, and they suit testing and debugging your own app. Ichiro is built for everyday tasks on real sites. It runs in the Chrome you already use and asks you before the agent opens a new site, pays or sends a message. Sign-ins stay with you.
 
 ## Features
 
@@ -91,7 +97,13 @@ The welcome gives you a prompt that has your agent do this. To do it yourself in
    claude mcp add --transport stdio --scope user ichiro -- node /path/to/ichiro/host/mcp.ts
    ```
 
-   Other agents: add a stdio server that runs `node /path/to/ichiro/host/mcp.ts`.
+   For Codex:
+
+   ```bash
+   codex mcp add ichiro -- node /path/to/ichiro/host/mcp.ts
+   ```
+
+   Other agents, such as Cursor, VS Code or Gemini CLI: add a stdio server that runs `node /path/to/ichiro/host/mcp.ts`.
 
 4. In the side panel, agree to what your agent will see, then press **I've connected**. Then ask your agent to do something in the browser.
 
@@ -142,6 +154,32 @@ You control Ichiro from the side panel with slash commands:
 **The agent drives the wrong browser.** With Ichiro in more than one browser, the agent drives the one that ran `/mcp on` last.
 
 **The bridge stopped working after you moved the folder.** An unpacked extension's ID comes from its folder path, so loading it from a new place gives it a new ID. Run `npm run host:install -- <new-id>` again.
+
+## FAQ
+
+### Is there an open source alternative to Claude in Chrome?
+
+Yes. Ichiro is MIT-licensed and works with Claude Code, Codex and other MCP agents, so it isn't tied to one assistant or plan.
+
+### How do I let Claude Code control my browser?
+
+Follow [Install](#install). The welcome gives you a prompt that has Claude Code connect itself, or you can add the server yourself with `claude mcp add` (see [Connect by hand](#connect-by-hand)). Then ask Claude Code to do something on a web page. It calls the `browser` tool on its own.
+
+### Does it work with Codex, Cursor or Gemini CLI?
+
+Codex works with `codex mcp add`. Any other agent that runs stdio MCP servers should work with the same `node host/mcp.ts` command.
+
+### Is Ichiro a Playwright MCP alternative?
+
+For tasks in your own browser with your logins, yes. For end-to-end tests of your app in a clean browser, Playwright MCP is the better fit.
+
+### Does it work in Edge, Brave or other Chromium browsers?
+
+Yes, the installer registers them (see [Requirements](#requirements)). Most testing so far has been with Chrome and Edge on Windows.
+
+### Where does my page data go?
+
+Only to the coding agent on your computer. Ichiro has no server and no analytics. Your agent may send what it reads to its AI provider, under that provider's policy.
 
 ## Development
 
