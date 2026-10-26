@@ -4,6 +4,9 @@ What changed in each Ichiro release, newest first. Each version is one git tag, 
 
 ## Unreleased
 
+### Changed
+- The privacy policy now says that page content can include personal details, and that Ichiro counts the agent tab's open network requests and your tab switches on your computer only, never passing them on.
+
 ## 0.2.1 · 2026-10-26
 
 ### Changed

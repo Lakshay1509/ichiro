@@ -1,6 +1,6 @@
 # Ichiro privacy policy
 
-Effective 24 October 2026.
+Effective 26 October 2026.
 
 **In short:** Ichiro has no server and sends nothing to us. It passes what your coding agent asks for to that agent, on your own computer, and only after you agree in the welcome screen.
 
@@ -12,13 +12,18 @@ Ichiro is a Chrome extension that lets a coding agent you run (such as Claude Co
 
 When your agent sends a command, Ichiro reads and passes back:
 
-- **Page content:** text, links, buttons and form fields of the page the agent works on, including frames inside it. Field values are included, except in fields Ichiro recognizes as password, card or one-time-code fields, which are masked. The agent is never allowed to type into those fields.
+- **Page content:** text, links, buttons and form fields of the page the agent works on, including frames inside it. Field values are included, except in fields Ichiro recognizes as password, card or one-time-code fields, which are masked. The agent is never allowed to type into those fields. If a page shows personal details, such as names, email addresses or messages, they are part of its content.
 - **Page addresses and titles** of the tabs the agent uses.
 - **Screenshots**, only when the agent asks for one. Ichiro refuses one while a recognized password or card field is visible.
 - **Files you allow:** during an agent's turn, Ichiro pauses each new download and asks you first. The agent can read the text of a PDF or text file only after you allow that download, and only if you turned on Chrome's "Allow access to file URLs" switch for Ichiro.
 - **What the agent types or clicks:** the text it enters into page fields, and the results of its actions.
 
 Ichiro reads pages only when your agent asks, and only on sites you allowed. A new site asks you first.
+
+Ichiro also uses two kinds of activity on your computer only, and never passes them on:
+
+- **Network requests** of the agent's tab: while a command runs, Ichiro counts the requests the page still has open, so it can wait for the page to finish loading. It doesn't keep their addresses or contents.
+- **Tab switches:** Ichiro counts them so a screenshot never shows a tab you switched to.
 
 ## Where the data goes
 
