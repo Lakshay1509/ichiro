@@ -12,3 +12,4 @@ bridge.json
 # Agent skills: only skills-lock.json is tracked. Restore them with: npx skills experimental_install
 .agents/skills/
 .claude/skills/
+*brag-output*
