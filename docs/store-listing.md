@@ -2,7 +2,7 @@
 
 Text for each tab of the developer dashboard (chrome.google.com/webstore/devconsole). Fill it by hand: Chrome lets no extension, Ichiro included, run on Web Store pages.
 
-Package: `.output/ichiro-0.1.0-chrome.zip` (built 2026-10-26 from c4e1bd2).
+Package: the zip attached to the latest GitHub release, never a fresh build (CLAUDE.md: Versions and releases). Now `ichiro-0.2.0-chrome.zip`.
 
 ## Package tab
 

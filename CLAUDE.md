@@ -20,6 +20,23 @@ A Chrome extension that lets a coding agent (Claude Code, Codex…) read any web
 - MCP (any coding agent drives the browser): turns on when you finish the welcome (you agree to what the agent gets, then "I've connected"); a new install has always-on on (`INSTALL_DEFAULTS`, `lib/memory/panel-memory.ts`); else side panel `/mcp on` (a new site asks you: Add site / No). Then register once: `claude mcp add --transport stdio --scope user ichiro -- node <repo>/host/mcp.ts`. Path: agent ⇄ `host/mcp.ts` ⇄ random pipe + token (`bridge.json` next to the launcher) ⇄ `host/host.ts` ⇄ panel. Rules: `lib/bridge/bridge.ts`.
 - Code lives in `entrypoints/` (each file there becomes part of the extension). Shared code lives in `lib/`, one folder per area (map in `README.md`); a new file goes in the folder of the area it serves. Manifest settings live in `wxt.config.ts`.
 
+## Versions and releases
+
+**One version = one tag = one GitHub release = one zip.** The Chrome Web Store gets that same zip file, never a rebuild: two builds of one commit can differ byte for byte. Since v0.2.0.
+
+- **Version** lives only in `package.json`; WXT copies it into the manifest. Semver: fix → patch (0.2.1), new feature → minor (0.3.0), a change that makes people redo their setup → major.
+- **The store refuses a version it already has**, so never reuse or lower one.
+- **CHANGELOG.md:** every user-facing change adds a line under `## Unreleased`, in the same commit, in plain words. If it changes `host/` or the bridge, say so: store installs update the extension only, the local copy needs `/update`.
+
+To release (only when the developer asks; name the step, e.g. "Release · step 3"):
+1. On `main`, clean tree, level with GitHub. `npm run typecheck` and `npm test` pass.
+2. `npm version <x.y.z> --no-git-tag-version` (sets `package.json` and `package-lock.json`).
+3. CHANGELOG.md: rename `## Unreleased` to `## <x.y.z> · <YYYY-MM-DD>`, with a fresh empty `## Unreleased` above it.
+4. Commit `chore: release v<x.y.z>`, then `git tag -a v<x.y.z> -m "Ichiro v<x.y.z>"`.
+5. `npm run zip` → `.output/ichiro-<x.y.z>-chrome.zip`. Take its SHA-256 (`Get-FileHash` on Windows, `shasum -a 256` elsewhere).
+6. `git push origin main v<x.y.z>`, then `gh release create v<x.y.z> <zip> --title "Ichiro v<x.y.z>" --notes-file <notes>`. Notes: the changelog entry, how to update, Install with this tag, the SHA-256.
+7. The developer uploads **that same zip** in the Web Store dashboard (Package → Upload new package). Its SHA-256 must match the release's. Chrome lets no extension, Ichiro included, run on Web Store pages, so this step is by hand.
+
 ## Who you're talking to
 
 Every explanation (chat replies, code comments, docs) must be easy to follow:
