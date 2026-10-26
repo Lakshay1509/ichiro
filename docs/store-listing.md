@@ -10,6 +10,13 @@ Upload the zip above. Nothing else to fill.
 
 ## Store listing tab
 
+**Title and summary** come from the zip's manifest (`wxt.config.ts`), not from this form:
+
+- Title: `Ichiro: Open Source Browser MCP for Coding Agents` (49 of 75 characters)
+- Summary: `Open source browser MCP for Claude Code, Codex and any coding agent. It works in your own Chrome and asks before risky steps.` (125 of 132)
+
+To change them, edit the manifest and upload a new version's zip.
+
 **Description** (plain text, paste as is):
 
 ```

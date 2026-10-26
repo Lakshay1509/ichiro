@@ -63,7 +63,7 @@ function Welcome({ done }: { done: () => void }) {
           <img src="/blink.svg" alt="" width={104} height={100} />
         </picture>
         <h1 id="welcome-title">Welcome to Ichiro</h1>
-        <p>Your coding agent's hands and eyes in Chrome.</p>
+        <p>Open source browser MCP for Claude Code, Codex and any coding agent.</p>
         <section class="shares" aria-labelledby="shares-title">
           <h2 id="shares-title">Your agent will see</h2>
           <ul>

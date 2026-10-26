@@ -3,8 +3,10 @@ import { defineConfig } from 'wxt';
 
 export default defineConfig({
   manifest: {
-    name: 'Ichiro',
-    description: "Your coding agent's hands and eyes in Chrome",
+    // name and description are the Web Store title and summary (75 and 132 characters max); keep them in step with
+    // README.md's heading and the welcome. Source: https://developer.chrome.com/docs/extensions/reference/manifest/name
+    name: 'Ichiro: Open Source Browser MCP for Coding Agents',
+    description: 'Open source browser MCP for Claude Code, Codex and any coding agent. It works in your own Chrome and asks before risky steps.',
     // Extension icons: WXT adds public/icon-16|32|48|128.png on its own (art/logo/icons). Source: https://wxt.dev/guide/essentials/config/manifest
     // Toolbar icon. Chrome needs this key so clicking the icon can open the side panel.
     // Source: https://developer.chrome.com/docs/extensions/reference/api/sidePanel

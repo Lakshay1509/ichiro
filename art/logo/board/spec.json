@@ -1,6 +1,6 @@
 {
   "brand": "Ichiro",
-  "tagline": "Your coding agent's hands and eyes in Chrome",
+  "tagline": "Open source browser MCP for Claude Code, Codex and any coding agent",
   "brief": "A Chrome extension that lets a coding agent (Claude Code, Codex) read any web page and act on it. It has no AI of its own: the agent is the mind. Named after Ichiro Kato, whose WABOT-1 (1973) had hands that gripped and eyes that measured distance.",
   "adjectives": ["calm", "precise", "trustworthy", "human"],
   "criteria": "Success: reads at 16 px in the Chrome toolbar, works in one colour, stays clear of sparkles, robot heads and cursor arrows, and fits the side panel's calm off-white and one blue.",

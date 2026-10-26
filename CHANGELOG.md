@@ -5,6 +5,7 @@ What changed in each Ichiro release, newest first. Each version is one git tag, 
 ## Unreleased
 
 ### Changed
+- The extension is now called "Ichiro: Open Source Browser MCP for Coding Agents" in Chrome and the Web Store, with the summary "Open source browser MCP for Claude Code, Codex and any coding agent. It works in your own Chrome and asks before risky steps." The welcome uses the same line as the README.
 - `/update` and the welcome's connect prompt put your local copy (the MCP server and the browser helper) on the release tag of the extension you have, not the newest code on `main`, so the two always match. `/update` now stops before moving any changes or commits of your own, and no longer fails on a copy cloned at a tag.
 - `/update` no longer rebuilds an unpacked Ichiro. To update one, unzip the new release's zip over the folder you loaded, reload it, then run `/update`.
 
