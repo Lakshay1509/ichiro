@@ -13,20 +13,19 @@ export function bridgeOff(reason: string | undefined, id: string): { text: strin
   return { text: `MCP bridge off: ${reason ?? 'the local helper stopped'}`, className: 'error' };
 }
 
-// /update: what you paste into your coding agent after an Ichiro update, so the local copy behind its MCP server (and the
-// helper Chrome starts from it) catches up. unpacked: Chrome loads the extension from that copy too, so it builds.
-// The restart is a reload, never /mcp on: that also trusts the current tab's site.
-export function updatePrompt(id: string, unpacked: boolean): string {
+// /update: what you paste into your coding agent after Ichiro updates. It moves the local copy behind its MCP server (and
+// the helper Chrome starts from it) to the release tag of the extension you have, so the two always match.
+// The restart is off and on, never /mcp on: that also trusts the current tab's site.
+export function updatePrompt(id: string, version: string): string {
   const steps = [
     'Find the Ichiro folder: your "ichiro" MCP server runs node <that folder>/host/mcp.ts (in Claude Code: claude mcp get ichiro).',
-    "In it, run git pull --ff-only, then npm install. If the pull can't fast-forward, stop and tell me why: don't discard my changes.",
-    `If the pull changed host/install.ts or lib/bridge/host-install.ts, register the browser helper again: npm run host:install -- ${id}\n   If it refuses because it runs inside the Claude desktop app on Windows, ask me to run that one command in my own terminal.`,
-    unpacked
-      ? 'Run npm run build, then ask me to press the reload icon on the Ichiro card in chrome://extensions and open its side panel: that loads the new build and starts the updated helper.'
-      : 'Ask me to turn Ichiro off and back on in chrome://extensions and open its side panel: that starts the updated helper.',
+    "In it, if git status shows changes, or git log --branches --not --remotes shows commits that aren't on GitHub, stop and tell me: don't move or discard my work.",
+    `Run git fetch --tags, then git checkout v${version}, then npm install. If there's no tag v${version}, stop and tell me.`,
+    `If that changed host/install.ts or lib/bridge/host-install.ts, register the browser helper again: npm run host:install -- ${id}\n   If it refuses because it runs inside the Claude desktop app on Windows, ask me to run that one command in my own terminal.`,
+    'Ask me to turn Ichiro off and back on in chrome://extensions and open its side panel: that starts the updated helper.',
     'Tell me when it\'s done, and whether I need to restart you so the updated "browser" tool loads.',
   ];
-  return `Update Ichiro on this computer: the local copy behind your "ichiro" MCP server.\n\n${steps.map((s, i) => `${i + 1}. ${s}`).join('\n')}`;
+  return `Make the local copy behind your "ichiro" MCP server match my Ichiro extension, version ${version}.\n\n${steps.map((s, i) => `${i + 1}. ${s}`).join('\n')}`;
 }
 
 // Where each Chromium browser looks for native hosts, so /mcp on works in any of them, not only Chrome.

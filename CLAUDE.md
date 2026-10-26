@@ -26,6 +26,7 @@ A Chrome extension that lets a coding agent (Claude Code, Codex…) read any web
 
 - **Version** lives only in `package.json`; WXT copies it into the manifest. Semver: fix → patch (0.2.1), new feature → minor (0.3.0), a change that makes people redo their setup → major.
 - **The store refuses a version it already has**, so never reuse or lower one.
+- **The local copy follows the tag:** `/update` and the welcome's connect prompt check out `v<installed version>` (`lib/bridge/host-install.ts`, `entrypoints/sidepanel/onboarding.tsx`). So the tag is on GitHub before the store gets the zip, and is never moved or deleted.
 - **CHANGELOG.md:** every user-facing change adds a line under `## Unreleased`, in the same commit, in plain words. If it changes `host/` or the bridge, say so: store installs update the extension only, the local copy needs `/update`.
 
 To release (only when the developer asks; name the step, e.g. "Release · step 3"):
@@ -34,7 +35,7 @@ To release (only when the developer asks; name the step, e.g. "Release · step 3
 3. CHANGELOG.md: rename `## Unreleased` to `## <x.y.z> · <YYYY-MM-DD>`, with a fresh empty `## Unreleased` above it.
 4. Commit `chore: release v<x.y.z>`, then `git tag -a v<x.y.z> -m "Ichiro v<x.y.z>"`.
 5. `npm run zip` → `.output/ichiro-<x.y.z>-chrome.zip`. Take its SHA-256 (`Get-FileHash` on Windows, `shasum -a 256` elsewhere).
-6. `git push origin main v<x.y.z>`, then `gh release create v<x.y.z> <zip> --title "Ichiro v<x.y.z>" --notes-file <notes>`. Notes: the changelog entry, how to update, Install with this tag, the SHA-256.
+6. `git push origin main v<x.y.z>`, then `gh release create v<x.y.z> <zip> --title "Ichiro v<x.y.z>" --notes-file <notes>`. Notes: the changelog entry, how to update (store: Chrome updates it, then `/update`; unpacked: unzip over the loaded folder, reload, then `/update`), Install with `git clone --branch v<x.y.z>`, the SHA-256.
 7. The developer uploads **that same zip** in the Web Store dashboard (Package → Upload new package). Its SHA-256 must match the release's. Chrome lets no extension, Ichiro included, run on Web Store pages, so this step is by hand.
 
 ## Who you're talking to

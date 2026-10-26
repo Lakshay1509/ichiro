@@ -8,10 +8,12 @@ import { useRef, useState } from 'preact/hooks';
 const REPO = 'https://github.com/Lakshay1509/ichiro';
 const PRIVACY = `${REPO}/blob/main/PRIVACY.md`;
 
-// What you paste into the agent. id: this extension's, the one the local helper must be registered for.
-export const connectPrompt = (id: string) => `Connect yourself to my browser through Ichiro, a Chrome extension with an MCP server.
+// What you paste into the agent. id: this extension's, the one the local helper must be registered for. version: its
+// release, so the local copy matches the extension (/update moves it on later).
+export const connectPrompt = (id: string, version: string) => `Connect yourself to my browser through Ichiro, a Chrome extension with an MCP server.
 
-1. Clone ${REPO} and run npm install in it.
+1. Clone the release that matches my extension, then run npm install in it: git clone --branch v${version} ${REPO}
+   If there's no tag v${version}, stop and tell me.
 2. Register the browser helper for my extension: npm run host:install -- ${id}
    If it refuses because it runs inside the Claude desktop app on Windows, ask me to run that one command in my own terminal.
 3. Add an MCP server named "ichiro" (stdio) that runs: node <the clone's folder>/host/mcp.ts
@@ -48,6 +50,8 @@ export function CopyPrompt({ text, autoFocus }: { text: string; autoFocus?: bool
 
 function Welcome({ done }: { done: () => void }) {
   const [step, setStep] = useState<1 | 2>(1);
+  // version_name is package.json's exact version, the tag's name. Source: https://wxt.dev/guide/essentials/config/manifest
+  const { version, version_name } = browser.runtime.getManifest();
 
   // key: each step mounts fresh, so step 2's autoFocus lands on Copy.
   if (step === 1) {
@@ -84,7 +88,7 @@ function Welcome({ done }: { done: () => void }) {
       <p class="welcome-step">Step 2 of 2</p>
       <h1 id="connect-title">Connect your agent</h1>
       <p>Copy this prompt and paste it into your coding agent (Claude Code, Codex…). It sets up the connection.</p>
-      <CopyPrompt text={connectPrompt(browser.runtime.id)} autoFocus />
+      <CopyPrompt text={connectPrompt(browser.runtime.id, version_name ?? version)} autoFocus />
       <button type="button" class="cta" onClick={done}>
         I've connected
       </button>

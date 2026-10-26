@@ -63,10 +63,8 @@ const crash = bridgeOff('Native host has exited.', ID);
 if (crash.className !== 'error' || crash.text !== 'MCP bridge off: Native host has exited.') fail(`crash: ${JSON.stringify(crash)}`);
 if (bridgeOff(undefined, ID).text !== 'MCP bridge off: the local helper stopped') fail('no reason');
 
-// /update: this id, a pull that never discards your changes, a build only when loaded unpacked, and a reload to start
-// the updated helper, never /mcp (its "on" trusts the current tab's site).
-const store = updatePrompt(ID, false);
-const dev = updatePrompt(ID, true);
-if (!store.includes('git pull --ff-only') || !store.includes(`npm run host:install -- ${ID}\n`) || store.includes('npm run build') || !store.includes('turn Ichiro off and back on')) fail(`update (store): ${store}`);
-if (!dev.includes('npm run build') || !dev.includes('reload icon')) fail(`update (unpacked): ${dev}`);
-if ([store, dev].some((p) => /\/mcp (on|off)/.test(p))) fail('update prompt sends /mcp on|off');
+// /update: the installed version's tag (never main), your own work left alone, this id, and off and on to start the
+// updated helper, never /mcp (its "on" trusts the current tab's site).
+const up = updatePrompt(ID, '1.2.3');
+if (!up.includes('git checkout v1.2.3') || !up.includes("don't move or discard my work") || !up.includes(`npm run host:install -- ${ID}\n`) || !up.includes('turn Ichiro off and back on')) fail(`update: ${up}`);
+if (/git pull|\/mcp (on|off)/.test(up)) fail(`update pulls main or sends /mcp: ${up}`);

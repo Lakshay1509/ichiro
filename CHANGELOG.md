@@ -4,6 +4,10 @@ What changed in each Ichiro release, newest first. Each version is one git tag, 
 
 ## Unreleased
 
+### Changed
+- `/update` and the welcome's connect prompt put your local copy (the MCP server and the browser helper) on the release tag of the extension you have, not the newest code on `main`, so the two always match. `/update` now stops before moving any changes or commits of your own, and no longer fails on a copy cloned at a tag.
+- `/update` no longer rebuilds an unpacked Ichiro. To update one, unzip the new release's zip over the folder you loaded, reload it, then run `/update`.
+
 ## 0.2.0 · 2026-10-26
 
 ### Added

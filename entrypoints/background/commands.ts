@@ -326,14 +326,14 @@ export const commands: Record<string, Command> = {
       return `Removed ${site}. The agent has to ask you before using it again.`;
     },
   },
-  // Not in MCP_COMMANDS: a prompt only you paste into your agent, so its local copy of Ichiro catches up after an update.
+  // Not in MCP_COMMANDS: a prompt only you paste into your agent, so its local copy of Ichiro matches this version.
   update: {
-    help: 'update — a prompt to paste into your coding agent after Ichiro updates: it updates the local copy behind its MCP server (and builds it, if you loaded Ichiro unpacked)',
-    run: async () => {
-      // installType "development": loaded unpacked. getSelf needs no "management" permission.
-      // Source: https://developer.chrome.com/docs/extensions/reference/api/management#method-getSelf
-      const { installType } = await browser.management.getSelf();
-      show({ kind: 'prompt', text: updatePrompt(browser.runtime.id, installType === 'development') });
+    help: "update — a prompt to paste into your coding agent after Ichiro updates: it moves the local copy behind its MCP server to this version's release. Not for a copy you develop Ichiro in",
+    run: () => {
+      // version_name is package.json's exact version, the tag's name (version drops a pre-release suffix).
+      // Source: https://wxt.dev/guide/essentials/config/manifest
+      const { version, version_name } = browser.runtime.getManifest();
+      show({ kind: 'prompt', text: updatePrompt(browser.runtime.id, version_name ?? version) });
     },
   },
   // Not in MCP_COMMANDS: only you can turn your asks off. Never saved, so it can't stay on by accident.
