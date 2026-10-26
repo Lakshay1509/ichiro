@@ -56,7 +56,7 @@ for (const href of ['https://alice.httpbin.org/', 'https://www.httpbin.org/']) i
 if (checkGoto('https://github.com/search?q=browser automation&type=repositories', sites) !== 'https://github.com/search?q=browser%20automation&type=repositories') fail('goto ok');
 if (checkGoto('https://www.github.com/x', sites) !== 'https://www.github.com/x') fail('goto www');
 if (checkGoto('https://gist.github.com/x', sites) !== 'https://gist.github.com/x') fail('goto subdomain');
-for (const url of [undefined, '', 'github.com', 'http://github.com/', 'https://evil.example/?d=secret', 'https://github.com@evil.example/', 'https://u:p@github.com/', 'javascript:alert(1)', 'https://github.io/']) {
+for (const url of [undefined, '', 'github.com', 'http://github.com/', 'https://evil.example/?d=secret', 'https://github.com@evil.example/', 'https://u:p@github.com/', 'javascript:alert(1)', 'https://github.io/', 'http://localhost:3000/']) {
   throws(() => checkGoto(url, sites), `goto ${JSON.stringify(url)}`);
 }
 
@@ -107,3 +107,34 @@ if (frameAsk(['about:blank', 'https://ads.evil.example/']) !== 'evil.example') f
 if (frameAsk(['about:srcdoc']) !== null) fail('a srcdoc frame of the top page asks nothing');
 if (frameAsk(['blob:https://evil.example/1f2e']) !== 'evil.example') fail("a blob frame is its creator's site");
 throws(() => frameSiteToAsk(['http://192.168.0.1/'], shopOnly), 'a frame on an IP address (no site to add)');
+
+// #7: a dev server on this computer. goto takes http on localhost, 127.0.0.1 and [::1] only; each port is its own
+// site (another app), asked once like any new site, home page first.
+const dev = ['github.com', 'localhost:3000'];
+for (const [url, want] of [['http://localhost:3000/api?x=1', 'http://localhost:3000/api?x=1'], ['https://localhost:3000/', 'https://localhost:3000/'], ['http://LOCALHOST:3000/', 'http://localhost:3000/']] as const) {
+  site(checkGoto(url, dev), want, `goto ${url}`);
+}
+for (const url of ['http://localhost:5173/', 'http://127.0.0.1:3000/', 'http://localhost/', 'http://localhost.evil.example:3000/', 'http://github.com/', 'http://192.168.0.1:3000/', 'http://u:p@localhost:3000/', 'ftp://localhost:3000/']) {
+  throws(() => checkGoto(url, dev), `goto ${url} off the Sites or not http(s) on loopback`);
+}
+// The same host, port and https default (443) all count; a different port or loopback host doesn't.
+if (!onSites('http://localhost:3000/x', dev) || onSites('http://localhost:3001/', dev) || onSites('http://127.0.0.1:3000/', dev)) fail('onSites by port');
+if (!onSites('http://127.0.0.1/', ['127.0.0.1:80']) || !onSites('https://[::1]/', ['[::1]:443']) || onSites('http://[::1]/', ['[::1]:443'])) fail('onSites default ports');
+site(siteOn('http://localhost:3000/app', dev), 'localhost:3000', 'a loopback page gets its own tips');
+site(siteToOpen('http://localhost:5173/', dev), 'localhost:5173', 'goto a new loopback port asks for it');
+site(siteToOpen('http://127.1:8080', dev), '127.0.0.1:8080', 'URL rewrites 127.1');
+site(siteToOpen('http://[0:0:0:0:0:0:0:1]/', dev), '[::1]:80', 'URL rewrites IPv6 loopback; http defaults to 80');
+site(siteToOpen('https://localhost/', dev), 'localhost:443', 'https defaults to 443');
+for (const url of ['http://localhost:5173/login', 'http://localhost:5173/?q=secret', 'http://localhost:3000/', 'http://flipkart.com/', 'http://10.0.0.1:3000/', 'http://localhost.:3000/']) {
+  site(siteToOpen(url, dev), '', `no ask for goto ${url}`);
+}
+site(siteToAdd('http://localhost:5173/x', dev), 'localhost:5173', 'landed on another local port');
+site(frameSiteToAsk(['http://localhost:9000/embed'], dev)?.site ?? '', 'localhost:9000', 'a frame from another local port asks');
+// The deep-link hint names the loopback home page over its own scheme and port.
+try {
+  checkGoto('http://localhost:5173/dashboard', dev);
+  fail('goto a deep link on a new loopback port');
+} catch (err) {
+  if (!(err as Error).message.startsWith('goto refused: localhost:5173 is not') || !(err as Error).message.includes('goto http://localhost:5173/)')) fail(`loopback hint: ${(err as Error).message}`);
+}
+site(wantsSite('localhost:5173', 'http://localhost:5173/'), 'The agent wants to open localhost:5173:\nhttp://localhost:5173/', 'ask for a loopback port');

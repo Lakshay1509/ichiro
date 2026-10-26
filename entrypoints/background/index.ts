@@ -5,7 +5,7 @@ import { sendToAllFrames, setOverlayOn } from '@/lib/page/frames';
 import { INSTALL_DEFAULTS, recall, remember } from '@/lib/memory/panel-memory';
 import { isFromPanel, isPanelSender, PANEL_PORT } from '@/lib/panel/panel-port';
 import { pruneSites } from '@/lib/memory/site-store';
-import { GOTO_RULE } from '@/lib/tabs/navigation';
+import { GOTO_RULES } from '@/lib/tabs/navigation';
 import { closeAsk, nextCommand, pressAsk, startBadge } from './asks';
 import { bridge, endAgentTurn, runEnded, save, startBridge, stopBridge } from './bridge';
 import { commands, typed } from './commands';
@@ -14,8 +14,8 @@ import { addPanel, alwaysOn, print, removePanel, showAlwaysOn } from './panels';
 
 export default defineBackground(() => {
   browser.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(console.error);
-  // A goto rule (navigation.ts) left by a worker that stopped mid-goto would keep blocking that tab: off at every start.
-  browser.declarativeNetRequest.updateSessionRules({ removeRuleIds: [GOTO_RULE] }).catch(console.error);
+  // Goto rules (navigation.ts) left by a worker that stopped mid-goto would keep blocking that tab: off at every start.
+  browser.declarativeNetRequest.updateSessionRules({ removeRuleIds: GOTO_RULES }).catch(console.error);
   startBadge();
   watchTabSwitches();
   browser.runtime.onConnect.addListener(onConnect);

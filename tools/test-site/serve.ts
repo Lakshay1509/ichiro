@@ -1,6 +1,6 @@
 // Local course site for RP1's live check: 10 assignment links, each page with a Download button.
 // Run: node tools/test-site/serve.ts, then open http://assignments.localtest.me:8123/ (localtest.me points at this
-// PC; plain localhost can never be a run's Site).
+// PC; http://localhost:8123/ works too, as its own site).
 import { createServer, type ServerResponse } from 'node:http';
 
 const PORT = 8123;

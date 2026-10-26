@@ -1,6 +1,6 @@
 // F10 site tips, the rules: which tip text may be saved, the 10-per-site cap, and which sites to remove. Pure, so Node
 // can test it; loading and saving (chrome.storage.local) live elsewhere. Design: docs/site-memory.md.
-import { NAMED_HOST, siteOf } from '../agent-prompt.ts';
+import { NAMED_HOST, siteOf, siteOfUrl } from '../agent-prompt.ts';
 
 export type Tip = { text: string; added: number }; // added: ms since 1970
 export type SiteMemory = { used: number; tips: Tip[] }; // used: the last run that read it, ms
@@ -22,7 +22,7 @@ export function checkTip(raw: string, site: string): { text: string } | { why: s
   const away = `a tip can only link to its own site${site ? `, ${site}` : ''}`;
   for (const link of text.match(/[a-z][a-z0-9+.-]*:\/\/\S*/gi) ?? []) {
     const url = URL.parse(link);
-    if (!site || !url || (url.protocol !== 'https:' && url.protocol !== 'http:') || siteOf(url.hostname) !== site) return { why: away };
+    if (!site || !url || (url.protocol !== 'https:' && url.protocol !== 'http:') || siteOfUrl(url) !== site) return { why: away };
   }
   if ((text.match(NAMED_HOST) ?? []).some((host) => ![site, ''].includes(siteOf(host.toLowerCase())))) return { why: away };
   return { text };
