@@ -42,6 +42,9 @@ for (const alwaysOn of [1, 'on', {}, null]) {
   store = { alwaysOn };
   if ((await recall()).alwaysOn) fail(`always-on saved as ${JSON.stringify(alwaysOn)}`);
 }
+// #7: a loopback Site is host:port, exactly as mcp on writes it; no port, a path or a padded port is dropped.
+store = { mcpSites: ['localhost:3000', '127.0.0.1:80', '[::1]:443', 'localhost', 'localhost:3000/x', 'localhost:03000', 'localhost:99999', 'LOCALHOST:3000'] };
+if ((await recall()).mcpSites.join() !== 'localhost:3000,127.0.0.1:80,[::1]:443') fail(`loopback Sites: ${JSON.stringify((await recall()).mcpSites)}`);
 store = { mcpSites: 'amazon.in' };
 if ((await recall()).mcpSites.length) fail('Sites saved as a string, not a list');
 // The welcome shows until onboarded is exactly true.

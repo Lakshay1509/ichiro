@@ -1,5 +1,5 @@
 // Checks safeUrl (only http(s) URLs pass) and arrived (goto's honest result). Run: npm test
-import { arrived, back, follow, GOTO_RULE, gotoRule, guardedGoto, loaded, openBehind, pinTab, safeUrl, targetTabId } from './navigation.ts';
+import { arrived, back, follow, GOTO_LOOPBACK_RULE, GOTO_RULE, GOTO_RULES, gotoRules, guardedGoto, loaded, openBehind, pinTab, safeUrl, targetTabId } from './navigation.ts';
 
 const allowed = ['https://en.wikipedia.org/wiki/Alan_Turing', 'http://localhost:3000/'];
 const blocked = ['javascript:alert(1)', 'JavaScript:alert(1)', 'data:text/html,hi', 'file:///C:/x.html', 'chrome://settings', 'wikipedia.org', ''];
@@ -102,18 +102,35 @@ if ((await openBehind()) !== 10) throw new Error('openBehind: returns the new ta
 if (JSON.stringify(created) !== JSON.stringify([{ url: 'about:blank', active: false, windowId: 1, index: 5 }])) throw new Error(`openBehind: created ${JSON.stringify(created)}`);
 
 // Lead 2 (audit 2026-10-24): while the agent's goto loads, its tab can't load a page off the Sites, so a redirect on
-// an allowed site can't carry page data to a site you never added. One session rule, this tab only, top pages only.
-const rule = gotoRule(7, ['httpbin.org', 'shop.com']);
-if (rule.action.type !== 'block') throw new Error('gotoRule must block');
-if (rule.condition.tabIds.join() !== '7' || rule.condition.resourceTypes.join() !== 'main_frame') throw new Error('gotoRule: this tab, top pages only');
-if (rule.condition.excludedRequestDomains.join() !== 'httpbin.org,shop.com') throw new Error('gotoRule: every site but the Sites');
-// The rule is on before the navigation starts and off after, even when the goto fails.
+// an allowed site can't carry page data to a site you never added. Session rules, this tab only, top pages only.
+const rules = gotoRules(7, ['httpbin.org', 'shop.com']);
+const rule = rules[0]!;
+if (rules.length !== 1 || rule.id !== GOTO_RULE || rule.action.type !== 'block') throw new Error('gotoRules: one rule, and it blocks');
+if (rule.condition.tabIds.join() !== '7' || rule.condition.resourceTypes.join() !== 'main_frame') throw new Error('gotoRules: this tab, top pages only');
+if (rule.condition.excludedRequestDomains?.join() !== 'httpbin.org,shop.com') throw new Error('gotoRules: every site but the Sites');
+// #7: a loopback Site is one port. It stays blocked by domain; a higher-priority allow rule lets exactly its http and
+// https origins load (Chrome's request URLs drop a default port, like URL). No empty domain list: Chrome refuses it.
+const [block, allow] = gotoRules(7, ['localhost:3000', 'shop.com', '127.0.0.1:80', '[::1]:443']);
+if (block!.condition.excludedRequestDomains?.join() !== 'shop.com') throw new Error('gotoRules: loopback Sites stay blocked by domain');
+if (allow?.id !== GOTO_LOOPBACK_RULE || allow.action.type !== 'allow' || allow.priority <= block!.priority) throw new Error('gotoRules: the loopback allow outranks the block');
+if (allow.condition.tabIds.join() !== '7' || allow.condition.resourceTypes.join() !== 'main_frame') throw new Error('gotoRules: the allow is this tab, top pages only');
+const pass = new RegExp(allow.condition.regexFilter!); // RE2's syntax here is a subset of JS's
+for (const url of ['http://localhost:3000/', 'https://localhost:3000/a?b', 'http://127.0.0.1/', 'https://127.0.0.1:80/', 'https://[::1]/x', 'http://[::1]:443/']) if (!pass.test(url)) throw new Error(`gotoRules: should allow ${url}`);
+for (const url of ['http://localhost:3001/', 'http://localhost:30000/', 'http://localhost/', 'http://127.0.0.1:8080/', 'http://127.0.0.10/', 'http://127x0x0x1/', 'https://[::1]:3000/', 'http://localhost.evil.example:3000/', 'https://evil.example/http://localhost:3000/']) {
+  if (pass.test(url)) throw new Error(`gotoRules: should not allow ${url}`);
+}
+const local = gotoRules(7, ['localhost:3000']);
+if (local.length !== 2 || 'excludedRequestDomains' in local[0]!.condition) throw new Error('gotoRules: only loopback Sites block every domain');
+// The rules are on before the navigation starts and off after, even when the goto fails.
 const dnr: string[] = [];
 (globalThis as unknown as { browser: Record<string, unknown> }).browser.declarativeNetRequest = {
-  updateSessionRules: async (o: { addRules?: { id: number }[]; removeRuleIds?: number[] }) => void dnr.push(o.addRules?.length ? `add ${o.addRules[0]!.id}` : `remove ${o.removeRuleIds?.join()}`),
+  updateSessionRules: async (o: { addRules?: { id: number }[]; removeRuleIds?: number[] }) => void dnr.push(o.addRules?.length ? `add ${o.addRules.map((r) => r.id).join()}` : `remove ${o.removeRuleIds?.join()}`),
 };
 await guardedGoto(7, ['shop.com'], async () => void dnr.push('goto'));
-if (dnr.join() !== `add ${GOTO_RULE},goto,remove ${GOTO_RULE}`) throw new Error(`guardedGoto order: ${dnr.join()}`);
+if (dnr.join() !== `add ${GOTO_RULE},goto,remove ${GOTO_RULES.join()}`) throw new Error(`guardedGoto order: ${dnr.join()}`);
+dnr.length = 0;
+await guardedGoto(7, ['localhost:3000'], async () => void dnr.push('goto'));
+if (dnr.join('|') !== `add ${GOTO_RULE},${GOTO_LOOPBACK_RULE}|goto|remove ${GOTO_RULES.join()}`) throw new Error(`guardedGoto loopback: ${dnr.join('|')}`);
 dnr.length = 0;
 try { await guardedGoto(7, ['shop.com'], async () => { throw new Error('timeout'); }); } catch { /* the goto's own error */ }
-if (dnr.at(-1) !== `remove ${GOTO_RULE}`) throw new Error('guardedGoto must remove the rule after a failed goto');
+if (dnr.at(-1) !== `remove ${GOTO_RULES.join()}`) throw new Error('guardedGoto must remove the rules after a failed goto');

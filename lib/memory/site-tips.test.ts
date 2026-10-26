@@ -55,6 +55,9 @@ for (const [raw, why] of refused) {
 }
 // A shared suffix: alice.github.io's tips can't point to bob.github.io (a different site on the list).
 if (!('why' in checkTip('Docs at bob.github.io', 'alice.github.io')) || !('text' in checkTip('Docs at https://alice.github.io/docs', 'alice.github.io'))) fail('checkTip github.io');
+// #7: a loopback site is one port: its tips may link to that port only.
+if (!('text' in checkTip('Settings at http://localhost:3000/settings', 'localhost:3000')) || !('why' in checkTip('Admin at http://localhost:8080/', 'localhost:3000'))) fail('checkTip loopback port');
+if (!('why' in checkTip('Dev build at http://localhost:3000/', SITE))) fail('checkTip: a public site can\'t link to a loopback one');
 // No site (a page on an IP): every link and site name is refused.
 const none = checkTip('See https://1.2.3.4/x', '');
 if (!('why' in none) || none.why !== 'a tip can only link to its own site' || !('why' in checkTip('See amazon.in', ''))) fail(`checkTip no site: ${JSON.stringify(none)}`);

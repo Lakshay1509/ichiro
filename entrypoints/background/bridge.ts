@@ -23,10 +23,10 @@ import { screenshot } from './input';
 import { closeStep, openStep, print, show, showMcp } from './panels';
 import { runRepeat } from './repeat';
 
-// Where the run's tab (or tab tabId) is (its URL and site name) and whether that's one of the run's Sites.
+// Where the run's tab (or tab tabId) is (its URL and host, with a port: localhost:3000) and whether that's one of the run's Sites.
 async function where(sites: string[], tabId?: number): Promise<{ onPlan: boolean; site: string; url: string; title: string }> {
   const tab = await browser.tabs.get(tabId ?? (await targetTabId()));
-  return { onPlan: onSites(tab.url, sites), site: (tab.url && URL.parse(tab.url)?.hostname) || 'this page', url: tab.url ?? '', title: tab.title ?? '' };
+  return { onPlan: onSites(tab.url, sites), site: (tab.url && URL.parse(tab.url)?.host) || 'this page', url: tab.url ?? '', title: tab.title ?? '' };
 }
 
 // The tab's top document: a real page load makes a new one, a script's own URL change (pushState) keeps it. '' unknown.
@@ -224,7 +224,7 @@ const askYou = (ask: (why: string) => Promise<boolean>) => async (why: string): 
   return yes;
 };
 // OT3: an ask that needs your hands in the agent's tab names it: you may be working in another tab. The site is the
-// hostname, not page text.
+// host, not page text.
 const inAgentTab = async () => ` in the agent's tab (${(await where(bridge?.sites ?? [])).site})`;
 const bridgeAsks = {
   allow: askYou((why) => askOrAuto(stopLineAsk(why), 'Allow once', "I'll do it")),

@@ -1,4 +1,5 @@
 // Navigation: goto, back, and following a tab a page opened. They run in the side panel because they use the tabs API, not the page.
+import { isLoopback } from '../agent-prompt.ts';
 
 // Only http(s) URLs. Blocks javascript:, data:, file:, chrome: and anything else.
 export function safeUrl(input: string): string {
@@ -41,23 +42,42 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 // a top page off the Sites. A redirect on an allowed site could otherwise carry page data in its URL to a site you
 // never added: this session rule blocks that hop before the request leaves (Chrome shows its "blocked" page instead).
 // declarativeNetRequestWithHostAccess: no install warning with Ichiro's access to all sites. tabIds: session rules only.
+// #7: a loopback Site (localhost:3000) is one port, which a domain list can't say. So it isn't excluded from the block;
+// a second, higher-priority rule allows exactly its http and https origins (URL drops a default port, like Chrome's
+// request URLs). An empty excludedRequestDomains isn't allowed, so it's left out when every Site is a loopback one.
 // Source: https://developer.chrome.com/docs/extensions/reference/api/declarativeNetRequest
 export const GOTO_RULE = 1;
-export const gotoRule = (tabId: number, sites: string[]) => ({
-  id: GOTO_RULE,
-  priority: 1,
-  action: { type: 'block' as const },
-  condition: { tabIds: [tabId], resourceTypes: ['main_frame' as const], excludedRequestDomains: sites },
-});
+export const GOTO_LOOPBACK_RULE = 2;
+export const GOTO_RULES = [GOTO_RULE, GOTO_LOOPBACK_RULE];
+const isLoopbackSite = (s: string) => {
+  const url = URL.parse(`https://${s}/`);
+  return !!url && isLoopback(url);
+};
+const reEscape = (s: string) => s.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&');
+type GotoRule = {
+  id: number;
+  priority: number;
+  action: { type: 'block' | 'allow' };
+  condition: { tabIds: number[]; resourceTypes: 'main_frame'[]; excludedRequestDomains?: string[]; regexFilter?: string };
+};
+export function gotoRules(tabId: number, sites: string[]): GotoRule[] {
+  const where = { tabIds: [tabId], resourceTypes: ['main_frame' as const] };
+  const domains = sites.filter((s) => !isLoopbackSite(s));
+  const origins = sites.filter(isLoopbackSite).flatMap((s) => [new URL(`http://${s}/`).origin, new URL(`https://${s}/`).origin]);
+  return [
+    { id: GOTO_RULE, priority: 1, action: { type: 'block' as const }, condition: { ...where, ...(domains.length ? { excludedRequestDomains: domains } : {}) } },
+    ...(origins.length ? [{ id: GOTO_LOOPBACK_RULE, priority: 2, action: { type: 'allow' as const }, condition: { ...where, regexFilter: `^(?:${origins.map(reEscape).join('|')})/` } }] : []),
+  ];
+}
 
-// Runs the agent's goto in tabId with gotoRule on, and always takes it off after. A rule that can't be added stops
+// Runs the agent's goto in tabId with gotoRules on, and always takes them off after. Rules that can't be added stop
 // the goto: it never runs unguarded.
 export async function guardedGoto<T>(tabId: number, sites: string[], run: () => Promise<T>): Promise<T> {
-  await browser.declarativeNetRequest.updateSessionRules({ removeRuleIds: [GOTO_RULE], addRules: [gotoRule(tabId, sites)] });
+  await browser.declarativeNetRequest.updateSessionRules({ removeRuleIds: GOTO_RULES, addRules: gotoRules(tabId, sites) });
   try {
     return await run();
   } finally {
-    await browser.declarativeNetRequest.updateSessionRules({ removeRuleIds: [GOTO_RULE] }).catch(() => {});
+    await browser.declarativeNetRequest.updateSessionRules({ removeRuleIds: GOTO_RULES }).catch(() => {});
   }
 }
 
