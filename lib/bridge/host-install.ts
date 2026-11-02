@@ -2,15 +2,38 @@
 // Source: https://developer.chrome.com/docs/extensions/develop/concepts/native-messaging
 // No Node imports here: the extension's background imports HOST_NAME from this file.
 export const HOST_NAME = 'com.ichiro.host';
+export const REPO = 'https://github.com/Lakshay1509/ichiro';
 
-// The log line when the bridge ends. Before host:install ran for this extension's id, Chrome says "Specified native
-// messaging host not found." (or "Access to the specified native messaging host is forbidden." for another id): a
-// first-time setup, so it says how, as a calm card with a headline (className stop), not a red error.
-export function bridgeOff(reason: string | undefined, id: string): { text: string; className: 'stop' | 'error' } {
+// What you paste into your coding agent to set up the connection: the welcome's step 2, and the log's card when Chrome
+// can't reach the helper (bridgeOff). id: this extension's, the one the helper must be registered for. version: its
+// release tag, so the local copy matches the extension. then: what you do once the agent is done.
+// A copy you already have (an "ichiro" MCP server) moves to that tag rather than getting a second clone, and your own
+// work in it stops the agent, as in /update.
+export const connectPrompt = (id: string, version: string, then: string) => `Connect yourself to my browser through Ichiro, a Chrome extension with an MCP server.
+
+1. Get the Ichiro release that matches my extension, v${version}:
+   a. If you already have an MCP server named "ichiro", its folder is my copy: the server runs node <that folder>/host/mcp.ts (in Claude Code: claude mcp get ichiro). If git status there shows changes, or git log --branches --not --remotes shows commits that aren't on GitHub, stop and tell me: don't move or discard my work. If it's clean, run git fetch --tags, then git checkout v${version}, then npm install.
+   b. If you don't have one, clone the release, then run npm install in it: git clone --branch v${version} ${REPO}
+   If there's no tag v${version}, stop and tell me.
+2. In that folder, register the browser helper for my extension: npm run host:install -- ${id}
+   If it refuses because it runs inside the Claude desktop app on Windows, ask me to run that one command in my own terminal.
+3. If there's no "ichiro" MCP server yet, add one (stdio) that runs: node <that folder>/host/mcp.ts
+   In Claude Code: claude mcp add --transport stdio --scope user ichiro -- node <that folder>/host/mcp.ts
+4. Tell me when it's done, and whether I need to restart you so the new "browser" tool loads. ${then}`;
+
+// What the log shows when the bridge ends. Before host:install ran for this extension's id, Chrome says "Specified
+// native messaging host not found." (or "Access to the specified native messaging host is forbidden." for another id):
+// a setup step, so it's a calm card with the connect prompt to paste into your agent (head: its headline, then a line),
+// not a red error. Reopening the panel tries again, so that's the step after.
+export function bridgeOff(reason: string | undefined, id: string, version: string): { kind: 'prompt'; head: string; text: string } | { kind: 'line'; text: string; className: 'error' } {
   if (/native messaging host (not found|is forbidden)/.test(reason ?? '')) {
-    return { text: `Set up MCP once on this computer\nIn your own terminal (not one inside the Claude app), in the Ichiro folder, run:\nnpm run host:install -- ${id}\nThen close and reopen this side panel.`, className: 'stop' };
+    return {
+      kind: 'prompt',
+      head: "Ichiro isn't connected to your agent yet\nCopy this prompt into your coding agent (Claude Code, Codex…). When it's done, close and reopen this side panel.",
+      text: connectPrompt(id, version, "I'll close and reopen the Ichiro side panel."),
+    };
   }
-  return { text: `MCP bridge off: ${reason ?? 'the local helper stopped'}`, className: 'error' };
+  return { kind: 'line', text: `MCP bridge off: ${reason ?? 'the local helper stopped'}`, className: 'error' };
 }
 
 // /update: what you paste into your coding agent after Ichiro updates. It moves the local copy behind its MCP server (and

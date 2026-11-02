@@ -20,7 +20,7 @@ import { groupTab, ungroupAll } from '@/lib/tabs/tab-group';
 import { answerAsk, askKeepGoing, askOrAuto, askResume, closeAsk, lastCommand, nextCommand } from './asks';
 import { commands, runLine, target } from './commands';
 import { screenshot } from './input';
-import { closeStep, openStep, print, show, showMcp } from './panels';
+import { closeStep, openStep, print, show, showMcp, showOnce } from './panels';
 import { runRepeat } from './repeat';
 
 // Where the run's tab (or tab tabId) is (its URL and host, with a port: localhost:3000) and whether that's one of the run's Sites.
@@ -152,8 +152,9 @@ export function startBridge(sites: string[]): string {
     sign(ungroupAll);
     showMcp('off');
     endAgentTurn();
-    const off = bridgeOff(browser.runtime.lastError?.message, browser.runtime.id); // not set up yet: says how
-    print(off.text, off.className);
+    // Not set up yet: the connect prompt to paste into your agent. Once, however many reopens fail the same way.
+    const { version, version_name } = browser.runtime.getManifest(); // version_name: the tag's name, as in /update
+    showOnce(bridgeOff(browser.runtime.lastError?.message, browser.runtime.id, version_name ?? version));
   });
   port.postMessage({ type: 'bridge' });
   return `MCP bridge starting. Sites: ${sites.join(', ') || 'none yet'}. Any other site asks you first.`;
