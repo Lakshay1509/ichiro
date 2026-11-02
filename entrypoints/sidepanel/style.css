@@ -75,6 +75,12 @@ body:has(#mcp:not([data-state='off'])) #out:empty::before {
   body:has(#mcp:not([data-state='off'])) #out:empty::before { background-image: url(/blink-still.svg); }
 }
 
+/* Empty log only: a quiet link to the repo, just above the command box. It goes once the agent logs a step. */
+#star { display: none; align-self: center; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 6px; color: var(--ink-muted); font-size: 12px; text-decoration: none; }
+body:not(.welcoming) #out:empty + #star { display: flex; }
+#star:hover { color: var(--ink); background: var(--hover); }
+#star svg { width: 14px; height: 14px; fill: currentColor; }
+
 .error { color: var(--danger); font-weight: 500; }
 
 /* Your own commands, as typed. Not a chat bubble: the panel takes /commands, not messages. */
