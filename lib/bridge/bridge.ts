@@ -161,14 +161,14 @@ export function checkAnswer(text: string): BridgeAnswer {
 }
 
 // BG7: whether the agent app can show a form dialog (MCP elicitation). An empty elicitation {} means form.
-// Source: https://modelcontextprotocol.io/specification/2026-07-28/client/elicitation#capabilities
+// Source: https://modelcontextprotocol.io/specification/2025-11-25/client/elicitation#capabilities
 export const formDialogs = (caps: { elicitation?: { form?: object; url?: object } } | undefined): boolean => !!caps?.elicitation && (!!caps.elicitation.form || !caps.elicitation.url);
 
 // BG7: the dialog for a panel ask: its text, then its two buttons as one required choice. Stop comes first and nothing
 // is picked for you, so a reflex Enter can never pick keep (like the panel keeping focus in the command box).
 export function askDialog(ask: BridgeAsk) {
   return {
-    message: `${ask.text}\n\nPick an answer and submit, or close this and answer in the Ichiro side panel. If you already answered there, this does nothing.`,
+    message: `${ask.text}\n\nOr answer in the Ichiro side panel: this closes by itself.`,
     requestedSchema: {
       type: 'object' as const,
       properties: {
@@ -179,12 +179,12 @@ export function askDialog(ask: BridgeAsk) {
   };
 }
 
-// BG7: what the user picked in that dialog (the SDK's inputResponse view): true keep, false stop, null nothing. Only a
+// BG7: what the user picked in that dialog (its elicitation result): true keep, false stop, null nothing. Only a
 // submitted pick counts. A decline, a close or an empty answer leave the panel's ask open: an agent app that can't show
 // the dialog answers by itself (Claude Code in print mode, as the Claude desktop app runs it, declines at once).
-export function dialogAnswer(view: { kind: string; action?: string; content?: Record<string, unknown> }): boolean | null {
-  if (view.kind !== 'elicit' || view.action !== 'accept') return null;
-  const choice = view.content?.choice;
+export function dialogAnswer(said: { action: string; content?: Record<string, unknown> }): boolean | null {
+  if (said.action !== 'accept') return null;
+  const choice = said.content?.choice;
   return choice === 'keep' ? true : choice === 'stop' ? false : null;
 }
 

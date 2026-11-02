@@ -260,14 +260,13 @@ const choice = dialog.requestedSchema.properties.choice;
 if ('default' in choice || choice.oneOf[0]!.const !== 'stop' || choice.oneOf[0]!.title !== 'No' || choice.oneOf[1]!.title !== 'Add site') fail('dialog choices');
 if (dialog.requestedSchema.required[0] !== 'choice') fail('the choice is required');
 // What the user picked there: each choice reads back as its button. Only a submitted pick counts.
-const accept = (c: unknown) => dialogAnswer({ kind: 'elicit', action: 'accept', content: { choice: c } });
+const accept = (c: unknown) => dialogAnswer({ action: 'accept', content: { choice: c } });
 if (accept(choice.oneOf[1]!.const) !== true || accept(choice.oneOf[0]!.const) !== false) fail('accept with a choice');
-if (accept('yes') !== null || accept(true) !== null || dialogAnswer({ kind: 'elicit', action: 'accept' }) !== null) fail('accept without a real choice does nothing');
+if (accept('yes') !== null || accept(true) !== null || dialogAnswer({ action: 'accept' }) !== null) fail('accept without a real choice does nothing');
 // Live bug (2026-10-23): the Claude desktop app runs Claude Code in print mode, which declines a dialog at once, with
 // nobody asked. A decline must not answer No for the user: it leaves the panel's ask open, like a close.
-if (dialogAnswer({ kind: 'elicit', action: 'decline' }) !== null) fail('decline leaves the panel ask open');
-if (dialogAnswer({ kind: 'elicit', action: 'cancel' }) !== null) fail('cancel leaves the panel ask open');
-if (dialogAnswer({ kind: 'missing' }) !== null || dialogAnswer({ kind: 'sampling' }) !== null) fail('no dialog answer');
+if (dialogAnswer({ action: 'decline' }) !== null) fail('decline leaves the panel ask open');
+if (dialogAnswer({ action: 'cancel' }) !== null) fail('cancel leaves the panel ask open');
 
 // BG7: which agent apps get a dialog: form elicitation, or an empty elicitation (form, by the spec). URL-only or none: panel only.
 if (!formDialogs({ elicitation: {} }) || !formDialogs({ elicitation: { form: {} } }) || !formDialogs({ elicitation: { form: {}, url: {} } })) fail('form dialogs');

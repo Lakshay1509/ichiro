@@ -1,11 +1,12 @@
 // MCP server for coding agents (Claude Code, Codex…): one tool, browser, that runs commands in the side panel
 // through the host's pipe (/mcp on). The agent starts it over stdio, so stdout is MCP's: logs go to stderr only.
-// Source: https://ts.sdk.modelcontextprotocol.io/v2/ (v2 SDK, 2026-07-28 spec)
+// Source: https://ts.sdk.modelcontextprotocol.io/v2/ (v2 SDK). It speaks the 2025-11-25 spec on purpose: see LEGACY.
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { connect } from 'node:net';
-import { CLIENT_CAPABILITIES_META_KEY, inputRequired, inputResponse, McpServer } from '@modelcontextprotocol/server';
-import { serveStdio } from '@modelcontextprotocol/server/stdio';
+import { setTimeout as delay } from 'node:timers/promises';
+import { McpServer, SUPPORTED_PROTOCOL_VERSIONS, type ServerContext } from '@modelcontextprotocol/server';
+import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 import * as z from 'zod/v4';
 import { askDialog, checkReply, dialogAnswer, formDialogs, MAX_BATCH, MAX_COMMAND, untrusted, type BridgeAsk, type BridgeReply } from '../lib/bridge/bridge.ts';
 import { hostPaths } from '../lib/bridge/host-install.ts';
@@ -78,6 +79,7 @@ function run(commands: string[]): Promise<BridgeReply> {
     socket.on('error', () => reject(new Error(OFF))); // no pipe: the panel or its bridge is closed
     socket.on('close', () => {
       open = null; // the run is over, and so is its ask
+      onAsk();
       reject(new Error('The side panel closed the bridge before replying.'));
     });
   });
@@ -85,53 +87,73 @@ function run(commands: string[]): Promise<BridgeReply> {
 // One per server process, so a reply that comes after its call returned waits here for the next call.
 const browse = lateReplies(run);
 
-// Settles once the panel shows an ask that no dialog has shown yet.
-const toShow = () => new Promise<void>((done) => {
+// Settles once test() holds: checked now, and each time the panel's ask changes or the run ends.
+const when = (test: () => boolean) => new Promise<void>((done) => {
   onAsk = () => {
-    if (open && open.id !== shown) done();
+    if (test()) done();
   };
   onAsk();
 });
+const newAsk = () => !!open && open.id !== shown; // an ask no dialog has shown yet
 
-serveStdio(() => {
-  const server = new McpServer({ name: 'ichiro', version: '0.0.1' }, { capabilities: { tools: {} } });
-  server.registerTool(
-    'browser',
-    {
-      description: DESCRIPTION,
-      // The host checks it again (checkRun): blank lines and the characters cap for the whole batch are refused there.
-      inputSchema: z.object({
-        commands: z.array(z.string().min(1).max(MAX_COMMAND)).min(1).max(MAX_BATCH)
-          .describe('Command lines, run in order, e.g. ["click 4", "type here \\"hello\\"", "key Enter"]. read and look only last. It stops at the first error.'),
-      }),
-    },
-    async ({ commands }, ctx) => {
-      try {
-        // BG7: any agent app that supports MCP elicitation shows the panel's ask as a dialog too. Its answer comes back
-        // as this same call again, carrying it (inputResponses); only the agent app fills that in, never the agent.
-        // Source: https://modelcontextprotocol.io/specification/2026-07-28/client/elicitation (the SDK serves older
-        // agent apps the same way with a server-to-client request).
-        const said = inputResponse(ctx.mcpReq.inputResponses, 'answer');
-        const keep = dialogAnswer(said);
-        if (keep !== null && open?.id === shown) answer(shown, keep); // only while that ask is open: after a panel answer, nothing
-        const caps = (ctx.mcpReq.envelope as Record<string, unknown> | undefined)?.[CLIENT_CAPABILITIES_META_KEY] ?? server.server.getClientCapabilities();
-        const dialogs = formDialogs(caps as Parameters<typeof formDialogs>[0]);
-        const { note, reply: r } = await browse(commands, { resumed: said.kind !== 'missing', until: dialogs ? toShow() : undefined });
-        if (!r && dialogs && open && open.id !== shown) {
-          shown = open.id;
-          return inputRequired({ inputRequests: { answer: inputRequired.elicit(askDialog(open)) } });
-        }
-        const head = note ? [{ type: 'text' as const, text: note }] : []; // ours, so outside the untrusted block
-        if (!r) return { content: head };
-        // The panel's errors can quote the page too (a label, a URL), so both go in the untrusted block.
-        if (r.type === 'error') return { content: [...head, { type: 'text', text: untrusted(r.error) }], isError: true };
-        const text = { type: 'text' as const, text: untrusted(r.text) };
-        // look's screenshot, already checked by checkReply. Source: https://modelcontextprotocol.io/specification/2026-07-28/server/tools#image-content
-        return { content: r.image ? [...head, text, { type: 'image' as const, data: r.image.data, mimeType: r.image.mimeType }] : [...head, text] };
-      } catch (e) {
-        return { content: [{ type: 'text', text: (e as Error).message }], isError: true };
+// BG7: why 2025-11-25 and not 2026-07-28. There a dialog is the agent app's once the call returns: nothing can take it
+// back, and the agent waits until you close it (https://modelcontextprotocol.io/specification/2026-07-28/basic/patterns/mrtr).
+// Here it's our own elicitation/create request, which we cancel when you answer in the panel, so the call ends and the
+// agent goes on. An agent app that only speaks 2026-07-28 can't connect.
+const LEGACY = SUPPORTED_PROTOCOL_VERSIONS.filter((v) => v < '2026-07-28');
+// Live check 2026-11-02: Claude Code gets that cancel but leaves the dialog open. So the panel asks alone first, and the
+// dialog shows only if the ask is still open after this: a quick panel answer leaves no dialog behind.
+const DIALOG_DELAY_MS = 10_000;
+// A dialog closes itself after this and the panel's ask stands. Under Claude Code's 30 minutes for a quiet stdio call
+// (https://code.claude.com/docs/en/mcp#time-limits-on-mcp-tool-calls).
+const DIALOG_MS = 10 * 60_000;
+
+// BG7: the panel's ask as a dialog in the agent app too; the first answer wins. Your pick there presses that button in
+// the panel. Your answer in the panel (or a run that ends) cancels the dialog's request.
+async function dialog(ask: BridgeAsk, elicit: ServerContext['mcpReq']['elicitInput']) {
+  const gone = new AbortController();
+  void when(() => open?.id !== ask.id).then(() => gone.abort());
+  try {
+    await delay(DIALOG_DELAY_MS, undefined, { signal: gone.signal });
+    const keep = dialogAnswer(await elicit(askDialog(ask), { signal: gone.signal, timeout: DIALOG_MS }));
+    if (keep !== null && open?.id === ask.id) answer(ask.id, keep); // only while that ask is open: after a panel answer, nothing
+  } catch {
+    // cancelled (answered in the panel), timed out, or the agent app failed: the panel's ask stands either way
+  }
+}
+
+const server = new McpServer({ name: 'ichiro', version: '0.0.1' }, { capabilities: { tools: {} }, supportedProtocolVersions: LEGACY });
+server.registerTool(
+  'browser',
+  {
+    description: DESCRIPTION,
+    // The host checks it again (checkRun): blank lines and the characters cap for the whole batch are refused there.
+    inputSchema: z.object({
+      commands: z.array(z.string().min(1).max(MAX_COMMAND)).min(1).max(MAX_BATCH)
+        .describe('Command lines, run in order, e.g. ["click 4", "type here \\"hello\\"", "key Enter"]. read and look only last. It stops at the first error.'),
+    }),
+  },
+  async ({ commands }, ctx) => {
+    try {
+      // BG7: an agent app that can show a form dialog (MCP elicitation) gets each of the run's asks as one; then the call
+      // waits on for the panel's reply, without running its commands again (resumed).
+      const dialogs = formDialogs(server.server.getClientCapabilities());
+      let { note, reply: r } = await browse(commands, { until: dialogs ? when(newAsk) : undefined });
+      while (!r && dialogs && open && open.id !== shown) {
+        shown = open.id;
+        await dialog(open, ctx.mcpReq.elicitInput);
+        ({ note, reply: r } = await browse(commands, { resumed: true, until: when(newAsk) }));
       }
-    },
-  );
-  return server;
-});
+      const head = note ? [{ type: 'text' as const, text: note }] : []; // ours, so outside the untrusted block
+      if (!r) return { content: head };
+      // The panel's errors can quote the page too (a label, a URL), so both go in the untrusted block.
+      if (r.type === 'error') return { content: [...head, { type: 'text', text: untrusted(r.error) }], isError: true };
+      const text = { type: 'text' as const, text: untrusted(r.text) };
+      // look's screenshot, already checked by checkReply. Source: https://modelcontextprotocol.io/specification/2025-11-25/server/tools#image-content
+      return { content: r.image ? [...head, text, { type: 'image' as const, data: r.image.data, mimeType: r.image.mimeType }] : [...head, text] };
+    } catch (e) {
+      return { content: [{ type: 'text', text: (e as Error).message }], isError: true };
+    }
+  },
+);
+await server.connect(new StdioServerTransport());
