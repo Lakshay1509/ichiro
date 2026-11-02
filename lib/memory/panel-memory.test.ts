@@ -21,7 +21,7 @@ const getDomain = (host: string) => host.split('.').slice(-2).join('.');
 Object.assign(globalThis, { browser: { storage: { local }, publicSuffix: { getDomain } } });
 
 // Nothing saved yet: all off, no Sites.
-if (JSON.stringify(await recall()) !== '{"mcpOn":false,"mcpSites":[],"overlayOn":false,"alwaysOn":false,"onboarded":false}') fail(`defaults: ${JSON.stringify(await recall())}`);
+if (JSON.stringify(await recall()) !== '{"mcpOn":false,"mcpSites":[],"overlayOn":false,"alwaysOn":false,"onboarded":false,"releaseCheckedAt":0}') fail(`defaults: ${JSON.stringify(await recall())}`);
 
 // Save → read back, locked to trusted contexts before the first write. A partial save keeps the rest.
 await remember({ mcpOn: true, mcpSites: ['amazon.in', 'wikipedia.org'] });
@@ -57,4 +57,11 @@ console.log('panel-memory: ok');
 if (JSON.stringify(INSTALL_DEFAULTS) !== '{"alwaysOn":true}') fail(`install defaults: ${JSON.stringify(INSTALL_DEFAULTS)}`);
 store = {};
 await remember(INSTALL_DEFAULTS);
-if (JSON.stringify(await recall()) !== '{"mcpOn":false,"mcpSites":[],"overlayOn":false,"alwaysOn":true,"onboarded":false}') fail(`after install: ${JSON.stringify(await recall())}`);
+if (JSON.stringify(await recall()) !== '{"mcpOn":false,"mcpSites":[],"overlayOn":false,"alwaysOn":true,"onboarded":false,"releaseCheckedAt":0}') fail(`after install: ${JSON.stringify(await recall())}`);
+// The update check's time comes back only as a real number; anything else is "never checked".
+for (const at of ['1', NaN, Infinity, null]) {
+  store = { releaseCheckedAt: at };
+  if ((await recall()).releaseCheckedAt !== 0) fail(`releaseCheckedAt saved as ${String(at)}`);
+}
+store = { releaseCheckedAt: 1_700_000_000_000 };
+if ((await recall()).releaseCheckedAt !== 1_700_000_000_000) fail('releaseCheckedAt');

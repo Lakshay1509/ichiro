@@ -1,6 +1,6 @@
 # Ichiro privacy policy
 
-Effective 26 October 2026.
+Effective 2 November 2026.
 
 **In short:** Ichiro has no server and sends nothing to us. It passes what your coding agent asks for to that agent, on your own computer, and only after you agree in the welcome screen.
 
@@ -32,6 +32,8 @@ Ichiro also uses two kinds of activity on your computer only, and never passes t
 3. To your coding agent. **Your agent may send this data to its AI provider** (for example Anthropic or OpenAI) under that provider's own privacy policy. Ichiro does not control that step.
 
 Ichiro has no server and no analytics. It doesn't sell data, show ads, or share data with anyone other than the coding agent you connect.
+
+**Update check, for copies loaded unpacked only:** at most once a day, when you open the side panel, Ichiro asks GitHub (api.github.com) for the number of its latest release, so it can tell you when there's an update. The request carries nothing about you or your pages; like any web request, it shows GitHub your IP address. The Chrome Web Store version never makes this request: Chrome updates it for you.
 
 ## What Ichiro stores, and where
 

@@ -8,10 +8,10 @@ What changed in each Ichiro release, newest first. Each version is one git tag, 
 - The privacy policy now says that page content can include personal details, and that Ichiro counts the agent tab's open network requests and your tab switches on your computer only, never passing them on.
 - When the side panel can't reach the browser helper (for example, you pressed "I've connected" before your agent finished), it now shows the connect prompt with a Copy button to paste into your coding agent, in place of a terminal command. It shows once, not again on every panel reopen.
 - The connect prompt reuses a copy of Ichiro you already have (moving it to your extension's release tag) before it clones a new one.
-
 - An ask (Add site, Allow once, Resume…) now shows in the side panel first. Your coding agent shows it as a dialog only if it's still unanswered after 10 seconds, so a quick answer in the panel leaves no dialog behind. An answer in either place lets the agent go on, and a dialog answer shows in the panel. The dialog's text is shorter. This changes `host/`: run `/update` so your local copy gets it, then restart your coding agent.
 
 ### Added
+- The side panel tells you when an update is available, with a prompt to copy into your coding agent. It shows when Chrome has updated Ichiro but the helper on your computer is older, and, for copies loaded unpacked only, when GitHub has a newer release (checked at most once a day). The helper now says its version when it starts: this changes `host/`, and after this release the panel itself asks you to update it.
 - A small "Star on GitHub" link above the command box while the side panel's log is empty. It goes away once the agent logs a step.
 
 ## 0.2.1 · 2026-10-26

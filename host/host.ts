@@ -22,6 +22,16 @@ if (!process.env.BA_ORIGIN || process.argv[2] !== process.env.BA_ORIGIN) {
 
 let bridging = false; // set by the first message, which must start the bridge; then fixed for this process
 
+// This copy's version (its package.json), sent with ready: the panel asks you to update it when the extension is newer.
+function ownVersion(): string {
+  try {
+    const v: unknown = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
+    return typeof v === 'string' ? v : '';
+  } catch {
+    return ''; // the panel takes it as older: its prompt only moves this copy to the extension's own tag
+  }
+}
+
 function handle(text: string) {
   if (bridging) return panelReply(text);
   if (!isStart(text)) return fail('The first message must be {"type":"bridge"}');
@@ -68,7 +78,7 @@ function startBridge() {
         // gone already, or rewritten mid-way: not ours to delete
       }
     });
-    send({ type: 'ready' });
+    send({ type: 'ready', version: ownVersion() });
   });
 }
 

@@ -3,6 +3,7 @@
 // Source: https://wxt.dev/guide/essentials/entrypoints.html
 import { sendToAllFrames, setOverlayOn } from '@/lib/page/frames';
 import { INSTALL_DEFAULTS, recall, remember } from '@/lib/memory/panel-memory';
+import { RELEASES_API, releaseCard } from '@/lib/bridge/updates';
 import { isFromPanel, isPanelSender, PANEL_PORT } from '@/lib/panel/panel-port';
 import { pruneSites } from '@/lib/memory/site-store';
 import { GOTO_RULES } from '@/lib/tabs/navigation';
@@ -10,7 +11,7 @@ import { closeAsk, nextCommand, pressAsk, startBadge } from './asks';
 import { bridge, endAgentTurn, runEnded, save, startBridge, stopBridge } from './bridge';
 import { commands, typed } from './commands';
 import { watchTabSwitches } from './input';
-import { addPanel, alwaysOn, print, removePanel, showAlwaysOn } from './panels';
+import { addPanel, alwaysOn, print, removePanel, showAlwaysOn, showOnce } from './panels';
 
 export default defineBackground(() => {
   browser.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(console.error);
@@ -71,6 +72,8 @@ async function connected() {
 function firstPanelOpened() {
   // F10: saved site tips unused for 180 days (or the least used, over 8 MB) are removed each time the panel opens.
   pruneSites(Date.now()).catch((err: Error) => print(`Couldn't tidy saved site tips: ${err.message}`, 'error'));
+  // Offline or GitHub down: no card, and no error in the log; tomorrow's panel open tries again.
+  checkRelease().catch((err: Error) => console.error(`Ichiro update check: ${err.message}`));
 
   // Turns back on what you left on (panel-memory.ts): the MCP bridge with its saved Sites, and the overlay.
   recall().then(async ({ mcpOn, mcpSites, overlayOn, alwaysOn }) => {
@@ -81,6 +84,20 @@ function firstPanelOpened() {
     setOverlayOn(true);
     await sendToAllFrames({ type: 'overlay', on: true }).catch(() => {});
   }).catch((err: Error) => print(`Couldn't read saved settings: ${err.message}`, 'error'));
+}
+
+// A copy loaded unpacked has no Web Store to update it: at most once a day, when a panel opens, it asks GitHub for the
+// latest release, and a newer one shows its update prompt (lib/bridge/updates.ts). A store install never asks (PRIVACY.md).
+// getSelf needs no permission. Source: https://developer.chrome.com/docs/extensions/reference/api/management#method-getSelf
+const DAY = 24 * 60 * 60 * 1000;
+async function checkRelease() {
+  if ((await browser.management.getSelf()).installType !== 'development') return;
+  const now = Date.now();
+  if (Math.abs(now - (await recall()).releaseCheckedAt) < DAY) return; // abs: a clock set back can't stop it for good
+  await remember({ releaseCheckedAt: now });
+  const res = await fetch(RELEASES_API, { headers: { Accept: 'application/vnd.github+json' } });
+  const card = res.ok ? releaseCard(await res.json(), browser.runtime.id, browser.runtime.getManifest().version) : null;
+  if (card) showOnce(card);
 }
 
 // As before BG4, closing the panel ends everything: the bridge stops (still saved on, so the next panel open turns it

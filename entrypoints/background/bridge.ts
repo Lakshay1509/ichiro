@@ -4,6 +4,7 @@ import { allowOnce, batchProblem, batchReply, captchaHold, checkAgentTip, checkC
 import { fileName, fromSites, RunDownloads } from '@/lib/files/downloads';
 import { captchaAll, frameFor, labelFor, nameFor, readAll } from '@/lib/page/frames';
 import { bridgeOff, HOST_NAME } from '@/lib/bridge/host-install';
+import { helperCard } from '@/lib/bridge/updates';
 import { HandOver, StopLine } from '@/lib/messages';
 import { follow, guardedGoto, openBehind, pinTab, targetTabId } from '@/lib/tabs/navigation';
 import { pageReport } from '@/lib/page/page-diff';
@@ -180,8 +181,14 @@ export function askAgent(ask: BridgeAsk | null) {
   if (running) bridge?.port.postMessage({ type: 'ask', ask: ask && { ...ask, text: ask.text.slice(0, MAX_ASK) } } satisfies AskNotice);
 }
 
-async function onBridge(port: Port, m: { type?: string; commands?: unknown; error?: unknown; session?: unknown }) {
-  if (m.type === 'ready') return showMcp('on');
+async function onBridge(port: Port, m: { type?: string; commands?: unknown; error?: unknown; session?: unknown; version?: unknown }) {
+  if (m.type === 'ready') {
+    showMcp('on');
+    // The local copy says its version (host.ts); older than this extension, the panel shows /update's prompt.
+    const card = helperCard(typeof m.version === 'string' ? m.version : '', browser.runtime.id, browser.runtime.getManifest());
+    if (card) showOnce(card);
+    return;
+  }
   if (m.type === 'error') return print(`MCP bridge: ${String(m.error)}`, 'error');
   if (isAnswer(m)) return answerAsk(m); // BG7: your answer in the agent app's dialog (the host checked where it came from)
   if (m.type !== 'run') return;

@@ -74,3 +74,7 @@ if (bridgeOff(undefined, ID, '1.2.3').text !== 'MCP bridge off: the local helper
 const up = updatePrompt(ID, '1.2.3');
 if (!up.includes('git checkout v1.2.3') || !up.includes("don't move or discard my work") || !up.includes(`npm run host:install -- ${ID}\n`) || !up.includes('turn Ichiro off and back on')) fail(`update: ${up}`);
 if (/git pull|\/mcp (on|off)/.test(up)) fail(`update pulls main or sends /mcp: ${up}`);
+// A newer release for an unpacked copy: the same guard and tag, plus a build, then a reload or the release's zip.
+const upNew = updatePrompt(ID, '1.3.0', true);
+if (!upNew.includes('git checkout v1.3.0, then npm install, then npm run build') || !upNew.includes(`${REPO}/releases/tag/v1.3.0`) || !upNew.includes('ichiro-1.3.0-chrome.zip') || !upNew.includes("don't move or discard my work")) fail(`unpacked update: ${upNew}`);
+if (/git pull|\/mcp (on|off)/.test(upNew) || up.includes('npm run build')) fail(`unpacked update pulls main or sends /mcp, or /update builds: ${upNew}`);

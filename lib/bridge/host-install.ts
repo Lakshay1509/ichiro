@@ -38,17 +38,22 @@ export function bridgeOff(reason: string | undefined, id: string, version: strin
 
 // /update: what you paste into your coding agent after Ichiro updates. It moves the local copy behind its MCP server (and
 // the helper Chrome starts from it) to the release tag of the extension you have, so the two always match.
+// unpacked: a newer release for a copy loaded unpacked, which no Web Store updates (lib/bridge/updates.ts): the agent
+// builds it too, and you reload it, or unzip the release over the folder Chrome loads.
 // The restart is off and on, never /mcp on: that also trusts the current tab's site.
-export function updatePrompt(id: string, version: string): string {
+export function updatePrompt(id: string, version: string, unpacked = false): string {
   const steps = [
     'Find the Ichiro folder: your "ichiro" MCP server runs node <that folder>/host/mcp.ts (in Claude Code: claude mcp get ichiro).',
     "In it, if git status shows changes, or git log --branches --not --remotes shows commits that aren't on GitHub, stop and tell me: don't move or discard my work.",
-    `Run git fetch --tags, then git checkout v${version}, then npm install. If there's no tag v${version}, stop and tell me.`,
+    `Run git fetch --tags, then git checkout v${version}, then npm install${unpacked ? ', then npm run build' : ''}. If there's no tag v${version}, stop and tell me.`,
     `If that changed host/install.ts or lib/bridge/host-install.ts, register the browser helper again: npm run host:install -- ${id}\n   If it refuses because it runs inside the Claude desktop app on Windows, ask me to run that one command in my own terminal.`,
-    'Ask me to turn Ichiro off and back on in chrome://extensions and open its side panel: that starts the updated helper.',
+    unpacked
+      ? `If Chrome loads Ichiro from <that folder>/.output/chrome-mv3, ask me to press the reload icon on Ichiro in chrome://extensions and open its side panel. If it loads it from another folder, ask me to download ichiro-${version}-chrome.zip from ${REPO}/releases/tag/v${version}, unzip it over that folder, then press reload.`
+      : 'Ask me to turn Ichiro off and back on in chrome://extensions and open its side panel: that starts the updated helper.',
     'Tell me when it\'s done, and whether I need to restart you so the updated "browser" tool loads.',
   ];
-  return `Make the local copy behind your "ichiro" MCP server match my Ichiro extension, version ${version}.\n\n${steps.map((s, i) => `${i + 1}. ${s}`).join('\n')}`;
+  const goal = unpacked ? `Update my Ichiro extension (loaded unpacked) and the local copy behind your "ichiro" MCP server to version ${version}.` : `Make the local copy behind your "ichiro" MCP server match my Ichiro extension, version ${version}.`;
+  return `${goal}\n\n${steps.map((s, i) => `${i + 1}. ${s}`).join('\n')}`;
 }
 
 // Where each Chromium browser looks for native hosts, so /mcp on works in any of them, not only Chrome.
