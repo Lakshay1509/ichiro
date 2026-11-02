@@ -103,13 +103,15 @@ function Entry({ item }: { item: Item }) {
     );
   }
   if (item.kind === 'sites') return <Sites sites={item.sites} />;
-  // /update: Copy isn't autofocused, so focus stays in the command box.
+  // /update, or the setup card (head: its headline, then a line). Copy isn't autofocused, so focus stays in the command box.
   if (item.kind === 'prompt') {
+    const [title, ...detail] = (item.head ?? 'Paste this into your coding agent').split('\n');
     return (
       <div class="tips copy">
         <div class="tips-head">
-          <span class="tips-site">Paste this into your coding agent</span>
+          <span class="tips-site">{title}</span>
         </div>
+        {detail.length > 0 && <div>{detail.join('\n')}</div>}
         <CopyPrompt text={item.text} />
       </div>
     );

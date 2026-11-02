@@ -19,7 +19,7 @@ export type Item =
   | { id: number; kind: 'ask'; buttons: string[] }
   | { id: number; kind: 'tips'; site: string; tips: string[] }
   | { id: number; kind: 'sites'; sites: string[] } // /sites: the bridge's Sites, each with a Delete button
-  | { id: number; kind: 'prompt'; text: string } // /update: a prompt to paste into your coding agent, with Copy
+  | { id: number; kind: 'prompt'; text: string; head?: string } // a prompt to paste into your coding agent, with Copy: /update's, or the setup card's (head: its headline, then a line)
   | Step;
 
 export type Log = { items: Item[]; open: number | null }; // open: the step new items go into

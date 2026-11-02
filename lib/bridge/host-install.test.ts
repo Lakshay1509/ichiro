@@ -1,5 +1,5 @@
 // Checks the launcher, manifest and paths host:install builds for each OS. Run: npm test
-import { bridgeOff, HOST_NAME, hostPaths, launcher, manifest, originFor, updatePrompt } from './host-install.ts';
+import { bridgeOff, connectPrompt, HOST_NAME, hostPaths, launcher, manifest, originFor, REPO, updatePrompt } from './host-install.ts';
 
 const fail = (what: string): never => {
   throw new Error(what);
@@ -54,14 +54,20 @@ const m = JSON.parse(manifest('/home/me/.ichiro/host.sh', ID));
 const want = { name: HOST_NAME, description: 'Ichiro MCP bridge', path: '/home/me/.ichiro/host.sh', type: 'stdio', allowed_origins: [ORIGIN] };
 if (JSON.stringify(m) !== JSON.stringify(want)) fail(`manifest: ${JSON.stringify(m)}`);
 
-// The bridge's end: not set up yet (Chrome's two setup errors) says how, with this id, as a calm card; anything else
-// stays a red error with Chrome's reason.
-const setup = bridgeOff('Specified native messaging host not found.', ID);
-if (setup.className !== 'stop' || !setup.text.startsWith('Set up MCP once') || !setup.text.includes(`npm run host:install -- ${ID}\n`)) fail(`not found: ${JSON.stringify(setup)}`);
-if (bridgeOff('Access to the specified native messaging host is forbidden.', ID).className !== 'stop') fail('forbidden is setup too');
-const crash = bridgeOff('Native host has exited.', ID);
-if (crash.className !== 'error' || crash.text !== 'MCP bridge off: Native host has exited.') fail(`crash: ${JSON.stringify(crash)}`);
-if (bridgeOff(undefined, ID).text !== 'MCP bridge off: the local helper stopped') fail('no reason');
+// Connect prompt: this version's tag, never main; a copy you already have is reused (your own work stops it) before
+// any clone; this id; and the step you take after, last.
+const connect = connectPrompt(ID, '1.2.3', 'THEN');
+if (!connect.includes('git checkout v1.2.3') || !connect.includes("don't move or discard my work") || !connect.includes(`git clone --branch v1.2.3 ${REPO}\n`) || !connect.includes(`npm run host:install -- ${ID}\n`) || !connect.endsWith(' THEN')) fail(`connect: ${connect}`);
+if (connect.indexOf('already have an MCP server') > connect.indexOf('git clone') || /git pull/.test(connect)) fail(`connect clones before reusing, or pulls main: ${connect}`);
+
+// The bridge's end: not set up yet (Chrome's two setup errors) gives the connect prompt for this id and version, as a
+// calm card that ends on reopening the panel; anything else stays a red error with Chrome's reason.
+const setup = bridgeOff('Specified native messaging host not found.', ID, '1.2.3');
+if (setup.kind !== 'prompt' || setup.text !== connectPrompt(ID, '1.2.3', "I'll close and reopen the Ichiro side panel.") || !setup.head.includes('close and reopen this side panel')) fail(`not found: ${JSON.stringify(setup)}`);
+if (bridgeOff('Access to the specified native messaging host is forbidden.', ID, '1.2.3').kind !== 'prompt') fail('forbidden is setup too');
+const crash = bridgeOff('Native host has exited.', ID, '1.2.3');
+if (crash.kind !== 'line' || crash.className !== 'error' || crash.text !== 'MCP bridge off: Native host has exited.') fail(`crash: ${JSON.stringify(crash)}`);
+if (bridgeOff(undefined, ID, '1.2.3').text !== 'MCP bridge off: the local helper stopped') fail('no reason');
 
 // /update: the installed version's tag (never main), your own work left alone, this id, and off and on to start the
 // updated helper, never /mcp (its "on" trusts the current tab's site).

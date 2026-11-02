@@ -67,6 +67,14 @@ export function show(item: New<Item>): Item {
   return full;
 }
 
+// Like show, but not when the log already ends with this same text: a retry that fails the same way (the bridge's
+// setup card on each panel reopen) says it once.
+export function showOnce(item: New<Item> & { text: string }) {
+  const last = log.items.at(-1);
+  if (last && 'text' in last && last.text === item.text) return;
+  show(item);
+}
+
 // Puts item where old is (an ask becomes what you chose), or with null takes old away. Nothing if /clear took old away.
 export function swap(old: { id: number }, item: New<Item> | null) {
   change({ type: 'swap', id: old.id, item: item && ({ ...item, id: old.id } as Item) });
