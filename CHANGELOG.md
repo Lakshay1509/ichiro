@@ -4,6 +4,8 @@ What changed in each Ichiro release, newest first. Each version is one git tag, 
 
 ## Unreleased
 
+## 0.3.0 · 2026-11-02
+
 ### Changed
 - The privacy policy now says that page content can include personal details, and that Ichiro counts the agent tab's open network requests and your tab switches on your computer only, never passing them on.
 - When the side panel can't reach the browser helper (for example, you pressed "I've connected" before your agent finished), it now shows the connect prompt with a Copy button to paste into your coding agent, in place of a terminal command. It shows once, not again on every panel reopen.
