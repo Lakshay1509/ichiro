@@ -127,7 +127,7 @@ It usually starts with `help` and `read`. Each reply begins with a step number, 
 | `click <n>` | Click an element, a label, or an `x,y` spot on the last screenshot |
 | `hover <n>` | Move the mouse over an element |
 | `type <n> "text"` | Type into a field; `type here` types where the cursor is |
-| `select <n> "option"` | Choose an option in a dropdown |
+| `select <n> "option"` | Choose an option in a dropdown; `select text "start" to "end"` selects a stretch of text in a text box or code editor, to replace with `paste` or `type here` |
 | `scroll <direction>` | Scroll the page, or the box around an element |
 | `drag x,y x,y …` | Press, move and release the mouse, for drawing apps |
 | `paste <text>` | Paste text where focus is, without touching your clipboard |

@@ -1,4 +1,6 @@
 // Messages the side panel sends to the page, and the page's replies. Add new commands here.
+import type { Landmark } from './page/landmarks.ts';
+
 export type Message =
   | { type: 'ping' }
   | { type: 'read'; next: number; overlay: boolean } // next: the last element number given out (lib/page/numbers.ts); overlay: /overlay's setting
@@ -25,6 +27,9 @@ export type Message =
   | { type: 'hover'; n: number }
   | { type: 'type'; n: number; text: string; enter: boolean; slow: boolean; allow?: boolean }
   | { type: 'select'; n: number; option: string; allow?: boolean }
+  // #2: select text "from" to "to" [nth], top page only. A text box selects it here; other text replies the real mouse's
+  // points, after checking them. step: the real click about to be sent, so the guard goes on that spot (none: a plan).
+  | { type: 'selectText'; from: string; to: string; nth?: number; step?: 'start' | 'end'; allow?: boolean }
   | { type: 'scroll'; dir: 'up' | 'down' | 'left' | 'right'; n?: number }
   | { type: 'key'; key: string; allow?: boolean }
   | { type: 'settle'; maxMs: number }
@@ -38,8 +43,9 @@ export type Message =
 export type PingReply = { url: string; title: string; contentType?: string; visible: boolean }; // visible: BG3, isDrawn
 
 // One frame's part of a read: header (top frame only), numbered element lines, and how many were found in total.
-// page: what the AI reads (F2): the element lines with the visible text around them, in page order.
-export type ReadReply = { header: string; lines: string[]; numbers: number[]; total: number; page: string[] };
+// page: what the AI reads (F2): the element lines with the visible text around them, in page order. landmarks (#6, top
+// page only): its nav, sidebar and header, with where their lines are in page.
+export type ReadReply = { header: string; lines: string[]; numbers: number[]; total: number; page: string[]; landmarks?: Landmark[] };
 
 // Reply type for each message type.
 export type Replies = {
@@ -63,6 +69,7 @@ export type Replies = {
   hover: string;
   type: string;
   select: string;
+  selectText: string | { points: { x: number; y: number }[]; note: string }; // points: click, then shift+click (the guard is on)
   scroll: string;
   key: string;
   settle: boolean;

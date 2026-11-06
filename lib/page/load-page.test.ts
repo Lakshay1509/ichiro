@@ -1,6 +1,6 @@
 // Checks the lazy-page loader (F3d): the stitch, the "is it lazy" probe count, the stop rules and the whole loop on fake
 // pages (normal, adds as you scroll, virtual list, endless feed, hidden tab). Run: npm test
-import { loadWith, MAX_SCREENS, MIN_NEW, newLines, stitch, stopReason, withNote, type Page } from './load-page.ts';
+import { looksVirtual, loadWith, MAX_SCREENS, MIN_NEW, newLines, stitch, stopReason, withNote, type Page } from './load-page.ts';
 
 const fail = (what: string): never => {
   throw new Error(what);
@@ -101,6 +101,15 @@ const textFull = (lines: string[]) => lines.join('\n').length >= 12_000;
   same(r.lines, f.all(), 'virtual: every row');
   if (!r.note.includes('to the end')) fail(`virtual note: ${r.note}`);
 }
+// The same list read while scrolled down: the pass still reads it top to bottom, in order (seen in the box test below:
+// started from the first read, the rows on screen came before the top's).
+{
+  const f = fake({ rows: 200, view: 20, virtual: true });
+  f.go(100);
+  const r = await loadWith(f.page, f.text, textFull);
+  same(r.lines, f.all(), 'virtual, scrolled down: every row in order');
+  if (f.at() !== 100) fail(`virtual, scrolled down: not put back (${f.at()})`);
+}
 // Endless feed (the infinite-scroll edge case): stops at the cap, says so, scrolls back.
 {
   const f = fake({ rows: 10, batches: Infinity });
@@ -130,3 +139,34 @@ const textFull = (lines: string[]) => lines.join('\n').length >= 12_000;
   const r = await loadWith(h.page, h.text, textFull);
   if (!r.note.includes("isn't on screen") || h.at() !== 0 || r.lines.length !== 12) fail(`hidden: ${r.note}`);
 }
+
+// #1: a box that keeps only its lines near the screen (a code editor) is read with its own notes, which get the screens
+// and the lines read. A box whose lines are all in the page is only probed: no note, so text all leaves it as it was.
+{
+  const notes = { bottom: (n: number, l: string[]) => `box: ${n} screens, ${l.length} lines`, full: () => 'full', cap: () => 'cap' };
+  const editor = fake({ rows: 240, view: 21, virtual: true });
+  editor.go(30);
+  const r = await loadWith(editor.page, editor.text, textFull, false, notes);
+  same(r.lines, editor.all(), 'box: every line');
+  if (!/^box: \d+ screens, 242 lines$/.test(r.note) || editor.at() !== 30) fail(`box: ${r.note} at ${editor.at()}`);
+  const plain = fake({ rows: 240, view: 21 });
+  same((await loadWith(plain.page, plain.text, textFull, false, notes)).note, '', 'box with all its lines: no note');
+}
+
+// Deep in a long list, the pass hits its cap before it gets back to where you were: what was on screen stays in.
+{
+  const f = fake({ rows: 3000, view: 20, virtual: true });
+  f.go(2000);
+  const r = await loadWith(f.page, f.text, textFull);
+  if (!r.note.includes('stopped after') || !r.lines.includes('row 2010') || !r.lines.includes('row 1')) fail(`capped deep: ${r.note}`);
+  if (r.lines.indexOf('row 1') > r.lines.indexOf('row 2010')) fail('capped deep: the top first, then what was on screen');
+}
+
+// #1: only a box whose text covers little of its height is scrolled: a code editor holding 100 of 240 lines, not a
+// sidebar or a chat with all its messages in the page.
+for (const [top, bottom, height, want, what] of [
+  [0, 2000, 4800, true, 'an editor with 100 of 240 lines'],
+  [0, 4700, 4800, false, 'all of its text in the page'],
+  [500, 500, 4800, true, 'no text in the page'],
+  [0, 100, 0, false, 'no height'],
+] as const) if (looksVirtual(top, bottom, height) !== want) fail(`looksVirtual, ${what}`);

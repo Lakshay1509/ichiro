@@ -1,7 +1,7 @@
 // BG4: real input on the command's tab (mouse, keyboard, typing where the cursor is) and look's screenshot.
 import { MAX_COMMAND } from '@/lib/bridge/bridge';
 import { focusedFrame, numbersAll } from '@/lib/page/frames';
-import { keyEvents, parseKey, scriptKey } from '@/lib/actions/keys';
+import { keyEvents, MODIFIERS, parseKey, scriptKey } from '@/lib/actions/keys';
 import { targetTabId } from '@/lib/tabs/navigation';
 import { attach, checkPoint, checkScriptClick, clickAtPoint, dragAlong, moveTo, pressAt, sendKeys, sendMouse, sendText, type Point } from '@/lib/actions/real-input';
 import { isDrawn, shrink, takeShot, type Shot } from '@/lib/page/screenshot';
@@ -79,6 +79,41 @@ export async function realPoints(points: Point[], clicks: 1 | 2, modifiers: numb
   if (!sent) throw new Error(NO_REAL_MOUSE);
   if (blocked) throw new Error(`${blocked}. Take a new screenshot`);
   return `ok — real ${drag ? 'drag' : clicks === 2 ? 'double-click' : 'click'}${aimed.note}`;
+}
+
+// #2: select text in the top page. A text box or editable area is selected by the page script (its reply is the result).
+// Other text, like a code editor that keeps its own selection (Monaco), by the real mouse: a click at its start, then a
+// shift+click at its end. The page plans and checks both spots first (stop-lines unless allowed). Then each click goes
+// like realPoints: the mouse moves there, the page checks that spot again with the guard on it alone, and the press
+// follows, so each lands only on what was checked. Attached before those checks, so they see Chrome's debugging bar.
+export async function realSelect(from: string, to: string, nth: number | undefined, allow: boolean): Promise<string> {
+  const msg = (step?: 'start' | 'end') => ({ type: 'selectText', from, to, ...(nth === undefined ? {} : { nth }), ...(step ? { step } : {}), allow }) as const;
+  const plan = await sendToTab(msg());
+  if (typeof plan === 'string') return plan;
+  const tabId = await targetTabId();
+  const attached = await attach(tabId);
+  if (!attached) throw new Error(`${NO_REAL_MOUSE}. That text isn't in a text box, so selecting it needs the real mouse`);
+  if (attached === 'fresh') await new Promise((resolve) => setTimeout(resolve, 250)); // the bar comes in
+  let note = plan.note;
+  for (const [i, step] of (['start', 'end'] as const).entries()) {
+    let sent = false;
+    let blocked = '';
+    try {
+      let aimed = await sendToTab(msg(step));
+      if (typeof aimed === 'string') return aimed;
+      if (await sendMouse(tabId, moveTo(checkPoint(aimed.points[i])))) {
+        aimed = await sendToTab(msg(step)); // checked again with the mouse there
+        if (typeof aimed === 'string') return aimed;
+        note = aimed.note;
+        sent = await sendMouse(tabId, pressAt(checkPoint(aimed.points[i]), 1, i ? MODIFIERS.shift : 0));
+      }
+    } finally {
+      blocked = await sendToTab({ type: 'aimDone' }).catch(() => '');
+    }
+    if (!sent) throw new Error(NO_REAL_MOUSE);
+    if (blocked) throw new Error(`${blocked}${i ? ' (the click at the start went: the cursor is there, nothing is selected)' : ''}. Read the page again`);
+  }
+  return `ok — real click at the start and shift+click at the end${note}`;
 }
 
 const NO_REAL_KEYBOARD = "No real keyboard on this page (the debugging bar was cancelled, or Chrome won't attach here): this needs it";

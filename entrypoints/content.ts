@@ -4,15 +4,17 @@ import { aim, aimKey, aimPoints, aimText, click, focusHere, pasteText, clickText
 import { captchaKind, visibleCaptcha } from '@/lib/safety/captcha';
 import { onScreen } from '@/lib/page/in-view';
 import { drawForShot, endShot, setOverlay } from '@/lib/page/overlay';
-import { loadPage, withNote } from '@/lib/page/load-page';
-import { findSnippets, findText, pageItems, pageLines, readText, TEXT_CAP, textTargets } from '@/lib/page/page-text';
+import { loadPage, wholeText, withNote } from '@/lib/page/load-page';
+import { findSnippets, findText, pageItems, readText, textTargets } from '@/lib/page/page-text';
+import { landmarkLines } from '@/lib/page/landmarks';
 import { notAlike, pickAll, pickLike } from '@/lib/page/pick';
 import { getElements, read, secretOnScreen } from '@/lib/page/reader';
+import { selectText } from '@/lib/actions/select-text';
 import { waitForQuiet } from '@/lib/tabs/settle';
 
 // One handler per message type. The type checks each reply matches lib/messages.ts. Handlers may be async.
 // Messages that act on the page. Inside a CAPTCHA's own frame they're refused (4.2).
-const ACTIONS = new Set<Message['type']>(['click', 'clickText', 'aim', 'aimPoints', 'aimKey', 'aimText', 'pasteText', 'hover', 'type', 'select', 'scroll', 'key']);
+const ACTIONS = new Set<Message['type']>(['click', 'clickText', 'aim', 'aimPoints', 'aimKey', 'aimText', 'pasteText', 'hover', 'type', 'select', 'selectText', 'scroll', 'key']);
 
 const handlers: {
   [K in Message['type']]: (msg: Extract<Message, { type: K }>) => Replies[K] | Promise<Replies[K]>;
@@ -23,14 +25,12 @@ const handlers: {
   read: ({ next, overlay }) => {
     const reply = read(next);
     setOverlay(overlay, getElements());
-    return { ...reply, page: pageLines(pageItems(getElements(), reply.lines)) };
+    const { lines, landmarks } = landmarkLines(pageItems(getElements(), reply.lines), getElements()); // #6
+    return { ...reply, page: lines, landmarks };
   },
   // text all and find load a lazy page first (F3d; pick does it inside); plain text reads the screen as it is.
-  text: async ({ all }) => {
-    if (!all) return readText();
-    const { lines, note } = await loadPage(() => readText(true).split('\n'), (l) => l.join('\n').length >= TEXT_CAP);
-    return withNote(note, lines.join('\n'));
-  },
+  // #1: text all also scrolls through a box that keeps only its lines near the screen (a code editor).
+  text: ({ all }) => (all ? wholeText() : readText()),
   // stay: find stops scrolling where the words showed up, so its jump to the match is short.
   find: async ({ query, nth }) => withNote((await loadPage(() => findSnippets(query), (l) => l.length >= nth, true)).note, findText(query, nth)),
   pick: ({ selector }) => pickAll(selector),
@@ -49,6 +49,7 @@ const handlers: {
   hover: ({ n }) => hover(n),
   type: ({ n, text, enter, slow, allow }) => typeText(n, text, enter, slow, allow),
   select: ({ n, option, allow }) => selectOption(n, option, allow),
+  selectText: ({ from, to, nth, step, allow }) => selectText(from, to, nth, step, allow),
   scroll: ({ dir, n }) => scroll(dir, n),
   key: ({ key, allow }) => pressKey(key, allow),
   settle: ({ maxMs }) => waitForQuiet(maxMs),

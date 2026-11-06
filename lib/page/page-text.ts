@@ -160,6 +160,39 @@ export function* shownPieces(root: Node, all: boolean): Generator<Piece & { node
 export const readText = (all = false, except?: Node) =>
   joinLines([...shownPieces(document.documentElement, all)].filter((p) => !except?.contains(p.node)));
 
+// #1: the text in box that's in the page now, by text all's rules, as lines. Not what it hides from screen readers: a
+// code editor's line numbers (CodeMirror's gutter is aria-hidden) would come out as a column of their own.
+export const boxText = (box: Element) => joinLines([...shownPieces(box, true)].filter((p) => {
+  const at = p.node instanceof Text ? parentOf(p.node) : p.node;
+  return !at?.closest('[aria-hidden=true]');
+}));
+
+// #1: the whole page's text (readText(true)), with each box in swap read as the lines given (what text all read by
+// scrolling it), in its place. A box with no text showing now gets its lines at the end.
+export function readTextWith(swap: Map<Element, string[]>): string {
+  const out: string[] = [];
+  const left = new Map(swap);
+  let pieces: Piece[] = [];
+  const flush = () => {
+    const text = joinLines(pieces);
+    if (text) out.push(text);
+    pieces = [];
+  };
+  for (const p of shownPieces(document.documentElement, true)) {
+    const at = p.node instanceof Text ? parentOf(p.node) : p.node;
+    const box = [...swap.keys()].find((b) => deepContains(b, at));
+    if (!box) pieces.push(p);
+    else if (left.has(box)) {
+      flush();
+      out.push(...left.get(box)!);
+      left.delete(box);
+    }
+  }
+  flush();
+  for (const lines of left.values()) out.push(...lines);
+  return out.join('\n');
+}
+
 // Lines in after that before doesn't have, repeats counted. Pure.
 export function addedLines(before: string[], after: string[]): string[] {
   const left = new Map<string, number>();
@@ -196,19 +229,27 @@ export function reaction(before: string[], after: string[], field?: { typed: str
 
 // F2: what the AI reads each step, like browser-use's page view: the listed elements with the visible text around them,
 // in page order, so a cinema's name sits right above its showtimes. An item is an element (its read line and name) or
-// a text piece with the name of the listed element it's inside ('' if none).
-export type Item = { line: string; name: string } | (Piece & { owner: string });
+// a text piece with the name of the listed element it's inside ('' if none). at: where it is on the page (#6 groups
+// items by landmark); tests leave it out.
+export type Item = ({ line: string; name: string } | (Piece & { owner: string })) & { at?: Node };
 const MAX_TEXT = 100; // characters per text line
 export const MAX_TEXT_LINES = 150; // per frame: a wall of text (a long article) is what text and find are for
 
 // Items → lines. Pure, so Node can test it. Text lines are always quoted: page text can never pass for an element
 // line ("[5] button …"), which the model and our code (page-diff, loop guard, labels) trust. Text an element line already
 // says is dropped: what's inside the element (its name) and a label right next to it.
-export function pageLines(items: Item[]): string[] {
+export const pageLines = (items: Item[]) => pageLinesIn(items, () => -1).lines;
+
+// #6: pageLines, keeping each landmark's lines apart: group(i) says which landmark item i sits in (-1: none), and ranges
+// where each one's lines start and end in the output, [start, end). A landmark's items come one after another (DOM
+// order); a stray one later (an element the walk couldn't reach) is printed as no landmark's. Pure.
+export function pageLinesIn(items: Item[], group: (i: number) => number): { lines: string[]; ranges: Map<number, { start: number; end: number }> } {
   const out: string[] = [];
+  const ranges = new Map<number, { start: number; end: number }>();
   let pieces: Piece[] = [];
   let above = ''; // name of the element just before the pending text
   let texts = 0;
+  let current = -1;
   const flush = (below: string) => {
     for (const line of joinLines(pieces).split('\n')) {
       if (!line || line === above || line === below) continue;
@@ -216,7 +257,15 @@ export function pageLines(items: Item[]): string[] {
     }
     pieces = [];
   };
-  for (const item of items) {
+  for (const [i, item] of items.entries()) {
+    const g = ranges.has(group(i)) && group(i) !== current ? -1 : group(i);
+    if (g !== current) {
+      flush('');
+      if (current >= 0) ranges.get(current)!.end = out.length;
+      if (g >= 0) ranges.set(g, { start: out.length, end: out.length });
+      current = g;
+      above = '';
+    }
     if ('line' in item) {
       flush(item.name);
       out.push(item.line);
@@ -226,8 +275,9 @@ export function pageLines(items: Item[]): string[] {
     }
   }
   flush('');
+  if (current >= 0) ranges.get(current)!.end = out.length;
   if (texts > MAX_TEXT_LINES) out.push(`(${texts - MAX_TEXT_LINES} more lines of text on screen not shown: use text or find)`);
-  return out;
+  return { lines: out, ranges };
 }
 
 // el, or a box it sits in, is pinned to the screen (sticky header, fixed popup or banner). Cached per read.
@@ -267,11 +317,11 @@ export function pageItems(elements: Map<number, Element>, lines: string[]): Item
       if (child instanceof Text) {
         if (!child.data.trim()) continue;
         const rects = lineBoxes(range, child);
-        if (rects.some((r) => onScreen(r)) && isShown(child) && uncovered(child, rects, pins)) items.push({ ...toPiece(child.data, rects, seeThrough(child)), owner });
+        if (rects.some((r) => onScreen(r)) && isShown(child) && uncovered(child, rects, pins)) items.push({ ...toPiece(child.data, rects, seeThrough(child)), owner, at: child });
       } else if (child instanceof Element && !clippedAway(child)) {
         const own = listed.get(child);
         if (own) {
-          items.push(own);
+          items.push({ ...own, at: child });
           listed.delete(child);
         }
         const shadow = shadowRootOf(child);
@@ -299,23 +349,66 @@ export function sameText(texts: string[], want: string): number[] {
   return [];
 }
 
+// #5: the deepest boxes whose text, glued from the text nodes inside them, reads exactly want (sameText's rules). Seen
+// live: a code editor draws "limit 5" as three spans ("limit", " ", "5"), and React draws "Last {n} days" as three text
+// nodes, so no single text node read the words. One walk: each text adds itself to the boxes above it; a box that grows
+// longer than want can't match, and neither can any box above it (they hold all of its text), so the walk stops there.
+// nodes: text nodes in DOM order; up: the box a node or box sits in. Pure.
+export function gluedMatches<T, E>(nodes: Iterable<T>, data: (n: T) => string, up: (n: T | E) => E | null, want: string): E[] {
+  const size = (s: string) => flat(s).replaceAll(' ', '').length;
+  const limit = size(want);
+  if (!limit) return [];
+  const glued = new Map<E, string | null>(); // null: longer than want
+  for (const n of nodes) {
+    const d = data(n);
+    let long = false;
+    for (let box = up(n); box; box = up(box)) {
+      const had = glued.get(box);
+      if (had === null) break; // it and every box above it are too long already
+      const text = `${had ?? ''}${d}`;
+      long ||= size(text) > limit;
+      glued.set(box, long ? null : text);
+    }
+  }
+  const boxes = [...glued].filter((e): e is [E, string] => e[1] !== null);
+  const hits = new Set(sameText(boxes.map(([, text]) => text), want).map((i) => boxes[i]![0]));
+  // A box around a hit adds only blank text to it: the hit inside is the one meant.
+  const outer = new Set<E>();
+  for (const hit of hits) for (let box = up(hit); box; box = up(box)) if (hits.has(box)) outer.add(box);
+  return [...hits].filter((hit) => !outer.has(hit));
+}
+
 // R1: the elements holding a shown text that reads exactly want, anywhere on the page (live, the one meant sat below the
 // screen), by the page list's rules: not hidden, not screen-reader-only, and on screen not covered by something pinned
 // (the click checks again once it's scrolled to). Each says if it's clickable and on screen, for chooseText.
-// shortcut: one text node each, so text split across tags ("Apply <b>now</b>") doesn't match; upgrade if a run needs it.
+// One text node each first (fast); when none reads want, a box whose text nodes glue into it (#5, gluedMatches).
 export type Found = { clickable: boolean; onScreen: boolean };
 export function textTargets(want: string): (Found & { el: Element })[] {
   const range = document.createRange();
   const pins = new Map<Element, boolean>();
+  // Shown by those rules: where it is (onScreen), or null if it isn't shown.
+  const seen = (n: Text): { onScreen: boolean } | null => {
+    const rects = lineBoxes(range, n);
+    const here = rects.some((r) => onScreen(r));
+    return isShown(n) && (here ? uncovered(n, rects, pins) : rects.some((r) => onPage(r, innerWidth, scrollY))) ? { onScreen: here } : null;
+  };
   const screen = new Map<Text, boolean>();
   const shown = [...textNodes(document.documentElement)].filter((n) => {
     if (!sameText([n.data], want).length) return false; // cheap test first: most text never matches
-    const rects = lineBoxes(range, n);
-    screen.set(n, rects.some((r) => onScreen(r)));
-    return isShown(n) && (screen.get(n) ? uncovered(n, rects, pins) : rects.some((r) => onPage(r, innerWidth, scrollY)));
+    const s = seen(n);
+    if (s) screen.set(n, s.onScreen);
+    return !!s;
   });
-  const els = new Map(sameText(shown.map((n) => n.data), want).map((i) => [parentOf(shown[i]!)!, screen.get(shown[i]!)!]));
-  return [...els].map(([el, onScreen]) => ({ el, onScreen, clickable: clickable(el) }));
+  if (shown.length) {
+    const els = new Map(sameText(shown.map((n) => n.data), want).map((i) => [parentOf(shown[i]!)!, screen.get(shown[i]!)!]));
+    return [...els].map(([el, onScreen]) => ({ el, onScreen, clickable: clickable(el) }));
+  }
+  // Glued from all text first (cheap), then each box's shown text only, so hidden text can't make up the words.
+  return gluedMatches(textNodes(document.documentElement), (n) => n.data, parentOf, want).flatMap((el) => {
+    const parts = [...textNodes(el)].map((n) => ({ n, s: n.data.trim() ? seen(n) : { onScreen: false } }));
+    if (!sameText([parts.filter((p) => p.s).map((p) => p.n.data).join('')], want).length) return [];
+    return [{ el, onScreen: parts.some((p) => p.s?.onScreen), clickable: clickable(el) }];
+  });
 }
 
 // R1: which of several shown texts a click "text" means: the one clickable one (live: a pricing toggle below the screen
@@ -408,8 +501,8 @@ export function shownElement(el: Element): boolean {
   return true;
 }
 
-// The text find searches: shown, anywhere on the page, top frame.
-function searchable(): Text[] {
+// The text find (and select text, #2) searches: shown, anywhere on the page, top frame.
+export function searchable(): Text[] {
   const range = document.createRange();
   const nodes: Text[] = [];
   for (const node of textNodes(document.documentElement)) {

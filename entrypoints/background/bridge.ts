@@ -2,7 +2,8 @@
 import { checkGoto, frameSiteToAsk, onSites, siteOn, siteToAdd, siteToOpen, wantsSite } from '@/lib/agent-prompt';
 import { allowOnce, batchProblem, batchReply, captchaHold, checkAgentTip, checkCommands, isAnswer, LOOK_HELP, lookShot, MAX_ASK, MAX_OUTPUT, MCP_COMMANDS, picksTab, retryUnlisted, showsPage, TIP_HELP, tipsOnce, type AskNotice, type BridgeAsk, type BridgeImage, type BridgeReply } from '@/lib/bridge/bridge';
 import { fileName, fromSites, RunDownloads } from '@/lib/files/downloads';
-import { captchaAll, frameFor, labelFor, nameFor, readAll } from '@/lib/page/frames';
+import { captchaAll, frameFor, labelFor, landmarksIn, nameFor, readAll } from '@/lib/page/frames';
+import { shorten } from '@/lib/page/landmarks';
 import { bridgeOff, HOST_NAME } from '@/lib/bridge/host-install';
 import { helperCard } from '@/lib/bridge/updates';
 import { HandOver, StopLine } from '@/lib/messages';
@@ -10,7 +11,7 @@ import { follow, guardedGoto, openBehind, pinTab, targetTabId } from '@/lib/tabs
 import { pageReport } from '@/lib/page/page-diff';
 import { remember, type Remembered } from '@/lib/memory/panel-memory';
 import type { Step } from '@/lib/panel/panel-port';
-import { parseCommand } from '@/lib/parse-command';
+import { elementWord, parseCommand } from '@/lib/parse-command';
 import { saidLine, splitReply, stepTitle } from '@/lib/panel/readable-log';
 import { detachAll, parsePoint } from '@/lib/actions/real-input';
 import { failed, recordLine } from '@/lib/memory/repeat';
@@ -72,11 +73,41 @@ export let skipRead = false;
 // command's read; it becomes bridge.page only once it's sent (agentCommand).
 export let forAgent = false;
 let agentRead: string | null = null;
+// #6: the landmarks this command's reply prints in full (site, then key and sig each), remembered once it's sent.
+let agentShown: { site: string; shown: [string, string][] } | null = null;
 
 // A fresh read as the agent gets it: the change since its last page list, or the whole list (pageReport says when).
+// Changes are found between whole lists, so a nav said in one line (#6) never reads as gone.
 export function agentPage(page: string): string {
   agentRead = page;
-  return pageReport(bridge?.page ?? null, page);
+  const report = pageReport(bridge?.page ?? null, page);
+  if (report === page) return shortened(page);
+  agentShown = null;
+  return report;
+}
+
+// #6: a whole page list as the agent gets it: a nav, sidebar or header it already got in full on this site, with the
+// same elements, is one line. all (read all): nothing is shortened.
+function shortened(page: string, all = false): string {
+  const marks = landmarksIn(page);
+  if (!bridge || !marks?.site) {
+    agentShown = null;
+    return page;
+  }
+  const { text, shown } = shorten(page, marks.landmarks, all ? new Map() : (bridge.seen.get(marks.site) ?? new Map()));
+  agentShown = { site: marks.site, shown };
+  return text;
+}
+
+// This command's read was sent: it's the agent's last page list now, and what it printed in full counts as seen.
+function sent() {
+  const b = bridge;
+  if (!b || agentRead === null) return;
+  b.page = agentRead;
+  if (!agentShown) return;
+  const seen = b.seen.get(agentShown.site) ?? new Map<string, string>();
+  for (const [key, sig] of agentShown.shown) seen.set(key, sig);
+  b.seen.set(agentShown.site, seen);
 }
 
 // The MCP bridge (/mcp on): a coding agent's commands come from the local helper's pipe (host/mcp.ts). Each shows
@@ -90,9 +121,10 @@ export type BridgeStep = { ran?: string[]; downloadsAt?: number };
 // steps (RP1): one per call, with what worked, for repeat <step>; each reply starts with its number.
 // solved: the CAPTCHA you last resumed from (captchaHold), so a solved one still on screen doesn't ask again.
 // session: the agent whose runs these are (host/mcp.ts). page and tipped are what that agent got, so they reset with it.
+// seen (#6): per site, the landmarks that agent got in full (key → its elements), so they reset with it too.
 // tab (OT1): that agent's own tab, kept whatever tab is in front; null until a command picks one (agentTab). came: for
 // each tab it followed, the tab it came from: where its back goes (#15), never Chrome's opener, which can be your tab.
-export let bridge: { port: Port; sites: string[]; refused: Set<string>; page: string | null; tipped: Set<string>; steps: BridgeStep[]; solved: string; session: string; tab: number | null; came: Map<number, number> } | null = null;
+export let bridge: { port: Port; sites: string[]; refused: Set<string>; page: string | null; tipped: Set<string>; seen: Map<string, Map<string, string>>; steps: BridgeStep[]; solved: string; session: string; tab: number | null; came: Map<number, number> } | null = null;
 
 // S2 for the bridge: a site off its Sites asks you first. No: refused and not asked again while the bridge is on.
 async function bridgeSite(site: string, url: string): Promise<void> {
@@ -115,9 +147,10 @@ async function bridgeSite(site: string, url: string): Promise<void> {
 // S2 in frames (audit 2026-10-24, lead 1): a click, type or select inside another site's frame asks you to add that
 // site first, like a tab on a new site. Reading an embed stays free; acting in one could send page data to a site you
 // never added. x,y clicks and type here already refuse frames. Runs before each try, so a re-read can't skip it.
-async function frameSites(name: string, nArg: string | undefined): Promise<void> {
+// raw: the element word as written: select text (#2, top page only) names no element, but select "text" is a dropdown.
+async function frameSites(name: string, nArg: string | undefined, raw: string | undefined): Promise<void> {
   const b = bridge;
-  if (!b || !['click', 'type', 'select'].includes(name) || nArg === 'here' || parsePoint(nArg ?? '')) return;
+  if (!b || !['click', 'type', 'select'].includes(name) || nArg === 'here' || (name === 'select' && raw === 'text') || parsePoint(nArg ?? '')) return;
   const frameId = frameFor(target(nArg, `${name} <number|"label">`));
   if (frameId === 0) return;
   const all = (await browser.webNavigation.getAllFrames({ tabId: await targetTabId() })) ?? [];
@@ -139,7 +172,7 @@ function sign(change: () => Promise<void>) {
 // Connects to the local helper (host/mcp.ts) with these Sites. Used by mcp on and by the panel turning it back on.
 export function startBridge(sites: string[]): string {
   const port = browser.runtime.connectNative(HOST_NAME);
-  bridge = { port, sites, refused: new Set(), page: null, tipped: new Set(), steps: [], solved: '', session: '', tab: null, came: new Map() };
+  bridge = { port, sites, refused: new Set(), page: null, tipped: new Set(), seen: new Map(), steps: [], solved: '', session: '', tab: null, came: new Map() };
   sign(ungroupAll); // OT2: a group left from before (the worker restarted) has no agent tab now
   showMcp('starting');
   port.onMessage.addListener((m) => void onBridge(port, m));
@@ -196,7 +229,7 @@ async function onBridge(port: Port, m: { type?: string; commands?: unknown; erro
   // outlives agents (it lives in the worker, and with always-on all day), so without this only the first agent got tips.
   const session = typeof m.session === 'string' ? m.session : '';
   if (bridge && bridge.session !== session) {
-    Object.assign(bridge, { session, page: null, tipped: new Set<string>(), tab: null, came: new Map<number, number>() });
+    Object.assign(bridge, { session, page: null, tipped: new Set<string>(), seen: new Map<string, Map<string, string>>(), tab: null, came: new Map<number, number>() });
     sign(ungroupAll);
   }
   running = true;
@@ -335,7 +368,7 @@ async function agentReport(): Promise<string> {
     const now = await where(bridge?.sites ?? []);
     if (!now.onPlan) return `The tab is on ${now.site}, off the bridge's Sites, so its content is hidden.`;
     const report = agentPage(await readAll(false));
-    if (bridge && agentRead !== null) bridge.page = agentRead; // sent with this reply
+    sent(); // with this reply
     return report;
   } catch (err) {
     return `(read failed: ${err instanceof Error ? err.message : String(err)})`;
@@ -490,6 +523,7 @@ async function agentCommand(line: string, last: boolean): Promise<AgentReply> {
   let image: BridgeImage | undefined;
   forAgent = true;
   agentRead = null;
+  agentShown = null;
   skipRead = !last; // F9's pattern: in a batch only the last command reads, so the reply has one change report
   try {
     if (name === 'goto') {
@@ -513,7 +547,9 @@ async function agentCommand(line: string, last: boolean): Promise<AgentReply> {
       output = `${shot.line}\n\n${read}`;
       image = shot.image;
     } else if (name === 'read') {
-      output = agentRead = await readAll(false); // always the whole list
+      // Always the whole list; read all with nothing shortened (#6).
+      if (args.length > 1 || (args[0] !== undefined && args[0] !== 'all')) throw new Error('Usage: read, or read all');
+      output = shortened((agentRead = await readAll(false)), args[0] === 'all');
     } else {
       // The re-read isn't the agent's: agentRead and bridge.page stay as they were.
       output = await allowOnce(async (allow) => {
@@ -521,7 +557,7 @@ async function agentCommand(line: string, last: boolean): Promise<AgentReply> {
         if (agentDownloads) agentDownloads.allowing = allow;
         try {
           return await retryUnlisted(async () => {
-            await frameSites(name, args[0]);
+            await frameSites(name, args[0], elementWord(line)?.word);
             return runLine(commands[name]!, line, allow);
           }, () => readAll(false));
         } finally {
@@ -561,7 +597,7 @@ async function agentCommand(line: string, last: boolean): Promise<AgentReply> {
   }
   // The read in output is of the old tab: the agent reads the new one next.
   if (followed) output = `${(output || 'ok').split('\n')[0]} — it opened a new tab, now the current one: ${after.url}. Send read to see it (text page 1 if it's a PDF).`;
-  else if (bridge && agentRead !== null) bridge.page = agentRead;
+  else sent();
   if (output) show({ kind: 'line', className: 'reply', ...splitReply(output) }); // RL4: for the agent, so the panel keeps it in Details
   // A new document, not a new URL: Maps' tabs change the URL by script (pushState) on the same page. Unknown: stops.
   const docAfter = await topDocument(await targetTabId());

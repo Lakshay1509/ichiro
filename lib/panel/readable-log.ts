@@ -40,7 +40,7 @@ const SAYS: Record<string, (t: string, arg: string) => string> = {
   hover: (t) => `Pointed the mouse at ${t}`,
   type: (t) => (t === 'here' ? 'Typed some text' : `Typed into ${t}`),
   paste: () => 'Pasted some text',
-  select: (t) => `Picked an option in ${t}`,
+  select: (t) => (t === 'text' ? 'Selected some text' : `Picked an option in ${t}`),
   scroll: (t, way) => (t ? `Scrolled ${t} ${way}` : `Scrolled the page ${way}`),
   drag: () => 'Dragged with the mouse',
   key: (_, key) => `Pressed ${key}`,

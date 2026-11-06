@@ -1,7 +1,7 @@
 // Checks scrollLine, sideRoom and sideLine (boxes that scroll sideways), urlName (unlabeled image links), cut
 // (shortened names), saysMore (calendar labels), ranges (panel and scroll box numbers) and classHint (unnamed icon
 // buttons). Run: npm test
-import { besideText, classHint, cut, isSecret, ranges, saysMore, scrollLine, sideLine, sideRoom, suggests, urlName } from './reader.ts';
+import { besideText, classHint, cut, isSecret, menuItems, ranges, saysMore, scrollLine, sideLine, sideRoom, suggests, urlName } from './reader.ts';
 
 // besideText: an unlabeled checkbox or radio is named by the text right beside it, up to the next control. Seen live
 // in 4 runs: boxes sharing a parent all got the parent's whole text ("… Yes No Clear") or nothing, and the model
@@ -164,3 +164,35 @@ for (const [type, attrs, want] of secrets) {
 }
 // A show-password button isn't a field: its id doesn't make it secret (else every login page would stop all clicks).
 if (isSecret({ getAttribute: () => null, id: 'show-password' } as unknown as Element)) throw new Error('isSecret: a show-password button is not secret');
+
+// #4: a menu built from plain boxes gives each option its own number, instead of one line for the whole menu. Seen live:
+// Supabase's time picker read as radiogroup "Last hour Last 3 hours …", with no number per option. A fake DOM: a box
+// has a tag, attributes, children and its text.
+type Node4 = { tagName: string; children: Node4[]; innerText: string; getAttribute: (n: string) => string | null };
+const box4 = (tag: string, attrs: Record<string, string>, kids: Node4[] | string): Node4 => ({
+  tagName: tag.toUpperCase(),
+  children: typeof kids === 'string' ? [] : kids,
+  innerText: typeof kids === 'string' ? kids : kids.map((k) => k.innerText).join('\n'),
+  getAttribute: (n) => attrs[n] ?? null,
+});
+const option = (text: string, cls = 'item px-2 py-1 text-sm') => box4('div', { class: cls }, text);
+const items = (menu: Node4) => menuItems(menu as unknown as Element).map((e) => (e as unknown as Node4).innerText).join(' | ');
+const times = ['Last hour', 'Last 3 hours', 'Last 24 hours', 'Last 3 days', 'Last 7 days'];
+for (const [menu, want, what] of [
+  [box4('div', { role: 'radiogroup', tabindex: '0' }, times.map((t) => option(t))), times.join(' | '), 'a radiogroup of plain divs'],
+  // The selected one has a class of its own: still built alike.
+  [box4('div', { role: 'radiogroup' }, times.map((t, i) => option(t, i ? 'item px-2 py-1 text-sm' : 'item px-2 py-1 text-sm bg-selected'))), times.join(' | '), 'a selected option'],
+  // Wrappers that hold all the menu's text are looked past.
+  [box4('div', { role: 'listbox' }, [box4('div', { class: 'scroll' }, [box4('div', {}, times.map((t) => option(t)))])]), times.join(' | '), 'wrapped options'],
+  // No ARIA menu role: 3 options at least, so a two-part box stays one.
+  [box4('div', { tabindex: '0' }, times.slice(0, 3).map((t) => option(t))), times.slice(0, 3).join(' | '), 'three options, no role'],
+  [box4('div', { tabindex: '0' }, times.slice(0, 2).map((t) => option(t))), '', 'two parts, no role'],
+  [box4('div', { role: 'tablist' }, [option('Monthly'), option('Yearly')]), 'Monthly | Yearly', 'two tabs in a tablist'],
+  // A card: title, price and rating are built differently, so the card stays one element.
+  [box4('div', { tabindex: '0' }, [box4('h3', {}, 'Blue shirt'), box4('span', { class: 'price' }, '$20'), box4('span', { class: 'stars' }, '4.5')]), '', 'a card'],
+  // Same tag, but classes with nothing in common: not built alike.
+  [box4('div', { tabindex: '0' }, [option('a', 'title big'), option('b', 'price red'), option('c', 'stars')]), '', 'different classes'],
+  // Text that isn't an option (a heading) means it isn't just a menu: kept whole.
+  [box4('div', { role: 'listbox' }, [box4('p', {}, 'Time range'), box4('ul', {}, times.map((t) => option(t)))]), '', 'a heading beside the options'],
+  [box4('div', { role: 'menu' }, ''), '', 'empty'],
+] as const) if (items(menu) !== want) throw new Error(`menuItems, ${what}: ${JSON.stringify(items(menu))}`);

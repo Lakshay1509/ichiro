@@ -4,6 +4,15 @@ What changed in each Ichiro release, newest first. Each version is one git tag, 
 
 ## Unreleased
 
+### Added
+- `select text "start" to "end"` selects a stretch of text by its first and last words, in a text box, an editable area or a code editor (Overleaf, Monaco), so your agent can replace part of a document with `paste` or `type here` without a screenshot. It replies with what it selected. When the words show up more than once, it lists them and asks for `n` instead of guessing. In a code editor it uses two real clicks: never on a link, button or label, and it asks you first where a click would (a checkout page, for example).
+- Shorter page lists on dashboard apps (Supabase, Vercel, AWS): once your agent got a site's nav, sidebar or header in full, a later page list on that site says it in one line while it reads the same, like `Sidebar "Project menu": 14 elements ([6]–[19]), the same as you got before on this site — read all lists them`. Their numbers and labels still work, and `read all` lists everything. Your own `/read` in the side panel always lists everything.
+
+### Fixed
+- `click "text"` now finds words the page draws in several pieces, like a code editor's `limit 5` (one piece per word) or a menu's `Last 7 days`. Before, it said "Nothing called …" though the words were on screen.
+- `read` gives each option of a custom dropdown its own number (time pickers, filters, menus built from plain boxes). Before, the whole menu was one element, so picking an option took a screenshot and a pixel click. Clicking an option still asks you first when the box around it says a risky word, like "Delete" or "Subscribe".
+- `text all` reads all of a box that keeps only the lines near the screen, like a code editor (Overleaf), a chat or a long feed. It scrolls the box a screen at a time, joins what it read, puts the scroll back, and says so in the reply. Before, it got only the lines on screen. Also, a page that loads as you scroll is now read in order when you were scrolled down.
+
 ## 0.3.0 · 2026-11-02
 
 ### Changed

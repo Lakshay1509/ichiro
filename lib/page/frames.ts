@@ -2,6 +2,7 @@
 import { captchaKind } from '../safety/captcha';
 import { findByLabel, labelOf, nameOf } from './find-by-label';
 import { claim, clashed } from './numbers';
+import type { Landmark } from './landmarks';
 import type { Message } from '../messages';
 import { targetTabId } from '../tabs/navigation';
 import { send, sendToTab } from '../tabs/send-to-tab';
@@ -15,6 +16,10 @@ let lastNumber: number | undefined;
 let reading: Promise<unknown> = Promise.resolve();
 // The element lines of the latest read, all frames, for finding elements by label.
 let readLines: string[] = [];
+// #6: the latest read's text, its site and its top page's landmarks (their lines counted in that text).
+let latest: { text: string; site: string; landmarks: Landmark[] } | null = null;
+// The landmarks of a read's text, if it's the latest read's; null otherwise (an older read, or a hidden one).
+export const landmarksIn = (text: string) => (latest?.text === text ? latest : null);
 // /overlay's setting (remembered across panel opens): every read sends it, so a newly opened page draws numbers too.
 let overlayOn = false;
 export const setOverlayOn = (on: boolean) => void (overlayOn = on);
@@ -156,6 +161,10 @@ async function readFrames(footer: boolean): Promise<string> {
   await browser.storage.session.set({ lastNumber });
 
   const text = [top.header, `Elements (${frameOfElement.size}):`, ...parts].join('\n');
+  // #6: the top page's lines come right after the header and the Elements line.
+  const offset = top.header.split('\n').length + 1;
+  const site = URL.parse(/^URL: (.*)$/m.exec(top.header)?.[1] ?? '')?.hostname ?? '';
+  latest = { text, site, landmarks: (top.landmarks ?? []).map((l) => ({ ...l, start: l.start + offset, end: l.end + offset })) };
   const ms = Math.round(performance.now() - start);
   if (!footer) return text;
   // Debug footer for you, not for the AI. Tokens ≈ characters ÷ 4.

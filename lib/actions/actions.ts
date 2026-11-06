@@ -1,7 +1,7 @@
 // Actions: do things to elements from the latest read, like a person would. Runs in the content script.
 // Known limit: these events have isTrusted = false. A few sites ignore them; harness Phase 7 adds real input.
 import {
-  clickable, clickPoint, deepContains, deepElementFromPoint, findInteractive, getElement, getElements, isSecret, name, NO_VALUE, panelOnTop,
+  clickable, clickPoint, deepContains, deepElementFromPoint, findInteractive, getElement, getElements, clickableBoxes, isSecret, name, NO_VALUE, panelOnTop,
   parentOf, readScroll, role, roomOf, scrollLine, shadowRootOf, sideLine, sideways, suggests, visibleCenter,
 } from '../page/reader.ts';
 import { HandOver, StopLine } from '../messages.ts';
@@ -91,7 +91,12 @@ export async function clickText(want: string, allow = false): Promise<string> {
 // Shared by our script click and I1's real one.
 async function prepareClick(el: Element, what: string, allow: boolean) {
   const aimed = await aimAt(el, what);
-  if (!allow) checkStopLine(JSON.stringify(name(el)), clickTargets(el, aimed.hit));
+  if (!allow) {
+    // #4: an option inside a clickable box: the box's handler gets the click too, so it's checked like the element.
+    const boxes = clickableBoxes(el);
+    checkStopLine(JSON.stringify(name(el)), [...clickTargets(el, aimed.hit), ...boxes]);
+    if (boxes.length) checkBoxes(el, `click ${JSON.stringify(name(el))}`);
+  }
   return aimed;
 }
 
@@ -219,11 +224,14 @@ export async function aimPoints(points: Point[], shot: { width: number; height: 
 }
 
 // The stop-lines for a press or release on hit: inside a listed thing (a button, a link), checked like clicking it.
-// Else the spot and the boxes around it.
-function checkSpot(hit: Element, what: string) {
+// Else the spot and the boxes around it. Also select text's real clicks (#2).
+export function checkSpot(hit: Element, what: string) {
   const owner = findInteractive().filter((e) => deepContains(e, hit)).at(-1);
-  if (owner) checkStopLine(`${what} on ${JSON.stringify(name(owner))}`, clickTargets(owner, hit));
-  else {
+  if (owner) {
+    const boxes = clickableBoxes(owner); // #4: as prepareClick
+    checkStopLine(`${what} on ${JSON.stringify(name(owner))}`, [...clickTargets(owner, hit), ...boxes]);
+    if (boxes.length) checkBoxes(owner, what);
+  } else {
     checkStopLine(what, [hit]);
     checkBoxes(hit, what);
   }
