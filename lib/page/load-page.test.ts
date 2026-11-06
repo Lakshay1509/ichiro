@@ -101,6 +101,15 @@ const textFull = (lines: string[]) => lines.join('\n').length >= 12_000;
   same(r.lines, f.all(), 'virtual: every row');
   if (!r.note.includes('to the end')) fail(`virtual note: ${r.note}`);
 }
+// The same list read while scrolled down: the pass still reads it top to bottom, in order (seen in the box test below:
+// started from the first read, the rows on screen came before the top's).
+{
+  const f = fake({ rows: 200, view: 20, virtual: true });
+  f.go(100);
+  const r = await loadWith(f.page, f.text, textFull);
+  same(r.lines, f.all(), 'virtual, scrolled down: every row in order');
+  if (f.at() !== 100) fail(`virtual, scrolled down: not put back (${f.at()})`);
+}
 // Endless feed (the infinite-scroll edge case): stops at the cap, says so, scrolls back.
 {
   const f = fake({ rows: 10, batches: Infinity });
@@ -129,4 +138,17 @@ const textFull = (lines: string[]) => lines.join('\n').length >= 12_000;
   const h = fake({ rows: 10, batches: 3, hidden: true });
   const r = await loadWith(h.page, h.text, textFull);
   if (!r.note.includes("isn't on screen") || h.at() !== 0 || r.lines.length !== 12) fail(`hidden: ${r.note}`);
+}
+
+// #1: a box that keeps only its lines near the screen (a code editor) is read with its own notes, which get the screens
+// and the lines read. A box whose lines are all in the page is only probed: no note, so text all leaves it as it was.
+{
+  const notes = { bottom: (n: number, l: string[]) => `box: ${n} screens, ${l.length} lines`, full: () => 'full', cap: () => 'cap' };
+  const editor = fake({ rows: 240, view: 21, virtual: true });
+  editor.go(30);
+  const r = await loadWith(editor.page, editor.text, textFull, false, notes);
+  same(r.lines, editor.all(), 'box: every line');
+  if (!/^box: \d+ screens, 242 lines$/.test(r.note) || editor.at() !== 30) fail(`box: ${r.note} at ${editor.at()}`);
+  const plain = fake({ rows: 240, view: 21 });
+  same((await loadWith(plain.page, plain.text, textFull, false, notes)).note, '', 'box with all its lines: no note');
 }

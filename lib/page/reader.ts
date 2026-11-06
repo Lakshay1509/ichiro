@@ -473,7 +473,7 @@ export function ranges(nums: number[]): string {
 }
 
 // Scrolls on its own (not the page): a scroll box with more inside than shows, up and down or sideways.
-const scrollsDown = (el: Element) => /^(auto|scroll)$/.test(getComputedStyle(el).overflowY) && el.scrollHeight > el.clientHeight + 1;
+export const scrollsDown = (el: Element) => /^(auto|scroll)$/.test(getComputedStyle(el).overflowY) && el.scrollHeight > el.clientHeight + 1;
 const scrollsAlone = (el: Element) => scrollsDown(el) || !!sideways(el);
 
 // Up to 3 boxes that scroll on their own and hold listed elements, biggest first, so the model knows what scroll moves.

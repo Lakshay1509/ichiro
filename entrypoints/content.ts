@@ -4,8 +4,8 @@ import { aim, aimKey, aimPoints, aimText, click, focusHere, pasteText, clickText
 import { captchaKind, visibleCaptcha } from '@/lib/safety/captcha';
 import { onScreen } from '@/lib/page/in-view';
 import { drawForShot, endShot, setOverlay } from '@/lib/page/overlay';
-import { loadPage, withNote } from '@/lib/page/load-page';
-import { findSnippets, findText, pageItems, pageLines, readText, TEXT_CAP, textTargets } from '@/lib/page/page-text';
+import { loadPage, wholeText, withNote } from '@/lib/page/load-page';
+import { findSnippets, findText, pageItems, pageLines, readText, textTargets } from '@/lib/page/page-text';
 import { notAlike, pickAll, pickLike } from '@/lib/page/pick';
 import { getElements, read, secretOnScreen } from '@/lib/page/reader';
 import { selectText } from '@/lib/actions/select-text';
@@ -27,11 +27,8 @@ const handlers: {
     return { ...reply, page: pageLines(pageItems(getElements(), reply.lines)) };
   },
   // text all and find load a lazy page first (F3d; pick does it inside); plain text reads the screen as it is.
-  text: async ({ all }) => {
-    if (!all) return readText();
-    const { lines, note } = await loadPage(() => readText(true).split('\n'), (l) => l.join('\n').length >= TEXT_CAP);
-    return withNote(note, lines.join('\n'));
-  },
+  // #1: text all also scrolls through a box that keeps only its lines near the screen (a code editor).
+  text: ({ all }) => (all ? wholeText() : readText()),
   // stay: find stops scrolling where the words showed up, so its jump to the match is short.
   find: async ({ query, nth }) => withNote((await loadPage(() => findSnippets(query), (l) => l.length >= nth, true)).note, findText(query, nth)),
   pick: ({ selector }) => pickAll(selector),

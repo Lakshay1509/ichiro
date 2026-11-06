@@ -10,6 +10,7 @@ What changed in each Ichiro release, newest first. Each version is one git tag, 
 ### Fixed
 - `click "text"` now finds words the page draws in several pieces, like a code editor's `limit 5` (one piece per word) or a menu's `Last 7 days`. Before, it said "Nothing called …" though the words were on screen.
 - `read` gives each option of a custom dropdown its own number (time pickers, filters, menus built from plain boxes). Before, the whole menu was one element, so picking an option took a screenshot and a pixel click. Clicking an option still asks you first when the menu box around it is named for a risky action, like "Delete".
+- `text all` reads all of a box that keeps only the lines near the screen, like a code editor (Overleaf), a chat or a long feed. It scrolls the box a screen at a time, joins what it read, puts the scroll back, and says so in the reply. Before, it got only the lines on screen. Also, a page that loads as you scroll is now read in order when you were scrolled down.
 
 ## 0.3.0 · 2026-11-02
 

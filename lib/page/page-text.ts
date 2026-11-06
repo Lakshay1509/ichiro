@@ -160,6 +160,39 @@ export function* shownPieces(root: Node, all: boolean): Generator<Piece & { node
 export const readText = (all = false, except?: Node) =>
   joinLines([...shownPieces(document.documentElement, all)].filter((p) => !except?.contains(p.node)));
 
+// #1: the text in box that's in the page now, by text all's rules, as lines. Not what it hides from screen readers: a
+// code editor's line numbers (CodeMirror's gutter is aria-hidden) would come out as a column of their own.
+export const boxText = (box: Element) => joinLines([...shownPieces(box, true)].filter((p) => {
+  const at = p.node instanceof Text ? parentOf(p.node) : p.node;
+  return !at?.closest('[aria-hidden=true]');
+}));
+
+// #1: the whole page's text (readText(true)), with each box in swap read as the lines given (what text all read by
+// scrolling it), in its place. A box with no text showing now gets its lines at the end.
+export function readTextWith(swap: Map<Element, string[]>): string {
+  const out: string[] = [];
+  const left = new Map(swap);
+  let pieces: Piece[] = [];
+  const flush = () => {
+    const text = joinLines(pieces);
+    if (text) out.push(text);
+    pieces = [];
+  };
+  for (const p of shownPieces(document.documentElement, true)) {
+    const at = p.node instanceof Text ? parentOf(p.node) : p.node;
+    const box = [...swap.keys()].find((b) => deepContains(b, at));
+    if (!box) pieces.push(p);
+    else if (left.has(box)) {
+      flush();
+      out.push(...left.get(box)!);
+      left.delete(box);
+    }
+  }
+  flush();
+  for (const lines of left.values()) out.push(...lines);
+  return out.join('\n');
+}
+
 // Lines in after that before doesn't have, repeats counted. Pure.
 export function addedLines(before: string[], after: string[]): string[] {
   const left = new Map<string, number>();
