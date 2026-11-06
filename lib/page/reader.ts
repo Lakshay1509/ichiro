@@ -141,15 +141,18 @@ export function findInteractive(): Element[] {
 // el can be clicked by findInteractive's rules: a control or generic clickable, itself or around it, or a pointer cursor.
 export const clickable = (el: Element) => !!el.closest(`${CONTROLS},${GENERIC}`) || getComputedStyle(el).cursor === 'pointer';
 
-// #4: el is a generic clickable inside another generic clickable box (a menu's option): a click on it also reaches
-// that box's own handler, so the boxes' labels count for its stop-lines (like a click on page text). Not <body> or
-// <html>: a page that sets a pointer cursor on itself would make every click ask.
-export function inClickableBox(el: Element): boolean {
-  if (el.matches(CONTROLS)) return false;
+// #4: the generic clickable boxes around el, innermost first, when el is a generic clickable itself (a menu's option):
+// a click on it also reaches their own handlers, so their names, text and labels count for its stop-lines, as when
+// they were the element (<div onclick=subscribe()>Subscribe to Pro <span aria-pressed>Monthly</span></div>: clicking
+// "Monthly" subscribes). [] for a control. Not <body> or <html>: a page with a pointer cursor on itself would make
+// every click ask.
+export function clickableBoxes(el: Element): Element[] {
+  if (el.matches(CONTROLS)) return [];
+  const boxes: Element[] = [];
   for (let p = parentOf(el); p && p !== document.body && p !== document.documentElement; p = parentOf(p)) {
-    if (!p.matches(CONTROLS) && (p.matches(GENERIC) || pointer(p))) return true;
+    if (!p.matches(CONTROLS) && (p.matches(GENERIC) || pointer(p))) boxes.push(p);
   }
-  return false;
+  return boxes;
 }
 
 // Center of the part of rect r inside the viewport, or null if none of it is (also null for zero size).
@@ -354,7 +357,7 @@ export let readScroll = { left: 0, top: 0 };
 export const getElements = () => elements;
 
 // What an element is, for keeping its number: a box that now says something else gets a new one.
-export const keyOf = (el: Element) => `${role(el)} ${name(el)}`;
+const keyOf = (el: Element) => `${role(el)} ${name(el)}`;
 
 // The element numbered n in the latest read. Throws instead of guessing if the page changed.
 export function getElement(n: number): Element {

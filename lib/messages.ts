@@ -27,8 +27,9 @@ export type Message =
   | { type: 'hover'; n: number }
   | { type: 'type'; n: number; text: string; enter: boolean; slow: boolean; allow?: boolean }
   | { type: 'select'; n: number; option: string; allow?: boolean }
-  // #2: select text "from" to "to" [nth], top page only. A text box selects it here; other text replies the real mouse's points.
-  | { type: 'selectText'; from: string; to: string; nth?: number }
+  // #2: select text "from" to "to" [nth], top page only. A text box selects it here; other text replies the real mouse's
+  // points, after checking them. step: the real click about to be sent, so the guard goes on that spot (none: a plan).
+  | { type: 'selectText'; from: string; to: string; nth?: number; step?: 'start' | 'end'; allow?: boolean }
   | { type: 'scroll'; dir: 'up' | 'down' | 'left' | 'right'; n?: number }
   | { type: 'key'; key: string; allow?: boolean }
   | { type: 'settle'; maxMs: number }

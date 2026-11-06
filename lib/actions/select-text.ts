@@ -1,9 +1,9 @@
 // select text "start" to "end" [n] (#2): selects a stretch of text by its first and last words, so a partial edit (paste
 // or type here over it, or key Delete) needs no screenshot and no pixel clicks. Runs in the content script.
 import type { Point } from './real-input.ts';
-import { guardClick } from './actions.ts';
+import { checkSpot, guardClick } from './actions.ts';
 import { joinLines, searchable, shownElement, toPiece } from '../page/page-text.ts';
-import { allElements, clickable, deepContains, deepElementFromPoint, isSecret, label, name, NO_VALUE, parentOf, role } from '../page/reader.ts';
+import { allElements, clickable, deepContains, deepElementFromPoint, isSecret, label, name, parentOf, role } from '../page/reader.ts';
 
 const MAX_ANCHOR = 100; // characters per anchor, like find's text
 const SHOWN_MATCHES = 5;
@@ -95,8 +95,9 @@ async function focus(el: HTMLElement) {
   await sleep(50);
 }
 
-// Plain text fields: their value, selected with setSelectionRange. Never a password, card or code field.
-// Source: https://developer.mozilla.org/en-US/docs/Web/API/HTMLInputElement/setSelectionRange
+// Plain text fields: their value, selected with setSelectionRange. Never a password, card or code field. Inputs of the
+// types it works on only: on others (email, number, date) it throws. Source:
+// https://developer.mozilla.org/en-US/docs/Web/API/HTMLInputElement/setSelectionRange
 function fieldBox(el: HTMLInputElement | HTMLTextAreaElement): Box {
   return {
     el,
@@ -135,12 +136,14 @@ function editableBox(el: HTMLElement): Box {
   };
 }
 
+const SELECTABLE = ['text', 'search', 'url', 'tel'];
+
 // The page's text boxes, in page order: shown text fields and the outermost editable areas.
 function textBoxes(): Box[] {
   const boxes: Box[] = [];
   for (const el of allElements(document.body)) {
     if (!shownElement(el) || isSecret(el)) continue;
-    if (el instanceof HTMLTextAreaElement || (el instanceof HTMLInputElement && !NO_VALUE.includes(el.type))) boxes.push(fieldBox(el));
+    if (el instanceof HTMLTextAreaElement || (el instanceof HTMLInputElement && SELECTABLE.includes(el.type))) boxes.push(fieldBox(el));
     else if (el instanceof HTMLElement && el.isContentEditable && !(parentOf(el) as HTMLElement | null)?.isContentEditable) boxes.push(editableBox(el));
   }
   return boxes;
@@ -179,10 +182,16 @@ function between(nodes: Text[], a: { piece: number; offset: number }, b: { piece
   return joinLines(pieces);
 }
 
+// Which real click of select text's two the panel is about to send: the click at the start, the shift+click at the end.
+export type SelectStep = 'start' | 'end';
+
 // Text outside any text box (a code editor that keeps its own selection, like Monaco): the real mouse selects it, with
-// a click at its start and a shift+click at its end, both checked like a click: on screen, not covered, not on a link or
-// button (that click would open it). The guard keeps both on what was checked. Top page only: the points are its own.
-function pagePoints(from: string, to: string, nth?: number): { points: Point[]; note: string } | null {
+// a click at its start and a shift+click at its end. Each spot is checked like a click: on screen, not covered, not on
+// a link, button or label (a click there would open it, or tick its box), and its stop-lines unless allowed (a
+// checkout page, a card field on screen, a risky box around it). No step: a plan, both checked, nothing guarded. With
+// step: that spot only (the start's caret may sit over it by now), and the guard on it alone, so the press must land
+// there. Top page only: the points are its own.
+function pagePoints(from: string, to: string, nth: number | undefined, step: SelectStep | undefined, allow: boolean): { points: Point[]; note: string } | null {
   const nodes = searchable();
   const text = nodes.map((n) => n.data).join('');
   const span = pickSpan([text], from, to, nth);
@@ -195,27 +204,38 @@ function pagePoints(from: string, to: string, nth?: number): { points: Point[]; 
     const word = i ? `the end (${JSON.stringify(to)})` : `the start (${JSON.stringify(from)})`;
     const p = caretPoint(node, offset, i === 1);
     if (!p) throw new Error(`That text isn't in a text box, so the real mouse selects it, and ${word} isn't on screen. Scroll so both ends show (find, scroll), then send it again`);
+    if (step && step !== (i ? 'end' : 'start')) return { p, hit: null };
     const hit = deepElementFromPoint(p.x, p.y);
     const parent = parentOf(node);
     if (!hit || !parent || !(deepContains(parent, hit) || deepContains(hit, parent))) throw new Error(`${word} is covered by ${hit ? what(hit) : 'something'}`);
-    if (clickable(hit)) throw new Error(`${word} is on ${what(hit)}: a click there would click it, so nothing was selected`);
+    if (clickable(hit) || hit.closest('label')) throw new Error(`${word} is on ${what(hit.closest('label') ?? hit)}: a click there would click it, so nothing was selected`);
+    if (!allow) checkSpot(hit, `select text: the ${i ? 'shift+click at the end' : 'click at the start'}`);
     return { p, hit };
   });
-  guardClick(false, ...hits.map((h) => h.hit));
+  const guarded = hits.find((h) => h.hit && step)?.hit;
+  if (guarded) guardClick(allow, guarded);
   return { points: hits.map((h) => h.p), note: ` — selected ${selectedNote(between(nodes, ends[0]!, ends[1]!))}` };
 }
 
 // select text: in a text box when the words are in one (the page script selects it), else in the page's text (the
-// panel's real mouse does it, from pagePoints). Replies what got selected.
-export async function selectText(from: string, to: string, nth?: number): Promise<string | { points: Point[]; note: string }> {
+// panel's real mouse does it, from pagePoints). Replies what got selected. A start in a text box with no end after it
+// may still be in the page's text (a code editor beside a search box): tried there before that's said.
+export async function selectText(from: string, to: string, nth?: number, step?: SelectStep, allow = false): Promise<string | { points: Point[]; note: string }> {
   const boxes = textBoxes();
-  const span = pickSpan(boxes.map((b) => b.text), from, to, nth);
-  if (span) {
-    const box = boxes[span.box]!;
-    return `ok — selected in ${boxName(box.el)}: ${selectedNote(await box.select(span.start, span.end))}`;
+  let missed: unknown;
+  try {
+    const span = pickSpan(boxes.map((b) => b.text), from, to, nth);
+    if (span) {
+      const box = boxes[span.box]!;
+      return `ok — selected in ${boxName(box.el)}: ${selectedNote(await box.select(span.start, span.end))}`;
+    }
+  } catch (err) {
+    if (!(err instanceof Error) || !err.message.startsWith('No ')) throw err; // several starts: never guessed
+    missed = err;
   }
-  const real = pagePoints(from, to, nth);
+  const real = pagePoints(from, to, nth, step, allow);
   if (real) return real;
+  if (missed) throw missed;
   // Editors like Overleaf's (CodeMirror) and Monaco keep only the lines near the screen on the page.
   throw new Error(`No match for ${JSON.stringify(from)} (case and spaces ignored). A code editor holds only the lines near the screen on the page: scroll it to the text (find, scroll), then send it again`);
 }

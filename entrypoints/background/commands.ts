@@ -200,7 +200,7 @@ export const commands: Record<string, Command> = {
       const [nArg, option] = args;
       if (nArg === 'text') {
         const { from, to, nth } = selectArgs(args.slice(1)); // the AI writes these words, so anything else is refused
-        return act(() => realSelect(from, to, nth));
+        return act(() => realSelect(from, to, nth, allow));
       }
       const usage = 'select <number|"label"> "option", e.g. select 5 "Price: low to high"';
       const n = target(nArg, usage);

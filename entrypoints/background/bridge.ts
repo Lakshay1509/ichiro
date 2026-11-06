@@ -11,7 +11,7 @@ import { follow, guardedGoto, openBehind, pinTab, targetTabId } from '@/lib/tabs
 import { pageReport } from '@/lib/page/page-diff';
 import { remember, type Remembered } from '@/lib/memory/panel-memory';
 import type { Step } from '@/lib/panel/panel-port';
-import { parseCommand } from '@/lib/parse-command';
+import { elementWord, parseCommand } from '@/lib/parse-command';
 import { saidLine, splitReply, stepTitle } from '@/lib/panel/readable-log';
 import { detachAll, parsePoint } from '@/lib/actions/real-input';
 import { failed, recordLine } from '@/lib/memory/repeat';
@@ -147,10 +147,10 @@ async function bridgeSite(site: string, url: string): Promise<void> {
 // S2 in frames (audit 2026-10-24, lead 1): a click, type or select inside another site's frame asks you to add that
 // site first, like a tab on a new site. Reading an embed stays free; acting in one could send page data to a site you
 // never added. x,y clicks and type here already refuse frames. Runs before each try, so a re-read can't skip it.
-async function frameSites(name: string, nArg: string | undefined): Promise<void> {
+// raw: the element word as written: select text (#2, top page only) names no element, but select "text" is a dropdown.
+async function frameSites(name: string, nArg: string | undefined, raw: string | undefined): Promise<void> {
   const b = bridge;
-  // type here and select text (#2, top page only) name no element.
-  if (!b || !['click', 'type', 'select'].includes(name) || nArg === 'here' || (name === 'select' && nArg === 'text') || parsePoint(nArg ?? '')) return;
+  if (!b || !['click', 'type', 'select'].includes(name) || nArg === 'here' || (name === 'select' && raw === 'text') || parsePoint(nArg ?? '')) return;
   const frameId = frameFor(target(nArg, `${name} <number|"label">`));
   if (frameId === 0) return;
   const all = (await browser.webNavigation.getAllFrames({ tabId: await targetTabId() })) ?? [];
@@ -557,7 +557,7 @@ async function agentCommand(line: string, last: boolean): Promise<AgentReply> {
         if (agentDownloads) agentDownloads.allowing = allow;
         try {
           return await retryUnlisted(async () => {
-            await frameSites(name, args[0]);
+            await frameSites(name, args[0], elementWord(line)?.word);
             return runLine(commands[name]!, line, allow);
           }, () => readAll(false));
         } finally {

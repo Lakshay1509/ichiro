@@ -2,10 +2,11 @@
 // links in every read, often more than the page's own content: once the agent got one in full on a site, a later page
 // list says it in one line while its elements are the same. Their numbers and labels still work.
 import { pageLinesIn, type Item } from './page-text.ts';
-import { deepContains, keyOf, label, panelOnTop, parentOf, ranges } from './reader.ts';
+import { deepContains, label, panelOnTop, parentOf, ranges } from './reader.ts';
 
-// One landmark in a read: key (which one, the same across pages of a site), title (for its line), sig (its elements,
-// by role and name: unchanged means the same), nums (their numbers), and its lines [start, end) in the read's text.
+// One landmark in a read: key (which one, the same across pages of a site), title (for its line), sig (its lines as
+// printed, numbers left out: unchanged means the agent would read the same, states and text included), nums (its
+// elements' numbers), and its lines [start, end) in the read's text.
 export type Landmark = { key: string; title: string; sig: string; nums: number[]; start: number; end: number };
 
 // Fewer elements than this aren't worth a line of their own.
@@ -62,14 +63,17 @@ export function landmarkLines(items: Item[], elements: Map<number, Element>): { 
     const title = `${kindOf(box)}${named ? ` ${JSON.stringify(named)}` : ''}`;
     const nth = (taken.get(title) ?? 0) + 1; // a second sidebar with no name is another one
     taken.set(title, nth);
-    return [{ key: `${title} #${nth}`, title, sig: listed.map(([, el]) => keyOf(el)).join('\n'), nums: listed.map(([n]) => n), ...range }];
+    return [{ key: `${title} #${nth}`, title, sig: sigOf(lines.slice(range.start, range.end)), nums: listed.map(([n]) => n), ...range }];
   });
   return { lines, landmarks };
 }
 
+// What a landmark's lines say, numbers left out: a new page renumbers its elements, the same links stay the same. Pure.
+export const sigOf = (lines: string[]) => lines.map((line) => line.replace(/^\[\d+\] /, '')).join('\n');
+
 // The one line a landmark is shortened to. Ours, not page text: the page's own words in it (its label) are quoted. Pure.
 export const shortLine = (l: Landmark) =>
-  `${l.title}: ${l.nums.length} elements (${ranges(l.nums)}), the same as you got before on this site — read all lists them`;
+  `${l.title}: ${l.nums.length} elements (${ranges(l.nums)}), the same as you got before on this site: click one by name, or read all lists them with their numbers`;
 
 // A page list's text with each landmark the agent got before (seen: key → sig) shortened to one line, while its
 // elements are the same. shown: the landmarks still printed in full, to remember once this is sent. Pure.

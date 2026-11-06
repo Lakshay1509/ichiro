@@ -1,6 +1,6 @@
 // Checks the lazy-page loader (F3d): the stitch, the "is it lazy" probe count, the stop rules and the whole loop on fake
 // pages (normal, adds as you scroll, virtual list, endless feed, hidden tab). Run: npm test
-import { loadWith, MAX_SCREENS, MIN_NEW, newLines, stitch, stopReason, withNote, type Page } from './load-page.ts';
+import { looksVirtual, loadWith, MAX_SCREENS, MIN_NEW, newLines, stitch, stopReason, withNote, type Page } from './load-page.ts';
 
 const fail = (what: string): never => {
   throw new Error(what);
@@ -152,3 +152,21 @@ const textFull = (lines: string[]) => lines.join('\n').length >= 12_000;
   const plain = fake({ rows: 240, view: 21 });
   same((await loadWith(plain.page, plain.text, textFull, false, notes)).note, '', 'box with all its lines: no note');
 }
+
+// Deep in a long list, the pass hits its cap before it gets back to where you were: what was on screen stays in.
+{
+  const f = fake({ rows: 3000, view: 20, virtual: true });
+  f.go(2000);
+  const r = await loadWith(f.page, f.text, textFull);
+  if (!r.note.includes('stopped after') || !r.lines.includes('row 2010') || !r.lines.includes('row 1')) fail(`capped deep: ${r.note}`);
+  if (r.lines.indexOf('row 1') > r.lines.indexOf('row 2010')) fail('capped deep: the top first, then what was on screen');
+}
+
+// #1: only a box whose text covers little of its height is scrolled: a code editor holding 100 of 240 lines, not a
+// sidebar or a chat with all its messages in the page.
+for (const [top, bottom, height, want, what] of [
+  [0, 2000, 4800, true, 'an editor with 100 of 240 lines'],
+  [0, 4700, 4800, false, 'all of its text in the page'],
+  [500, 500, 4800, true, 'no text in the page'],
+  [0, 100, 0, false, 'no height'],
+] as const) if (looksVirtual(top, bottom, height) !== want) fail(`looksVirtual, ${what}`);

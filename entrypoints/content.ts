@@ -49,7 +49,7 @@ const handlers: {
   hover: ({ n }) => hover(n),
   type: ({ n, text, enter, slow, allow }) => typeText(n, text, enter, slow, allow),
   select: ({ n, option, allow }) => selectOption(n, option, allow),
-  selectText: ({ from, to, nth }) => selectText(from, to, nth),
+  selectText: ({ from, to, nth, step, allow }) => selectText(from, to, nth, step, allow),
   scroll: ({ dir, n }) => scroll(dir, n),
   key: ({ key, allow }) => pressKey(key, allow),
   settle: ({ maxMs }) => waitForQuiet(maxMs),

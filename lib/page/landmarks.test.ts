@@ -1,6 +1,6 @@
 // Checks #6: a landmark's lines are kept together (pageLinesIn), and a nav, sidebar or header the agent got before on
 // the site, with the same elements, is said in one line (shorten). Run: npm test
-import { MIN_ELEMENTS, shorten, shortLine, type Landmark } from './landmarks.ts';
+import { MIN_ELEMENTS, shorten, shortLine, sigOf, type Landmark } from './landmarks.ts';
 import { pageLines, pageLinesIn, type Item } from './page-text.ts';
 
 const fail = (what: string): never => {
@@ -34,7 +34,11 @@ const seen = new Map(first.shown);
 const again = shorten(page, [nav, side], seen);
 same(again.text.split('\n'), ['URL: https://supabase.com/dashboard/project/x/logs', 'Elements (9):', shortLine(nav), '"Logs explorer"', shortLine(side), '[40] button "Run"'], 'seen: one line each');
 same(again.shown, [], 'nothing new to remember');
-same(shortLine(nav), 'Navigation: 6 elements ([11]–[15], [30]), the same as you got before on this site — read all lists them', 'the line');
+same(shortLine(nav), 'Navigation: 6 elements ([11]–[15], [30]), the same as you got before on this site: click one by name, or read all lists them with their numbers', 'the line');
+// The sig is what the agent reads, numbers left out: a new page's numbers don't matter, a state or a text line does.
+same(sigOf(['[11] link "Home"', '"Org"']), sigOf(['[41] link "Home"', '"Org"']), 'renumbered: the same');
+if (sigOf(['[11] link "Home"', '"Production"']) === sigOf(['[11] link "Home"', '"Read-only: billing overdue"'])) fail('a changed text line must count');
+if (sigOf(['[11] tab "Logs" selected']) === sigOf(['[11] tab "Logs"'])) fail('a changed state must count');
 // The nav changed (a new link): printed in full again, and remembered as it is now.
 const changed = shorten(page, [{ ...nav, sig: `${nav.sig}\nlink Billing` }, side], seen);
 if (!changed.text.includes('[11] link "Home"') || changed.text.includes(shortLine(side)) === false) fail(`changed nav: ${changed.text}`);

@@ -83,31 +83,36 @@ export async function realPoints(points: Point[], clicks: 1 | 2, modifiers: numb
 
 // #2: select text in the top page. A text box or editable area is selected by the page script (its reply is the result).
 // Other text, like a code editor that keeps its own selection (Monaco), by the real mouse: a click at its start, then a
-// shift+click at its end, at the points the page checked, with its guard on. Attached before the second check, so its
-// points are measured with Chrome's debugging bar in, as the mouse will meet them (realPoints does the same).
-export async function realSelect(from: string, to: string, nth: number | undefined): Promise<string> {
-  const msg = { type: 'selectText', from, to, ...(nth === undefined ? {} : { nth }) } as const;
-  const first = await sendToTab(msg);
-  if (typeof first === 'string') return first;
+// shift+click at its end. The page plans and checks both spots first (stop-lines unless allowed). Then each click goes
+// like realPoints: the mouse moves there, the page checks that spot again with the guard on it alone, and the press
+// follows, so each lands only on what was checked. Attached before those checks, so they see Chrome's debugging bar.
+export async function realSelect(from: string, to: string, nth: number | undefined, allow: boolean): Promise<string> {
+  const msg = (step?: 'start' | 'end') => ({ type: 'selectText', from, to, ...(nth === undefined ? {} : { nth }), ...(step ? { step } : {}), allow }) as const;
+  const plan = await sendToTab(msg());
+  if (typeof plan === 'string') return plan;
   const tabId = await targetTabId();
   const attached = await attach(tabId);
-  let sent = false;
-  let blocked = '';
-  let note = first.note;
-  try {
-    if (!attached) throw new Error(`${NO_REAL_MOUSE}. That text isn't in a text box, so selecting it needs the real mouse`);
-    if (attached === 'fresh') await new Promise((resolve) => setTimeout(resolve, 250)); // the bar comes in
-    const again = await sendToTab(msg);
-    if (typeof again === 'string') return again;
-    if (again.points.length !== 2) throw new Error('select text: the page gave no start and end points');
-    const [start, end] = again.points.map(checkPoint) as [Point, Point];
-    note = again.note;
-    sent = await sendMouse(tabId, [...clickAtPoint(start), ...clickAtPoint(end, 1, MODIFIERS.shift)]);
-  } finally {
-    blocked = await sendToTab({ type: 'aimDone' }).catch(() => '');
+  if (!attached) throw new Error(`${NO_REAL_MOUSE}. That text isn't in a text box, so selecting it needs the real mouse`);
+  if (attached === 'fresh') await new Promise((resolve) => setTimeout(resolve, 250)); // the bar comes in
+  let note = plan.note;
+  for (const [i, step] of (['start', 'end'] as const).entries()) {
+    let sent = false;
+    let blocked = '';
+    try {
+      let aimed = await sendToTab(msg(step));
+      if (typeof aimed === 'string') return aimed;
+      if (await sendMouse(tabId, moveTo(checkPoint(aimed.points[i])))) {
+        aimed = await sendToTab(msg(step)); // checked again with the mouse there
+        if (typeof aimed === 'string') return aimed;
+        note = aimed.note;
+        sent = await sendMouse(tabId, pressAt(checkPoint(aimed.points[i]), 1, i ? MODIFIERS.shift : 0));
+      }
+    } finally {
+      blocked = await sendToTab({ type: 'aimDone' }).catch(() => '');
+    }
+    if (!sent) throw new Error(NO_REAL_MOUSE);
+    if (blocked) throw new Error(`${blocked}${i ? ' (the click at the start went: the cursor is there, nothing is selected)' : ''}. Read the page again`);
   }
-  if (!sent) throw new Error(NO_REAL_MOUSE);
-  if (blocked) throw new Error(`${blocked}. Read the page again`);
   return `ok — real click at the start and shift+click at the end${note}`;
 }
 
