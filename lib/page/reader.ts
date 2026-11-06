@@ -70,27 +70,87 @@ export function* allElements(root: ParentNode): Generator<Element> {
   }
 }
 
-function hasCollectedAncestor(el: Element, found: Set<Element>): boolean {
-  for (let p = parentOf(el); p; p = parentOf(p)) if (found.has(p)) return true;
-  return false;
+// The nearest box around el that is in one of sets, or null.
+function ownerIn(el: Element, ...sets: Set<Element>[]): Element | null {
+  for (let p = parentOf(el); p; p = parentOf(p)) if (sets.some((s) => s.has(p))) return p;
+  return null;
+}
+
+const pointer = (el: Element) => getComputedStyle(el).cursor === 'pointer';
+// A pointer cursor el sets itself, not one it inherits from the box around it.
+const ownPointer = (el: Element) => pointer(el) && !pointer(parentOf(el) ?? el);
+
+// ARIA's composite widgets: their parts are what you pick (a radiogroup's options). Combobox is a control already.
+// Source: https://www.w3.org/TR/wai-aria-1.2/#composite
+const MENU_ROLES = new Set(['grid', 'listbox', 'menu', 'menubar', 'radiogroup', 'tablist', 'tree', 'treegrid']);
+
+// Text with no spaces and no icon glyphs, to compare a box's text with its parts' however the page spaces them.
+const squashed = (el: Element) => ((el as HTMLElement).innerText ?? el.textContent ?? '').replace(ICON_GLYPHS, '').replace(/\s+/g, '');
+// Class names shared over all class names (1 when neither has any).
+function sharedClasses(a: Element, b: Element): number {
+  const [ca, cb] = [a, b].map((el) => new Set((el.getAttribute('class') ?? '').split(/\s+/).filter(Boolean)));
+  const all = new Set([...ca!, ...cb!]);
+  return all.size ? [...ca!].filter((c) => cb!.has(c)).length / all.size : 1;
+}
+
+// #4: the options of a menu built from plain boxes (Radix, cmdk, Headless UI style), or [] if box isn't one. Seen live:
+// Supabase's time picker read as one radiogroup "Last hour Last 3 hours …", with no number per option, so picking one
+// took a screenshot and a pixel click. Options: box's children (past wrappers holding all its text), 2+ of them in an
+// ARIA menu role or 3+ otherwise, built alike (same tag and role, most classes shared: a selected one adds a class),
+// whose texts glued make all of box's text. Nothing else is in it, so a card's title and price aren't split up.
+// Only children, tagName, getAttribute and innerText, so Node tests can use a fake DOM.
+export function menuItems(box: Element): Element[] {
+  const all = squashed(box);
+  if (!all) return [];
+  let items = [...box.children].filter(squashed);
+  while (items.length === 1 && squashed(items[0]!) === all) items = [...items[0]!.children].filter(squashed);
+  const first = items[0];
+  if (!first || items.length < (MENU_ROLES.has(box.getAttribute('role')?.trim() ?? '') ? 2 : 3)) return [];
+  const alike = (el: Element) => el.tagName === first.tagName && el.getAttribute('role') === first.getAttribute('role') && sharedClasses(el, first) >= 0.5;
+  return items.every(alike) && items.map(squashed).join('') === all ? items : [];
 }
 
 // Everything clickable or typeable, in DOM order (the order the numbers follow), shadow roots included.
 export function findInteractive(): Element[] {
   const found = new Set<Element>();
   if (!document.body) return [];
+  const menus = new Set<Element>(); // #4: generic boxes whose options are collected in their place
+  const options = new Set<Element>();
+  const addGeneric = (el: Element) => {
+    const items = menuItems(el);
+    if (!items.length) return void found.add(el);
+    menus.add(el);
+    for (const item of items) options.add(item);
+  };
   // DOM order, so ancestors (and shadow hosts) are always checked before what's inside them.
   for (const el of allElements(document.body)) {
-    if (el.matches(CONTROLS)) found.add(el);
-    else if (hasCollectedAncestor(el, found)) continue;
-    // cursor is inherited, so the outermost pointer element is collected and its children skip via the line above.
-    else if (el.matches(GENERIC) || getComputedStyle(el).cursor === 'pointer') found.add(el);
+    if (el.matches(CONTROLS) || options.has(el)) {
+      found.add(el);
+      continue;
+    }
+    // Inside a control, everything is part of it. cursor is inherited, so the outermost pointer element is collected
+    // and its children skip. #4: but inside a generic one (a box collected for tabindex, aria-* or a pointer cursor),
+    // a box with a click signal of its own (those attributes, or a pointer cursor it sets itself) is a target too:
+    // seen live, a menu's options were swallowed by the menu box.
+    const owner = ownerIn(el, found, menus);
+    if (owner ? !owner.matches(CONTROLS) && (el.matches(GENERIC) || ownPointer(el)) : el.matches(GENERIC) || pointer(el)) addGeneric(el);
   }
   return [...found];
 }
 
 // el can be clicked by findInteractive's rules: a control or generic clickable, itself or around it, or a pointer cursor.
 export const clickable = (el: Element) => !!el.closest(`${CONTROLS},${GENERIC}`) || getComputedStyle(el).cursor === 'pointer';
+
+// #4: el is a generic clickable inside another generic clickable box (a menu's option): a click on it also reaches
+// that box's own handler, so the boxes' labels count for its stop-lines (like a click on page text). Not <body> or
+// <html>: a page that sets a pointer cursor on itself would make every click ask.
+export function inClickableBox(el: Element): boolean {
+  if (el.matches(CONTROLS)) return false;
+  for (let p = parentOf(el); p && p !== document.body && p !== document.documentElement; p = parentOf(p)) {
+    if (!p.matches(CONTROLS) && (p.matches(GENERIC) || pointer(p))) return true;
+  }
+  return false;
+}
 
 // Center of the part of rect r inside the viewport, or null if none of it is (also null for zero size).
 export function clippedCenter(r: DOMRect): { x: number; y: number } | null {

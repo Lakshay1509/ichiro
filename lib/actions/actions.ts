@@ -1,7 +1,7 @@
 // Actions: do things to elements from the latest read, like a person would. Runs in the content script.
 // Known limit: these events have isTrusted = false. A few sites ignore them; harness Phase 7 adds real input.
 import {
-  clickable, clickPoint, deepContains, deepElementFromPoint, findInteractive, getElement, getElements, isSecret, name, NO_VALUE, panelOnTop,
+  clickable, clickPoint, deepContains, deepElementFromPoint, findInteractive, getElement, getElements, inClickableBox, isSecret, name, NO_VALUE, panelOnTop,
   parentOf, readScroll, role, roomOf, scrollLine, shadowRootOf, sideLine, sideways, suggests, visibleCenter,
 } from '../page/reader.ts';
 import { HandOver, StopLine } from '../messages.ts';
@@ -91,7 +91,11 @@ export async function clickText(want: string, allow = false): Promise<string> {
 // Shared by our script click and I1's real one.
 async function prepareClick(el: Element, what: string, allow: boolean) {
   const aimed = await aimAt(el, what);
-  if (!allow) checkStopLine(JSON.stringify(name(el)), clickTargets(el, aimed.hit));
+  if (!allow) {
+    checkStopLine(JSON.stringify(name(el)), clickTargets(el, aimed.hit));
+    // #4: a menu's option inside a clickable box: the box's handler gets the click too.
+    if (inClickableBox(el)) checkBoxes(el, `click ${JSON.stringify(name(el))}`);
+  }
   return aimed;
 }
 
@@ -222,8 +226,10 @@ export async function aimPoints(points: Point[], shot: { width: number; height: 
 // Else the spot and the boxes around it.
 function checkSpot(hit: Element, what: string) {
   const owner = findInteractive().filter((e) => deepContains(e, hit)).at(-1);
-  if (owner) checkStopLine(`${what} on ${JSON.stringify(name(owner))}`, clickTargets(owner, hit));
-  else {
+  if (owner) {
+    checkStopLine(`${what} on ${JSON.stringify(name(owner))}`, clickTargets(owner, hit));
+    if (inClickableBox(owner)) checkBoxes(owner, what); // #4: as prepareClick
+  } else {
     checkStopLine(what, [hit]);
     checkBoxes(hit, what);
   }

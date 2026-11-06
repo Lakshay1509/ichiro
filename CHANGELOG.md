@@ -6,6 +6,7 @@ What changed in each Ichiro release, newest first. Each version is one git tag, 
 
 ### Fixed
 - `click "text"` now finds words the page draws in several pieces, like a code editor's `limit 5` (one piece per word) or a menu's `Last 7 days`. Before, it said "Nothing called …" though the words were on screen.
+- `read` gives each option of a custom dropdown its own number (time pickers, filters, menus built from plain boxes). Before, the whole menu was one element, so picking an option took a screenshot and a pixel click. Clicking an option still asks you first when the menu box around it is named for a risky action, like "Delete".
 
 ## 0.3.0 · 2026-11-02
 
