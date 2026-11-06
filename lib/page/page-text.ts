@@ -299,23 +299,66 @@ export function sameText(texts: string[], want: string): number[] {
   return [];
 }
 
+// #5: the deepest boxes whose text, glued from the text nodes inside them, reads exactly want (sameText's rules). Seen
+// live: a code editor draws "limit 5" as three spans ("limit", " ", "5"), and React draws "Last {n} days" as three text
+// nodes, so no single text node read the words. One walk: each text adds itself to the boxes above it; a box that grows
+// longer than want can't match, and neither can any box above it (they hold all of its text), so the walk stops there.
+// nodes: text nodes in DOM order; up: the box a node or box sits in. Pure.
+export function gluedMatches<T, E>(nodes: Iterable<T>, data: (n: T) => string, up: (n: T | E) => E | null, want: string): E[] {
+  const size = (s: string) => flat(s).replaceAll(' ', '').length;
+  const limit = size(want);
+  if (!limit) return [];
+  const glued = new Map<E, string | null>(); // null: longer than want
+  for (const n of nodes) {
+    const d = data(n);
+    let long = false;
+    for (let box = up(n); box; box = up(box)) {
+      const had = glued.get(box);
+      if (had === null) break; // it and every box above it are too long already
+      const text = `${had ?? ''}${d}`;
+      long ||= size(text) > limit;
+      glued.set(box, long ? null : text);
+    }
+  }
+  const boxes = [...glued].filter((e): e is [E, string] => e[1] !== null);
+  const hits = new Set(sameText(boxes.map(([, text]) => text), want).map((i) => boxes[i]![0]));
+  // A box around a hit adds only blank text to it: the hit inside is the one meant.
+  const outer = new Set<E>();
+  for (const hit of hits) for (let box = up(hit); box; box = up(box)) if (hits.has(box)) outer.add(box);
+  return [...hits].filter((hit) => !outer.has(hit));
+}
+
 // R1: the elements holding a shown text that reads exactly want, anywhere on the page (live, the one meant sat below the
 // screen), by the page list's rules: not hidden, not screen-reader-only, and on screen not covered by something pinned
 // (the click checks again once it's scrolled to). Each says if it's clickable and on screen, for chooseText.
-// shortcut: one text node each, so text split across tags ("Apply <b>now</b>") doesn't match; upgrade if a run needs it.
+// One text node each first (fast); when none reads want, a box whose text nodes glue into it (#5, gluedMatches).
 export type Found = { clickable: boolean; onScreen: boolean };
 export function textTargets(want: string): (Found & { el: Element })[] {
   const range = document.createRange();
   const pins = new Map<Element, boolean>();
+  // Shown by those rules: where it is (onScreen), or null if it isn't shown.
+  const seen = (n: Text): { onScreen: boolean } | null => {
+    const rects = lineBoxes(range, n);
+    const here = rects.some((r) => onScreen(r));
+    return isShown(n) && (here ? uncovered(n, rects, pins) : rects.some((r) => onPage(r, innerWidth, scrollY))) ? { onScreen: here } : null;
+  };
   const screen = new Map<Text, boolean>();
   const shown = [...textNodes(document.documentElement)].filter((n) => {
     if (!sameText([n.data], want).length) return false; // cheap test first: most text never matches
-    const rects = lineBoxes(range, n);
-    screen.set(n, rects.some((r) => onScreen(r)));
-    return isShown(n) && (screen.get(n) ? uncovered(n, rects, pins) : rects.some((r) => onPage(r, innerWidth, scrollY)));
+    const s = seen(n);
+    if (s) screen.set(n, s.onScreen);
+    return !!s;
   });
-  const els = new Map(sameText(shown.map((n) => n.data), want).map((i) => [parentOf(shown[i]!)!, screen.get(shown[i]!)!]));
-  return [...els].map(([el, onScreen]) => ({ el, onScreen, clickable: clickable(el) }));
+  if (shown.length) {
+    const els = new Map(sameText(shown.map((n) => n.data), want).map((i) => [parentOf(shown[i]!)!, screen.get(shown[i]!)!]));
+    return [...els].map(([el, onScreen]) => ({ el, onScreen, clickable: clickable(el) }));
+  }
+  // Glued from all text first (cheap), then each box's shown text only, so hidden text can't make up the words.
+  return gluedMatches(textNodes(document.documentElement), (n) => n.data, parentOf, want).flatMap((el) => {
+    const parts = [...textNodes(el)].map((n) => ({ n, s: n.data.trim() ? seen(n) : { onScreen: false } }));
+    if (!sameText([parts.filter((p) => p.s).map((p) => p.n.data).join('')], want).length) return [];
+    return [{ el, onScreen: parts.some((p) => p.s?.onScreen), clickable: clickable(el) }];
+  });
 }
 
 // R1: which of several shown texts a click "text" means: the one clickable one (live: a pricing toggle below the screen

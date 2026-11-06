@@ -1,5 +1,5 @@
 // Checks joinLines (same-line pieces glue, a gap adds a space, a lower piece starts a new line) and find's matcher. Run: npm test
-import { addedLines, capText, chooseText, findMatches, iconText, joinLines, MAX_TEXT_LINES, nameHit, onPage, pageLines, rankSections, reaction, sameText, TEXT_CAP, textArgs, toPiece, type Piece } from './page-text.ts';
+import { addedLines, capText, chooseText, findMatches, gluedMatches, iconText, joinLines, MAX_TEXT_LINES, nameHit, onPage, pageLines, rankSections, reaction, sameText, TEXT_CAP, textArgs, toPiece, type Piece } from './page-text.ts';
 
 // R1: click by text takes shown texts that read exactly the words (spaces collapsed, icon glyphs dropped), then ignoring
 // case if none; never part of a longer text. All matches come back, so the caller can refuse two.
@@ -14,6 +14,49 @@ for (const [texts, want, expected, what] of [
   [['Fees', 'Fees'], 'Fees', '0,1', 'two returned'],
   [['Fees'], '  ', '', 'blank words'],
 ] as const) if (same([...texts], want) !== expected) throw new Error(`sameText, ${what}: ${same([...texts], want)}`);
+
+// #5: click "text" when no single text node reads the words: the deepest box whose text nodes glue into them. A fake
+// DOM: a box has a name and a parent; a text node has its words and a parent.
+type GBox = { name: string; up: GBox | null };
+type GTxt = { data: string; up: GBox };
+const glue = (texts: GTxt[], want: string) => gluedMatches<GTxt, GBox>(texts, (t) => t.data, (n) => n.up, want).map((b) => b.name).join();
+const gbox = (name: string, up: GBox | null = null): GBox => ({ name, up });
+const gtxt = (data: string, up: GBox): GTxt => ({ data, up });
+{
+  // Seen live on Supabase's SQL editor (Monaco): one span per token, a no-break space between them.
+  const page = gbox('page');
+  const line = gbox('line', page);
+  const [limit, space, five] = [gbox('limit', line), gbox('space', line), gbox('5', line)];
+  const monaco = [gtxt('limit', limit), gtxt('\u00a0', space), gtxt('5', five)];
+  for (const [texts, want, expected, what] of [
+    [monaco, 'limit 5', 'line', 'tokens in their own spans'],
+    [monaco, 'LIMIT 5', 'line', 'case ignored when no exact match'],
+    [monaco, 'limit', 'limit', 'one span still matches (the deepest box)'],
+    [monaco, 'limit 50', '', 'no partial match'],
+    [monaco, '  ', '', 'blank words'],
+  ] as const) if (glue([...texts], want) !== expected) throw new Error(`gluedMatches, ${what}: ${glue([...texts], want)}`);
+
+  // React's `Last {n} days`: three text nodes in one button, inside a menu that holds only it and blank text.
+  const menu = gbox('menu');
+  const button = gbox('button', menu);
+  const react = [gtxt('\n  ', menu), gtxt('Last ', button), gtxt('7', button), gtxt(' days', button), gtxt('\n', menu)];
+  if (glue(react, 'Last 7 days') !== 'button') throw new Error(`gluedMatches, React text nodes: ${glue(react, 'Last 7 days')}`);
+
+  // A long text between two pieces makes the box too long, and every box above it: never "limit5" from the ends.
+  const outer = gbox('outer');
+  const mid = gbox('mid', outer);
+  const long = [gtxt('limit', gbox('a', mid)), gtxt('x'.repeat(500), gbox('b', mid)), gtxt('5', gbox('c', mid)), gtxt('', outer)];
+  if (glue(long, 'limit5') !== '') throw new Error(`gluedMatches, too long: ${glue(long, 'limit5')}`);
+
+  // Two boxes read the words: both come back (the caller picks one or refuses), but an exact one beats one by case.
+  const list = gbox('list');
+  const [first, second] = [gbox('first', list), gbox('second', list)];
+  const twice = [gtxt('Apply', gbox('f1', first)), gtxt(' now', gbox('f2', first)), gtxt('apply', gbox('s1', second)), gtxt(' now', gbox('s2', second))];
+  if (glue(twice, 'Apply now') !== 'first') throw new Error(`gluedMatches, exact case first: ${glue(twice, 'Apply now')}`);
+  const [a, b] = [gbox('a', list), gbox('b', list)];
+  const both = [gtxt('Apply', gbox('a1', a)), gtxt(' now', gbox('a2', a)), gtxt('Apply', gbox('b1', b)), gtxt(' now', gbox('b2', b))];
+  if (glue(both, 'Apply now') !== 'a,b') throw new Error(`gluedMatches, two boxes: ${glue(both, 'Apply now')}`);
+}
 
 // R1: several texts read the words: the one clickable one wins, else the one on screen; a tie throws (never guess),
 // and the result says how many there were and which was clicked.

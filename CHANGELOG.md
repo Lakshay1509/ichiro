@@ -4,6 +4,9 @@ What changed in each Ichiro release, newest first. Each version is one git tag, 
 
 ## Unreleased
 
+### Fixed
+- `click "text"` now finds words the page draws in several pieces, like a code editor's `limit 5` (one piece per word) or a menu's `Last 7 days`. Before, it said "Nothing called …" though the words were on screen.
+
 ## 0.3.0 · 2026-11-02
 
 ### Changed
