@@ -10,6 +10,7 @@ import { capText, textArgs } from '@/lib/page/page-text';
 import { parseCommand, restOf } from '@/lib/parse-command';
 import { pdfFind, pdfText } from '@/lib/files/pdf-text';
 import { pickArgs } from '@/lib/page/pick';
+import { selectArgs } from '@/lib/actions/select-text';
 import { MAX_POINTS, mouseFlags, parsePoint, type Point } from '@/lib/actions/real-input';
 import { MAX_REPEAT_ITEMS } from '@/lib/memory/repeat';
 import { downloadArgs, fileKind, fileUrl, MAX_TEXT_FILE, newestReadable } from '@/lib/files/run-files';
@@ -20,7 +21,7 @@ import { listSites } from '@/lib/memory/site-store';
 import { updatePrompt } from '@/lib/bridge/host-install';
 import { askResume, closeAsk, nextCommand, runAndPrint } from './asks';
 import { agentDownloads, agentPage, bridge, endAgentTurn, forAgent, runEnded, running, save, skipRead, startBridge, stopBridge } from './bridge';
-import { checkText, realKey, realMouse, realPoints, typeHere, typingFrame } from './input';
+import { checkText, realKey, realMouse, realPoints, realSelect, typeHere, typingFrame } from './input';
 import { clearLog, leaveStep, print, show, showAlwaysOn, showAuto } from './panels';
 
 // allow: run past a stop-line. Only the Allow once button passes true, never a typed command.
@@ -190,8 +191,13 @@ export const commands: Record<string, Command> = {
     },
   },
   select: {
-    help: 'select <n|"label"> "option" — pick an option in dropdown n (real <select> only)',
-    run: ([nArg, option], allow) => {
+    help: 'select <n|"label"> "option" — pick an option in dropdown n (real <select> only). select text "start" to "end" [n] — select the text from "start" to the end of the first "end" after it (case and spaces ignored), in a text box, an editor or a code editor on screen, then paste or type here to replace it, or key Delete to remove it; n picks the nth "start" when there are several',
+    run: (args, allow) => {
+      const [nArg, option] = args;
+      if (nArg === 'text') {
+        const { from, to, nth } = selectArgs(args.slice(1)); // the AI writes these words, so anything else is refused
+        return act(() => realSelect(from, to, nth));
+      }
       const usage = 'select <number|"label"> "option", e.g. select 5 "Price: low to high"';
       const n = target(nArg, usage);
       if (option === undefined) throw new Error(`Usage: ${usage}`);

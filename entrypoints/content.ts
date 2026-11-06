@@ -8,11 +8,12 @@ import { loadPage, withNote } from '@/lib/page/load-page';
 import { findSnippets, findText, pageItems, pageLines, readText, TEXT_CAP, textTargets } from '@/lib/page/page-text';
 import { notAlike, pickAll, pickLike } from '@/lib/page/pick';
 import { getElements, read, secretOnScreen } from '@/lib/page/reader';
+import { selectText } from '@/lib/actions/select-text';
 import { waitForQuiet } from '@/lib/tabs/settle';
 
 // One handler per message type. The type checks each reply matches lib/messages.ts. Handlers may be async.
 // Messages that act on the page. Inside a CAPTCHA's own frame they're refused (4.2).
-const ACTIONS = new Set<Message['type']>(['click', 'clickText', 'aim', 'aimPoints', 'aimKey', 'aimText', 'pasteText', 'hover', 'type', 'select', 'scroll', 'key']);
+const ACTIONS = new Set<Message['type']>(['click', 'clickText', 'aim', 'aimPoints', 'aimKey', 'aimText', 'pasteText', 'hover', 'type', 'select', 'selectText', 'scroll', 'key']);
 
 const handlers: {
   [K in Message['type']]: (msg: Extract<Message, { type: K }>) => Replies[K] | Promise<Replies[K]>;
@@ -49,6 +50,7 @@ const handlers: {
   hover: ({ n }) => hover(n),
   type: ({ n, text, enter, slow, allow }) => typeText(n, text, enter, slow, allow),
   select: ({ n, option, allow }) => selectOption(n, option, allow),
+  selectText: ({ from, to, nth }) => selectText(from, to, nth),
   scroll: ({ dir, n }) => scroll(dir, n),
   key: ({ key, allow }) => pressKey(key, allow),
   settle: ({ maxMs }) => waitForQuiet(maxMs),

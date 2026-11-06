@@ -49,6 +49,7 @@ same(saidLine('click 340,220', nameFor), 'Clicked a spot on the page', 'a spot')
 same(saidLine('click "Search"', nameFor), 'Clicked "Search"', 'label already');
 same(saidLine('type 5 "secret words"', nameFor), 'Typed into "Email"', 'typed text stays out');
 same(saidLine('type here hello', nameFor), 'Typed some text', 'type here');
+same(saidLine('select text "\\begin{abstract}" to "\\end{abstract}"', nameFor), 'Selected some text', 'select text (#2)');
 same(saidLine('scroll down', nameFor), 'Scrolled the page down', 'scroll the page');
 same(saidLine('scroll down 12', nameFor), 'Scrolled "Search" down', 'scroll a box');
 same(saidLine('goto nowhere', nameFor), 'Opened a page', 'not a URL');

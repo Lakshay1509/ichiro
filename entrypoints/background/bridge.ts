@@ -117,7 +117,8 @@ async function bridgeSite(site: string, url: string): Promise<void> {
 // never added. x,y clicks and type here already refuse frames. Runs before each try, so a re-read can't skip it.
 async function frameSites(name: string, nArg: string | undefined): Promise<void> {
   const b = bridge;
-  if (!b || !['click', 'type', 'select'].includes(name) || nArg === 'here' || parsePoint(nArg ?? '')) return;
+  // type here and select text (#2, top page only) name no element.
+  if (!b || !['click', 'type', 'select'].includes(name) || nArg === 'here' || (name === 'select' && nArg === 'text') || parsePoint(nArg ?? '')) return;
   const frameId = frameFor(target(nArg, `${name} <number|"label">`));
   if (frameId === 0) return;
   const all = (await browser.webNavigation.getAllFrames({ tabId: await targetTabId() })) ?? [];

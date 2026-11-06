@@ -451,8 +451,8 @@ export function shownElement(el: Element): boolean {
   return true;
 }
 
-// The text find searches: shown, anywhere on the page, top frame.
-function searchable(): Text[] {
+// The text find (and select text, #2) searches: shown, anywhere on the page, top frame.
+export function searchable(): Text[] {
   const range = document.createRange();
   const nodes: Text[] = [];
   for (const node of textNodes(document.documentElement)) {
