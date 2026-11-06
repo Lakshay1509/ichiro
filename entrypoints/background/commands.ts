@@ -118,8 +118,12 @@ export const commands: Record<string, Command> = {
     },
   },
   read: {
-    help: 'list what you can click or type into on the page',
-    run: () => readAll(),
+    help: "list what you can click or type into on the page. A nav, sidebar or header the agent already got in full on this site, with the same elements, is one line in its page lists (their numbers and labels still work); read all lists them too",
+    // Yours is never shortened: read all is the same as read here.
+    run: ([all]) => {
+      if (all !== undefined && all !== 'all') throw new Error('Usage: read, or read all');
+      return readAll();
+    },
   },
   text: {
     help: 'text [all | page N | download [page N]] — show the plain text on screen, like dates and prices (iframes included); text all reads the whole page, not just the screen; text page N reads a PDF from page N on; text download reads the newest file you downloaded with the user\'s ok (a PDF, from page N, or a text file)',

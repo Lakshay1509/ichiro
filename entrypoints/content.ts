@@ -5,7 +5,8 @@ import { captchaKind, visibleCaptcha } from '@/lib/safety/captcha';
 import { onScreen } from '@/lib/page/in-view';
 import { drawForShot, endShot, setOverlay } from '@/lib/page/overlay';
 import { loadPage, wholeText, withNote } from '@/lib/page/load-page';
-import { findSnippets, findText, pageItems, pageLines, readText, textTargets } from '@/lib/page/page-text';
+import { findSnippets, findText, pageItems, readText, textTargets } from '@/lib/page/page-text';
+import { landmarkLines } from '@/lib/page/landmarks';
 import { notAlike, pickAll, pickLike } from '@/lib/page/pick';
 import { getElements, read, secretOnScreen } from '@/lib/page/reader';
 import { selectText } from '@/lib/actions/select-text';
@@ -24,7 +25,8 @@ const handlers: {
   read: ({ next, overlay }) => {
     const reply = read(next);
     setOverlay(overlay, getElements());
-    return { ...reply, page: pageLines(pageItems(getElements(), reply.lines)) };
+    const { lines, landmarks } = landmarkLines(pageItems(getElements(), reply.lines), getElements()); // #6
+    return { ...reply, page: lines, landmarks };
   },
   // text all and find load a lazy page first (F3d; pick does it inside); plain text reads the screen as it is.
   // #1: text all also scrolls through a box that keeps only its lines near the screen (a code editor).

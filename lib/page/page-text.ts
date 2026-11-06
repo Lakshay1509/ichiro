@@ -229,19 +229,27 @@ export function reaction(before: string[], after: string[], field?: { typed: str
 
 // F2: what the AI reads each step, like browser-use's page view: the listed elements with the visible text around them,
 // in page order, so a cinema's name sits right above its showtimes. An item is an element (its read line and name) or
-// a text piece with the name of the listed element it's inside ('' if none).
-export type Item = { line: string; name: string } | (Piece & { owner: string });
+// a text piece with the name of the listed element it's inside ('' if none). at: where it is on the page (#6 groups
+// items by landmark); tests leave it out.
+export type Item = ({ line: string; name: string } | (Piece & { owner: string })) & { at?: Node };
 const MAX_TEXT = 100; // characters per text line
 export const MAX_TEXT_LINES = 150; // per frame: a wall of text (a long article) is what text and find are for
 
 // Items → lines. Pure, so Node can test it. Text lines are always quoted: page text can never pass for an element
 // line ("[5] button …"), which the model and our code (page-diff, loop guard, labels) trust. Text an element line already
 // says is dropped: what's inside the element (its name) and a label right next to it.
-export function pageLines(items: Item[]): string[] {
+export const pageLines = (items: Item[]) => pageLinesIn(items, () => -1).lines;
+
+// #6: pageLines, keeping each landmark's lines apart: group(i) says which landmark item i sits in (-1: none), and ranges
+// where each one's lines start and end in the output, [start, end). A landmark's items come one after another (DOM
+// order); a stray one later (an element the walk couldn't reach) is printed as no landmark's. Pure.
+export function pageLinesIn(items: Item[], group: (i: number) => number): { lines: string[]; ranges: Map<number, { start: number; end: number }> } {
   const out: string[] = [];
+  const ranges = new Map<number, { start: number; end: number }>();
   let pieces: Piece[] = [];
   let above = ''; // name of the element just before the pending text
   let texts = 0;
+  let current = -1;
   const flush = (below: string) => {
     for (const line of joinLines(pieces).split('\n')) {
       if (!line || line === above || line === below) continue;
@@ -249,7 +257,15 @@ export function pageLines(items: Item[]): string[] {
     }
     pieces = [];
   };
-  for (const item of items) {
+  for (const [i, item] of items.entries()) {
+    const g = ranges.has(group(i)) && group(i) !== current ? -1 : group(i);
+    if (g !== current) {
+      flush('');
+      if (current >= 0) ranges.get(current)!.end = out.length;
+      if (g >= 0) ranges.set(g, { start: out.length, end: out.length });
+      current = g;
+      above = '';
+    }
     if ('line' in item) {
       flush(item.name);
       out.push(item.line);
@@ -259,8 +275,9 @@ export function pageLines(items: Item[]): string[] {
     }
   }
   flush('');
+  if (current >= 0) ranges.get(current)!.end = out.length;
   if (texts > MAX_TEXT_LINES) out.push(`(${texts - MAX_TEXT_LINES} more lines of text on screen not shown: use text or find)`);
-  return out;
+  return { lines: out, ranges };
 }
 
 // el, or a box it sits in, is pinned to the screen (sticky header, fixed popup or banner). Cached per read.
@@ -300,11 +317,11 @@ export function pageItems(elements: Map<number, Element>, lines: string[]): Item
       if (child instanceof Text) {
         if (!child.data.trim()) continue;
         const rects = lineBoxes(range, child);
-        if (rects.some((r) => onScreen(r)) && isShown(child) && uncovered(child, rects, pins)) items.push({ ...toPiece(child.data, rects, seeThrough(child)), owner });
+        if (rects.some((r) => onScreen(r)) && isShown(child) && uncovered(child, rects, pins)) items.push({ ...toPiece(child.data, rects, seeThrough(child)), owner, at: child });
       } else if (child instanceof Element && !clippedAway(child)) {
         const own = listed.get(child);
         if (own) {
-          items.push(own);
+          items.push({ ...own, at: child });
           listed.delete(child);
         }
         const shadow = shadowRootOf(child);

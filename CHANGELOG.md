@@ -6,6 +6,7 @@ What changed in each Ichiro release, newest first. Each version is one git tag, 
 
 ### Added
 - `select text "start" to "end"` selects a stretch of text by its first and last words, in a text box, an editable area or a code editor (Overleaf, Monaco), so your agent can replace part of a document with `paste` or `type here` without a screenshot. It replies with what it selected. When the words show up more than once, it lists them and asks for `n` instead of guessing.
+- Shorter page lists on dashboard apps (Supabase, Vercel, AWS): once your agent got a site's nav, sidebar or header in full, a later page list on that site says it in one line while its elements are the same, like `Sidebar "Project menu": 14 elements ([6]–[19]), the same as you got before on this site — read all lists them`. Their numbers and labels still work, and `read all` lists everything. Your own `/read` in the side panel always lists everything.
 
 ### Fixed
 - `click "text"` now finds words the page draws in several pieces, like a code editor's `limit 5` (one piece per word) or a menu's `Last 7 days`. Before, it said "Nothing called …" though the words were on screen.

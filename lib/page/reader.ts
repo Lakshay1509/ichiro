@@ -354,7 +354,7 @@ export let readScroll = { left: 0, top: 0 };
 export const getElements = () => elements;
 
 // What an element is, for keeping its number: a box that now says something else gets a new one.
-const keyOf = (el: Element) => `${role(el)} ${name(el)}`;
+export const keyOf = (el: Element) => `${role(el)} ${name(el)}`;
 
 // The element numbered n in the latest read. Throws instead of guessing if the page changed.
 export function getElement(n: number): Element {
